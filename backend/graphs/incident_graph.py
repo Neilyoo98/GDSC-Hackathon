@@ -195,6 +195,99 @@ def _file_signals(files: list[str]) -> set[str]:
     return signals
 
 
+def _path_tokens(path: str) -> set[str]:
+    return {
+        token
+        for token in re.split(r"[/_.-]+", path.lower())
+        if len(token) >= 3 and token not in {"test", "tests", "spec", "src", "pkg"}
+    }
+
+
+def _resolve_affected_files(
+    *,
+    repo_name: str,
+    requested_files: list[str],
+    issue_title: str,
+    issue_body: str,
+    repo_files: list[str] | None = None,
+) -> tuple[list[str], list[str]]:
+    """Map LLM-selected paths to files that actually exist in the repository."""
+    from ingestion.github_issue import list_repo_files
+
+    available = repo_files or list_repo_files(repo_name, max_files=700)
+    available_set = set(available)
+    available_lower = {path.lower(): path for path in available}
+    issue_tokens = _tokens(f"{issue_title}\n{issue_body}")
+    resolved: list[str] = []
+    notes: list[str] = []
+
+    def add(path: str, *, note: str | None = None) -> None:
+        if path not in resolved:
+            resolved.append(path)
+        if note:
+            notes.append(note)
+
+    for raw_path in requested_files:
+        path = str(raw_path or "").strip().strip("`'\"")
+        if not path:
+            continue
+
+        if path in available_set:
+            add(path)
+            continue
+
+        lowered = path.lower()
+        if lowered in available_lower:
+            add(available_lower[lowered], note=f"Resolved {path} to {available_lower[lowered]} by case-insensitive match")
+            continue
+
+        requested_tokens = _path_tokens(path)
+        requested_dir = path.split("/", 1)[0].lower() if "/" in path else ""
+        requested_base = os.path.basename(path).lower()
+        requested_stem = os.path.splitext(requested_base)[0].replace("_test", "").replace("-test", "")
+
+        def score(candidate: str) -> float:
+            candidate_lower = candidate.lower()
+            candidate_tokens = _path_tokens(candidate)
+            candidate_dir = candidate.split("/", 1)[0].lower() if "/" in candidate else ""
+            candidate_base = os.path.basename(candidate).lower()
+            candidate_stem = os.path.splitext(candidate_base)[0]
+
+            value = 0.0
+            if requested_dir and requested_dir == candidate_dir:
+                value += 5.0
+            if requested_base == candidate_base:
+                value += 8.0
+            if requested_stem and requested_stem == candidate_stem:
+                value += 7.0
+            if requested_stem and requested_stem in candidate_stem:
+                value += 5.0
+            value += len(requested_tokens & candidate_tokens) * 2.0
+            value += len(issue_tokens & candidate_tokens) * 0.8
+            if "test" in requested_base and "test" not in candidate_base:
+                value += 1.0
+            if candidate_lower.endswith(".go") and any(token in issue_tokens for token in {"go", "handler", "endpoint", "health", "auth", "token"}):
+                value += 0.6
+            if candidate_lower == "readme.md" and any(token in issue_tokens for token in {"readme", "mojibake", "documentation"}):
+                value += 10.0
+            return value
+
+        candidates = sorted(available, key=score, reverse=True)
+        best = candidates[0] if candidates and score(candidates[0]) >= 4.0 else ""
+        if best:
+            add(best, note=f"Resolved missing {path} to existing {best}")
+
+    if not resolved:
+        fallback_scores = sorted(available, key=lambda candidate: len(issue_tokens & _path_tokens(candidate)), reverse=True)
+        for candidate in fallback_scores[:3]:
+            if len(issue_tokens & _path_tokens(candidate)) > 0:
+                add(candidate, note=f"Selected {candidate} from issue text")
+        if not resolved and "README.md" in available_set:
+            add("README.md", note="Selected README.md as fallback because no affected file could be resolved")
+
+    return resolved[:5], notes
+
+
 def _select_related_coworkers(
     *,
     store: Any,
@@ -315,18 +408,45 @@ async def issue_reader(state: AUBIIssueState) -> dict[str, Any]:
         }
         log.append(f"📋 Incident: {title}")
 
+    repo_name = str(issue_fields.get("repo_name") or "")
+    if repo_name:
+        try:
+            from ingestion.github_issue import list_repo_files
+            repo_files = list_repo_files(repo_name, max_files=700)
+        except Exception as exc:
+            logger.warning("Could not list files for %s before issue analysis: %s", repo_name, exc)
+            repo_files = []
+
+    repo_file_context = (
+        "Existing repository files:\n" + "\n".join(f"- {path}" for path in repo_files[:300])
+        if repo_files else
+        "Existing repository files could not be listed."
+    )
     response = await _get_gpt55().ainvoke([
         SystemMessage(content=(
             "Extract from this issue report:\n"
             '{"affected_service": "...", "affected_files": ["path/to/file"], '
             '"error_type": "...", "urgency": "P1|P2|P3"}\n'
-            "Return JSON only. affected_files must be real repository paths likely relevant to the bug."
+            "Return JSON only. affected_files must be existing repository paths from the provided file list. "
+            "Do not invent test files. If the issue is about docs or README text, choose README.md."
         )),
-        HumanMessage(content=f"Title: {title}\n\nBody:\n{body}"),
+        HumanMessage(content=f"Title: {title}\n\nBody:\n{body}\n\n{repo_file_context}"),
     ])
     data = _json(response.content)
     if not isinstance(data, dict) or not data.get("affected_files"):
         raise ValueError("Issue analysis did not identify any affected repository files")
+
+    raw_files = [str(path) for path in (data.get("affected_files") or []) if str(path).strip()]
+    affected_files, resolution_notes = _resolve_affected_files(
+        repo_name=repo_name,
+        requested_files=raw_files,
+        issue_title=title,
+        issue_body=body,
+        repo_files=repo_files,
+    )
+    if not affected_files:
+        raise ValueError(f"Issue analysis selected no readable files from {repo_name}: {raw_files}")
+    log.extend(f"🧭 {note}" for note in resolution_notes)
 
     log.append(
         f"🔍 Identified: {data.get('affected_service','?')} — "
@@ -335,7 +455,7 @@ async def issue_reader(state: AUBIIssueState) -> dict[str, Any]:
 
     return {
         **issue_fields,
-        "affected_files":   data.get("affected_files", []),
+        "affected_files":   affected_files,
         "affected_service": data.get("affected_service"),
         "error_type":       data.get("error_type"),
         "urgency":          data.get("urgency", "P2"),
@@ -649,13 +769,27 @@ async def code_reader(state: AUBIIssueState) -> dict[str, Any]:
         raise ValueError("Cannot read code without repo_name and affected_files")
 
     from ingestion.github_issue import read_repo_files
-    contents = read_repo_files(repo_name, files)
+    log: list[str] = []
+    try:
+        contents = read_repo_files(repo_name, files)
+    except FileNotFoundError:
+        resolved_files, resolution_notes = _resolve_affected_files(
+            repo_name=repo_name,
+            requested_files=[str(path) for path in files],
+            issue_title=str(state.get("issue_title") or ""),
+            issue_body=str(state.get("issue_body") or ""),
+        )
+        if not resolved_files or resolved_files == files:
+            raise
+        log.extend(f"🧭 {note}" for note in resolution_notes)
+        contents = read_repo_files(repo_name, resolved_files)
+        files = resolved_files
     missing = [path for path in files if path not in contents]
     if missing:
         raise FileNotFoundError(f"Could not read required files from {repo_name}: {missing}")
-    log = [f"📁 Read {len(contents)} file(s): {', '.join(contents.keys())}"]
+    log.append(f"📁 Read {len(contents)} file(s): {', '.join(contents.keys())}")
 
-    return {"file_contents": contents, "stream_log": log}
+    return {"affected_files": files, "file_contents": contents, "stream_log": log}
 
 
 # ---------------------------------------------------------------------------
