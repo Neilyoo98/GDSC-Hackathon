@@ -39,7 +39,7 @@ export default function AgentsPage() {
   const selectedAgent = agents.find((a) => a.id === selectedId) ?? null;
 
   // Map agents → orbital timeline items
-  const timelineData = useMemo(() => agents.map((agent, i) => {
+  const timelineData = useMemo(() => (Array.isArray(agents) ? agents : []).map((agent, i) => {
     const relIds: number[] = [];
     agents.forEach((other, j) => {
       if (j !== i && shareFiles(agent, other)) relIds.push(j + 1);
@@ -84,10 +84,11 @@ export default function AgentsPage() {
 
   // Center label: connection count
   const connectionCount = useMemo(() => {
+    const list = Array.isArray(agents) ? agents : [];
     let count = 0;
-    for (let i = 0; i < agents.length; i++)
-      for (let j = i + 1; j < agents.length; j++)
-        if (shareFiles(agents[i], agents[j])) count++;
+    for (let i = 0; i < list.length; i++)
+      for (let j = i + 1; j < list.length; j++)
+        if (shareFiles(list[i], list[j])) count++;
     return count;
   }, [agents]);
 

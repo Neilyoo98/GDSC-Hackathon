@@ -80,7 +80,8 @@ export function useAgents() {
     setError(null);
     try {
       const fetched = await api.getAgents();
-      setAgents(fetched.length > 0 ? fetched : DEMO_AGENTS);
+      const list = Array.isArray(fetched) ? fetched : [];
+      setAgents(list.length > 0 ? list : DEMO_AGENTS);
     } catch {
       setAgents(DEMO_AGENTS);
     } finally {
