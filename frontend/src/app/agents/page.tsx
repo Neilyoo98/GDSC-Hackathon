@@ -138,12 +138,37 @@ function arcPath(cx: number, cy: number, r: number, startDeg: number, endDeg: nu
   return `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`;
 }
 
+// ── Feature 2: Particles (subtle, single-color) ───────────────────────────
+function ConnectionParticles({ ax, ay, bx, by, connIdx }: {
+  ax: number; ay: number; bx: number; by: number; connIdx: number;
+}) {
+  return (
+    <>
+      {[0, 1].map((p) => (
+        <motion.circle
+          key={p}
+          r={1.5}
+          fill="#e8e4dc"
+          animate={{ cx: [ax, bx], cy: [ay, by], opacity: [0, 0.28, 0.28, 0] }}
+          transition={{
+            duration: 3.0 + connIdx * 0.4,
+            repeat: Infinity,
+            delay: connIdx * 0.3 + p * 1.4,
+            ease: "linear",
+            times: [0, 0.08, 0.92, 1],
+          }}
+        />
+      ))}
+    </>
+  );
+}
+
 // ── Mesh graph ─────────────────────────────────────────────────────────────
 function MeshGraph({
   agents, connections, selectedId, onSelect,
   matchedIds, searchActive,
   onConnectionClick,
-  entered,
+  entered, tick,
 }: {
   agents: Agent[];
   connections: MeshConnection[];
@@ -153,8 +178,15 @@ function MeshGraph({
   searchActive: boolean;
   onConnectionClick: (c: MeshConnection, svgMx: number, svgMy: number) => void;
   entered: boolean;
+  tick: number;
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
+  const [dash, setDash] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => setDash((d) => (d + 1) % 40), 40);
+    return () => clearInterval(id);
+  }, []);
 
   if (!agents.length) return null;
 
@@ -223,7 +255,8 @@ function MeshGraph({
               stroke="#e8e4dc"
               strokeWidth={isActive ? 1.2 : 0.7}
               strokeOpacity={isActive ? 0.5 : 0.12}
-              strokeDasharray={isActive ? "none" : "5 12"} />
+              strokeDasharray={isActive ? "none" : "5 12"}
+              strokeDashoffset={-dash} />
             {/* Wide hit area */}
             <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="transparent" strokeWidth={18} />
             {/* Midpoint label — only when active */}
@@ -234,6 +267,8 @@ function MeshGraph({
                 {conn.label.slice(0, 14)}
               </text>
             )}
+            {/* Subtle particles */}
+            <ConnectionParticles ax={a.x} ay={a.y} bx={b.x} by={b.y} connIdx={ci} />
           </motion.g>
         );
       })}
@@ -247,7 +282,7 @@ function MeshGraph({
             x1={CX} y1={CY} x2={p.x} y2={p.y}
             stroke="#e8e4dc" strokeWidth={0.5}
             strokeOpacity={isActive ? 0.2 : 0.06}
-            strokeDasharray="3 12"
+            strokeDasharray="3 12" strokeDashoffset={-dash * 0.5}
             initial={{ opacity: 0 }}
             animate={{ opacity: entered ? 1 : 0 }}
             transition={{ duration: 0.6, delay: 0.4 + i * 0.08 }}
@@ -283,8 +318,10 @@ function MeshGraph({
 
             {/* Search highlight ring */}
             {searchActive && matchedIds.has(agent.id) && (
-              <circle cx={x} cy={y} r={ARC_R + 16} fill="none"
+              <motion.circle cx={x} cy={y} r={ARC_R + 16} fill="none"
                 stroke="#39ff14" strokeWidth={2} strokeOpacity={0.8}
+                animate={{ r: [ARC_R + 14, ARC_R + 20, ARC_R + 14] }}
+                transition={{ duration: 1.6, repeat: Infinity }}
               />
             )}
 
@@ -328,18 +365,25 @@ function MeshGraph({
               {coworkerName(agent)}
             </text>
 
-            <text
-              x={x} y={y + NODE_R + 32}
-              textAnchor="middle"
-              fill="#e8e4dc"
-              fontSize={8}
-              fontFamily="'Space Mono', monospace"
-              letterSpacing="0.05em"
-              opacity={0.45}
-              style={{ userSelect: "none" }}
-            >
-              {tickerFact(agent, 0).slice(0, 30)}
-            </text>
+            {/* Feature 4: Rotating fact ticker */}
+            <AnimatePresence mode="wait">
+              <motion.text
+                key={`${agent.id}-${tick}`}
+                x={x} y={y + NODE_R + 32}
+                textAnchor="middle"
+                fill="#e8e4dc"
+                fontSize={8}
+                fontFamily="'Space Mono', monospace"
+                letterSpacing="0.05em"
+                style={{ userSelect: "none" }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 0.45 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.5 }}
+              >
+                {tickerFact(agent, tick).slice(0, 30)}
+              </motion.text>
+            </AnimatePresence>
           </motion.g>
         );
       })}
@@ -352,7 +396,9 @@ function MeshGraph({
         style={{ transformOrigin: `${CX}px ${CY}px` } as React.CSSProperties}
       >
         <circle cx={CX} cy={CY} r={22} fill="#080808" stroke="#39ff14" strokeWidth={1} strokeOpacity={0.5} />
-        <circle cx={CX} cy={CY} r={6} fill="#39ff14" opacity={0.9} />
+        <motion.circle cx={CX} cy={CY} r={6} fill="#39ff14"
+          animate={{ r: [5, 7, 5], opacity: [0.8, 1, 0.8] }}
+          transition={{ duration: 2, repeat: Infinity }} />
         <text x={CX} y={CY + 36} textAnchor="middle" fill="#39ff14" fontSize={9}
           fontFamily="'Space Mono', monospace" letterSpacing="0.25em" opacity={0.7}
           style={{ textTransform: "uppercase", userSelect: "none" }}>
@@ -463,6 +509,9 @@ export default function AgentsPage() {
   // Feature 3: entrance
   const [entered, setEntered]           = useState(false);
 
+  // Feature 4: ticker
+  const [tick, setTick]                 = useState(0);
+
   // Feature 5: connection card
   const [connCard, setConnCard]         = useState<{ conn: MeshConnection; mx: number; my: number } | null>(null);
 
@@ -479,6 +528,12 @@ export default function AgentsPage() {
       return () => clearTimeout(t);
     }
   }, [isLoading, agentList.length, entered]);
+
+  // Feature 4: tick every 3s
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 3000);
+    return () => clearInterval(id);
+  }, []);
 
   const handleConnectionClick = useCallback((conn: MeshConnection, mx: number, my: number) => {
     setConnCard((prev) => prev?.conn === conn ? null : { conn, mx, my });
@@ -581,7 +636,7 @@ export default function AgentsPage() {
 
         {/* Status */}
         <div className="absolute top-6 right-6 z-10 flex items-center gap-2 pointer-events-none">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#39ff14]" />
+          <span className="w-1.5 h-1.5 rounded-full bg-[#39ff14] animate-pulse" />
           <span className="font-mono text-[9px] uppercase tracking-[3px] text-[#39ff14]">Mesh Online</span>
         </div>
 
@@ -610,6 +665,7 @@ export default function AgentsPage() {
                 searchActive={searchActive}
                 onConnectionClick={handleConnectionClick}
                 entered={entered}
+                tick={tick}
               />
 
               {/* Feature 5: Connection evidence card */}
