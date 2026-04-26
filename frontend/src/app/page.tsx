@@ -241,7 +241,7 @@ export default function Home() {
         @keyframes meshScan { 0%{transform:translateY(0);opacity:0}15%{opacity:.75}100%{transform:translateY(640px);opacity:0} }
         @keyframes pathFlow { to{stroke-dashoffset:-220} }
         @keyframes nodePulse { 0%,100%{opacity:.28;transform:scale(1)}50%{opacity:.95;transform:scale(1.08)} }
-        @keyframes signalRise { 0%{transform:translateY(10px);opacity:0}18%,72%{opacity:1}100%{transform:translateY(-12px);opacity:0} }
+        @keyframes signalFloat { 0%,100%{transform:translateY(0);opacity:.88}25%{transform:translateY(-3px);opacity:1}75%{transform:translateY(3px);opacity:1} }
         @keyframes borderSweep { 0%{transform:translateX(-120%)}100%{transform:translateX(220%)} }
         @keyframes softFloat { 0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)} }
         @keyframes activeNode { 0%,100%{border-color:#39ff14;background:#39ff1412}50%{border-color:#e8e4dc99;background:#39ff1420} }
@@ -265,7 +265,7 @@ export default function Home() {
         .aubi-button-primary{background:#080808cc;color:#e8e4dc}
         .aubi-button-secondary{background:#080808cc;color:#e8e4dc}
         .interactive-surface{position:relative;transition:transform .24s ease,border-color .24s ease,background .24s ease,box-shadow .24s ease}
-        .interactive-surface:hover{z-index:2;transform:translateY(-6px) scale(1.04);border-color:#39ff14;background:#39ff14;box-shadow:0 18px 45px #39ff1426}
+        .interactive-surface:hover{z-index:2;transform:translateY(-6px) scale(1.04);border-color:#39ff14cc;background:#24c918;box-shadow:0 18px 45px #24c91824}
         .interactive-surface:hover p{color:#080808}
         .active-pipeline-node{animation:activeNode 2.8s ease-in-out infinite}
         .metric-tile{transition:transform .24s ease,background .24s ease}
@@ -279,7 +279,7 @@ export default function Home() {
         .mesh-node{transform-box:fill-box;transform-origin:center;animation:nodePulse 3.8s ease-in-out infinite}
         .mesh-node path{fill:#080808;stroke:#e8e4dc;stroke-opacity:.22;stroke-width:1}
         .mesh-node circle{fill:#39ff14}
-        .signal-rise{animation:signalRise 2.6s ease-in-out infinite}
+        .signal-rise{animation:signalFloat 2.6s ease-in-out infinite}
         .cursor-spotlight{opacity:var(--spotlight-opacity);background:radial-gradient(395px circle at var(--spotlight-x) var(--spotlight-y),#e8e4dc24 0%,#e8e4dc12 30%,#e8e4dc08 52%,transparent 74%);transition:opacity .24s ease;mix-blend-mode:screen}
         .hero-grid-base{opacity:.12;background-image:linear-gradient(#39ff14 1px,transparent 1px),linear-gradient(90deg,#39ff14 1px,transparent 1px);background-size:64px 64px}
         .hero-grid-lens{opacity:calc(var(--spotlight-opacity) * .72);background-image:linear-gradient(#39ff1433 1px,transparent 1px),linear-gradient(90deg,#39ff1433 1px,transparent 1px);background-size:54px 54px;background-position:var(--grid-shift-x) var(--grid-shift-y);transform:translate3d(0,0,0) scale(1.018);transform-origin:var(--spotlight-x) var(--spotlight-y);mask-image:radial-gradient(270px circle at var(--spotlight-x) var(--spotlight-y),black 0%,black 18%,transparent 64%);-webkit-mask-image:radial-gradient(270px circle at var(--spotlight-x) var(--spotlight-y),black 0%,black 18%,transparent 64%);filter:none;transition:opacity .18s ease,background-position .12s linear}
