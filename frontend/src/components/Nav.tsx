@@ -8,12 +8,16 @@ export function Nav() {
 
   return (
     <nav className="sticky top-0 z-50 flex h-[52px] items-center justify-between border-b border-[#1f1f1f] bg-[#080808] px-6">
-      <div className="flex flex-col leading-none">
+      <Link
+        href="/"
+        aria-label="AUBI home"
+        className="flex flex-col leading-none transition-opacity hover:opacity-80 focus:outline-none focus-visible:ring-1 focus-visible:ring-[#39ff14]"
+      >
         <span className="font-syne text-2xl font-normal tracking-[4px] text-[#e8e4dc]">AUBI</span>
         <span className="mt-1 font-mono text-[8px] uppercase tracking-[3px] text-[#e8e4dc99]">
           Autonomous · Agent · Mesh
         </span>
-      </div>
+      </Link>
 
       <div className="flex gap-8">
         {[
