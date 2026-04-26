@@ -136,13 +136,6 @@ export default function IncidentPage() {
         )}
 
         <CoworkerMeshPanel result={result} agents={agents} events={events} />
-        <ProcessDashboard
-          result={result}
-          events={events}
-          agents={agents}
-          latestIssue={latestIssue}
-          isStreaming={isStreaming}
-        />
 
         {/* Mini agent map */}
         {agents.length > 0 && (
@@ -163,10 +156,25 @@ export default function IncidentPage() {
 
       {/* ── RIGHT COLUMN ── */}
       <div className="flex-1 flex flex-col overflow-hidden">
+        <div className={[
+          "transition-all duration-500 overflow-hidden border-b border-[#1e2d45]",
+          hasResult ? "flex-none h-[42%]" : "flex-none h-[48%]",
+        ].join(" ")}>
+          <div className="h-full p-5">
+            <ProcessDashboard
+              result={result}
+              events={events}
+              agents={agents}
+              latestIssue={latestIssue}
+              isStreaming={isStreaming}
+            />
+          </div>
+        </div>
+
         {/* Neural trace */}
         <div className={[
           "transition-all duration-500 overflow-hidden border-b border-[#1e2d45]",
-          hasResult ? "flex-none h-[55%]" : "flex-1",
+          hasResult ? "flex-none h-[18%]" : "flex-1",
         ].join(" ")}>
           <div className="h-full p-5">
             <NeuralTrace events={events} isStreaming={isStreaming} />
