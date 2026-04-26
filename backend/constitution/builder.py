@@ -1,7 +1,9 @@
 """Context Constitution builder.
 
-Takes structured GitHub data → GPT-5.5 → list of ConstitutionFacts
+Takes structured GitHub data → Gemini 2.0 Flash → list of ConstitutionFacts
 → stored as Qdrant semantic_facts points.
+
+Gemini is used here for structured JSON output (response_mime_type=application/json).
 """
 
 from __future__ import annotations
@@ -12,17 +14,17 @@ import os
 from typing import Any
 from uuid import uuid4
 
-from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
+import google.generativeai as genai
 
 logger = logging.getLogger(__name__)
 
-# GPT-5.5 for constitution inference
-gpt55 = ChatOpenAI(
-    model="gpt-5.5",
-    base_url="https://us.api.openai.com/v1",
-    streaming=False,
-    use_responses_api=True,
+genai.configure(api_key=os.getenv("GEMINI_API_KEY", ""))
+_gemini = genai.GenerativeModel(
+    "gemini-2.0-flash",
+    generation_config=genai.GenerationConfig(
+        response_mime_type="application/json",
+        temperature=0.2,
+    ),
 )
 
 CONSTITUTION_SYSTEM = """\
@@ -111,12 +113,9 @@ async def build_constitution_from_github(
         review_comments=review_comments or "(no review comments found)",
     )
 
-    response = await gpt55.ainvoke([
-        SystemMessage(content=CONSTITUTION_SYSTEM),
-        HumanMessage(content=prompt),
-    ])
-
-    raw = response.content
+    full_prompt = f"{CONSTITUTION_SYSTEM}\n\n{prompt}"
+    response = await _gemini.generate_content_async(full_prompt)
+    raw = response.text
     try:
         start = raw.find("[")
         end = raw.rfind("]") + 1
