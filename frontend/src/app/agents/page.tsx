@@ -6,6 +6,9 @@ import { useAgents } from "@/hooks/useAgents";
 import { DossierPanel } from "@/components/DossierPanel";
 import { api } from "@/lib/api";
 import { coworkerName } from "@/lib/agents";
+import { PerspectiveGrid } from "@/components/PerspectiveGrid";
+import { ShimmerButton } from "@/components/ui/shimmer-button";
+import { BorderBeam } from "@/components/ui/border-beam";
 import type { Agent } from "@/lib/types";
 
 // ── Constitution category colours ──────────────────────────────────────────
@@ -618,9 +621,8 @@ export default function AgentsPage() {
         className="flex-1 relative overflow-hidden"
         onClick={() => { setConnCard(null); }}
       >
-        {/* Subtle grid */}
-        <div className="absolute inset-0 pointer-events-none opacity-[0.04]"
-          style={{ backgroundImage: "linear-gradient(#e8e4dc 1px,transparent 1px),linear-gradient(90deg,#e8e4dc 1px,transparent 1px)", backgroundSize: "64px 64px" }} />
+        {/* Interactive 3D perspective grid */}
+        <PerspectiveGrid />
 
         {/* Top-left header */}
         <div className="absolute top-6 left-6 z-10 pointer-events-none">
@@ -721,10 +723,11 @@ export default function AgentsPage() {
 
         {/* Register button */}
         {!isLoading && agentList.length > 0 && (
-          <button onClick={() => setShowModal(true)}
-            className="absolute bottom-6 left-6 z-10 font-mono text-[10px] uppercase tracking-[2px] text-[#e8e4dc66] border border-[#1f1f1f] px-4 py-2 hover:text-[#e8e4dc] hover:border-[#39ff1433] transition-colors">
-            + Register coworker
-          </button>
+          <div className="absolute bottom-6 left-6 z-10">
+            <ShimmerButton onClick={() => setShowModal(true)} className="px-4 py-2 text-[10px]">
+              + Register coworker
+            </ShimmerButton>
+          </div>
         )}
 
         {/* Constitution legend */}
@@ -763,8 +766,9 @@ export default function AgentsPage() {
           >
             <motion.div
               initial={{ y: 16, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 16, opacity: 0 }}
-              className="bg-[#080808] border border-[#1f1f1f] w-full max-w-sm mx-4"
+              className="relative bg-[#080808] border border-[#1f1f1f] w-full max-w-sm mx-4 overflow-hidden"
             >
+              <BorderBeam size={200} duration={6} colorFrom="#39ff14" colorTo="#00f0ff" />
               <div className="flex items-center justify-between px-5 py-4 border-b border-[#1f1f1f]">
                 <span className="font-mono text-[9px] uppercase tracking-[3px] text-[#e8e4dc66]">{"// register coworker"}</span>
                 <button onClick={() => setShowModal(false)} className="text-[#e8e4dc44] hover:text-[#e8e4dc] text-xl leading-none">×</button>
@@ -787,13 +791,13 @@ export default function AgentsPage() {
                   </div>
                 ))}
                 {createError && <p className="font-mono text-[10px] text-[#ff3366]">{createError}</p>}
-                <button
+                <ShimmerButton
                   type="submit"
                   disabled={!form.github_username.trim() || creating}
-                  className="w-full py-2.5 font-mono text-[11px] uppercase tracking-[3px] font-bold text-[#080808] bg-[#39ff14] disabled:opacity-40 transition-opacity hover:bg-[#44ff22]"
+                  className="w-full py-2.5 disabled:opacity-40"
                 >
                   {creating ? "Building constitution..." : "Build + Register"}
-                </button>
+                </ShimmerButton>
               </form>
             </motion.div>
           </motion.div>

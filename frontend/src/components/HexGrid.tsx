@@ -6,6 +6,14 @@ import { HexNode } from "./HexNode";
 import { InteractiveBackground } from "./InteractiveBackground";
 import type { Agent } from "@/lib/types";
 
+export interface MeshCommunicationLink {
+  id: string;
+  fromId: string;
+  toId: string;
+  label?: string;
+  active?: boolean;
+}
+
 const POSITION_MAPS: Record<number, [number, number][]> = {
   0: [],
   1: [[0, 0]],
@@ -42,10 +50,19 @@ interface Props {
   onSelect: (id: string | null) => void;
   compact?: boolean;
   pulsingAgentId?: string | null;
+  communicationLinks?: MeshCommunicationLink[];
   onAddAgent?: () => void;
 }
 
-export function HexGrid({ agents, selectedId, onSelect, compact = false, pulsingAgentId, onAddAgent }: Props) {
+export function HexGrid({
+  agents,
+  selectedId,
+  onSelect,
+  compact = false,
+  pulsingAgentId,
+  communicationLinks = [],
+  onAddAgent,
+}: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [positions, setPositions] = useState<[number, number][]>(() => getPositions(agents.length));
@@ -63,7 +80,16 @@ export function HexGrid({ agents, selectedId, onSelect, compact = false, pulsing
     setPositions(getPositions(agents.length));
   }, [agents.length]);
 
-  const viewBox = compact ? "-250 -200 500 400" : "-500 -360 1000 720";
+  const viewBox = compact ? "-280 -230 560 460" : "-500 -360 1000 720";
+  const activeAgentIds = useMemo(() => {
+    const ids = new Set<string>();
+    communicationLinks.forEach((link) => {
+      if (!link.active) return;
+      ids.add(link.fromId);
+      ids.add(link.toId);
+    });
+    return ids;
+  }, [communicationLinks]);
 
   const connections = useMemo(() => {
     const pairs: { a: number; b: number }[] = [];
@@ -144,7 +170,7 @@ export function HexGrid({ agents, selectedId, onSelect, compact = false, pulsing
         preserveAspectRatio="xMidYMid meet"
         style={{ overflow: "visible", position: "relative", zIndex: 1 }}
       >
-        {/* Connection lines */}
+        {/* Ownership / file-overlap lines */}
         {connections.map(({ a, b }, idx) => {
           const [ax, ay] = positions[a] ?? [0, 0];
           const [bx, by] = positions[b] ?? [0, 0];
@@ -152,53 +178,68 @@ export function HexGrid({ agents, selectedId, onSelect, compact = false, pulsing
 
           return (
             <g key={`${agents[a]?.id ?? a}-${agents[b]?.id ?? b}`}>
-              {/* Glow halo when connected agent is hovered */}
-              {isGlowing && (
-                <line x1={ax} y1={ay} x2={bx} y2={by}
-                  stroke="#00f0ff" strokeWidth={6} opacity={0.15}
-                  style={{ filter: "blur(4px)" }}
-                />
-              )}
-              {/* Pulsing base line */}
               <motion.line
                 x1={ax} y1={ay} x2={bx} y2={by}
-                stroke={isGlowing ? "#00f0ffaa" : "#00f0ff28"}
-                strokeWidth={isGlowing ? 2 : 1.5}
-                animate={{ opacity: [0.5, 1, 0.5] }}
-                transition={{ duration: 2.4 + idx * 0.35, repeat: Infinity, ease: "easeInOut" }}
+                stroke={isGlowing ? "#00f0ff99" : "#24415f"}
+                strokeWidth={isGlowing ? 1.6 : 1}
+                strokeOpacity={isGlowing ? 0.7 : 0.28}
+                animate={isGlowing ? { opacity: [0.45, 0.85, 0.45] } : undefined}
+                transition={{ duration: 1.8 + idx * 0.2, repeat: Infinity, ease: "easeInOut" }}
               />
-              {/* Particles A → B (cyan) */}
-              {!compact && [0, 1, 2].map((p) => (
+            </g>
+          );
+        })}
+
+        {/* Live directed coworker communication */}
+        {communicationLinks.map((link, idx) => {
+          const fromIndex = agents.findIndex((agent) => agent.id === link.fromId);
+          const toIndex = agents.findIndex((agent) => agent.id === link.toId);
+          if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return null;
+
+          const [ax, ay] = positions[fromIndex] ?? [0, 0];
+          const [bx, by] = positions[toIndex] ?? [0, 0];
+          const active = link.active ?? idx >= communicationLinks.length - 2;
+          const stroke = active ? "#00f0ff" : "#45617d";
+          const strokeWidth = active ? 2 : 1.2;
+          const dx = bx - ax;
+          const dy = by - ay;
+          const distance = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+          const trim = compact ? 38 : 74;
+          const sx = ax + (dx / distance) * trim;
+          const sy = ay + (dy / distance) * trim;
+          const ex = bx - (dx / distance) * trim;
+          const ey = by - (dy / distance) * trim;
+          const midX = (sx + ex) / 2;
+          const midY = (sy + ey) / 2;
+
+          return (
+            <g key={link.id}>
+              <motion.line
+                x1={sx} y1={sy} x2={ex} y2={ey}
+                stroke={stroke}
+                strokeWidth={strokeWidth}
+                strokeOpacity={active ? 0.8 : 0.34}
+                animate={active ? { opacity: [0.45, 1, 0.45] } : undefined}
+                transition={{ duration: 1.15, repeat: Infinity, ease: "easeInOut", delay: idx * 0.06 }}
+              />
+              {active && (
                 <motion.circle
-                  key={`f${p}`}
-                  r={2.5} fill="#00f0ff"
-                  style={{ filter: "drop-shadow(0 0 3px #00f0ffdd)" }}
-                  animate={{ cx: [ax, bx], cy: [ay, by], opacity: [0, 1, 1, 0] }}
+                  r={2.5}
+                  fill={stroke}
+                  initial={{ cx: sx, cy: sy, opacity: 0 }}
+                  animate={{
+                    cx: [sx, midX, ex],
+                    cy: [sy, midY, ey],
+                    opacity: [0, 0.9, 0],
+                  }}
                   transition={{
-                    duration: 2.8,
+                    duration: 1.5,
                     repeat: Infinity,
-                    delay: idx * 0.7 + p * 0.95,
-                    ease: "linear",
-                    times: [0, 0.08, 0.92, 1],
+                    ease: "easeInOut",
+                    delay: idx * 0.1,
                   }}
                 />
-              ))}
-              {/* Particles B → A (purple) */}
-              {!compact && [0, 1].map((p) => (
-                <motion.circle
-                  key={`r${p}`}
-                  r={2} fill="#8b5cf6"
-                  style={{ filter: "drop-shadow(0 0 3px #8b5cf6dd)" }}
-                  animate={{ cx: [bx, ax], cy: [by, ay], opacity: [0, 0.85, 0.85, 0] }}
-                  transition={{
-                    duration: 3.5,
-                    repeat: Infinity,
-                    delay: idx * 0.9 + p * 1.5,
-                    ease: "linear",
-                    times: [0, 0.08, 0.92, 1],
-                  }}
-                />
-              ))}
+              )}
             </g>
           );
         })}
@@ -214,7 +255,7 @@ export function HexGrid({ agents, selectedId, onSelect, compact = false, pulsing
               isSelected={selectedId === agent.id}
               breathDuration={2.8 + i * 0.18}
               compact={compact}
-              pulsing={pulsingAgentId === agent.id}
+              pulsing={pulsingAgentId === agent.id || activeAgentIds.has(agent.id)}
               onHover={() => setHoveredId(agent.id)}
               onLeave={() => setHoveredId(null)}
               onPointerDown={(e) => handleNodePointerDown(i, e)}

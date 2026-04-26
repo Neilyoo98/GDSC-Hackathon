@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 
+const DEFAULT_BACKEND_URL = "https://gdsc-hackathon-production.up.railway.app";
+
 export function backendUrl() {
   const configured =
     process.env.BACKEND_URL ||
-    process.env.NEXT_PUBLIC_BACKEND_URL;
-  if (!configured) {
-    throw new Error("BACKEND_URL or NEXT_PUBLIC_BACKEND_URL is required");
-  }
+    process.env.NEXT_PUBLIC_BACKEND_URL ||
+    DEFAULT_BACKEND_URL;
   return configured.replace(/\/+$/, "");
 }
 

@@ -1,20 +1,114 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useIncidentStream } from "@/hooks/useIncidentStream";
 import { useAgents } from "@/hooks/useAgents";
 import { IncidentTerminal } from "@/components/IncidentTerminal";
 import { NeuralTrace } from "@/components/NeuralTrace";
-import { HexGrid } from "@/components/HexGrid";
+import { HexGrid, type MeshCommunicationLink } from "@/components/HexGrid";
 import { CoworkerMeshPanel } from "@/components/CoworkerMeshPanel";
 import { ProcessDashboard } from "@/components/ProcessDashboard";
-import { LiveExchangeFeed } from "@/components/aubi/LiveExchangeFeed";
-import { ConsiderationsPanel } from "@/components/aubi/ConsiderationsPanel";
 import { api } from "@/lib/api";
 import { coworkerName } from "@/lib/agents";
-import { firstAgentFromValues } from "@/lib/agentLookup";
-import type { GitHubIssue, CoworkerContextExchange } from "@/lib/types";
+import type { Agent, AgentMessage, CoworkerContextExchange, GitHubIssue } from "@/lib/types";
+
+function normalizedIdentity(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/@/g, "")
+    .replace(/['’]s\b/g, "")
+    .replace(/\baubi\b/g, "")
+    .replace(/\bcoworker\b/g, "")
+    .replace(/[_\s-]+agent$/g, "")
+    .replace(/[_\s-]+/g, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function shortHumanName(agent: Agent): string {
+  const source = agent.name || agent.github_username || "Developer";
+  return source.split(/[\s-]+/).find(Boolean) ?? source;
+}
+
+function identityValues(agent: Agent): string[] {
+  return [
+    agent.id,
+    agent.github_username,
+    agent.name,
+    shortHumanName(agent),
+    `${agent.name}_aubi`,
+    `${agent.github_username}_aubi`,
+    coworkerName(agent),
+  ].filter(Boolean);
+}
+
+function findAgentBySignal(value: unknown, agents: Agent[]): Agent | undefined {
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  const raw = normalizedIdentity(value);
+  if (!raw || raw === "orchestrator") return undefined;
+  return agents.find((agent) =>
+    identityValues(agent).some((candidate) => {
+      const normalized = normalizedIdentity(candidate);
+      return normalized.length > 1 && (raw === normalized || raw.includes(normalized) || normalized.includes(raw));
+    })
+  );
+}
+
+function linkFromMessage(message: AgentMessage, agents: Agent[], index: number): MeshCommunicationLink | null {
+  if (normalizedIdentity(message.sender) === "orchestrator" || normalizedIdentity(message.recipient) === "orchestrator") {
+    return null;
+  }
+  const from = findAgentBySignal(message.sender, agents);
+  const to = findAgentBySignal(message.recipient, agents);
+  if (!from || !to || from.id === to.id) return null;
+  return {
+    id: `msg-${index}-${from.id}-${to.id}`,
+    fromId: from.id,
+    toId: to.id,
+    label: message.message,
+  };
+}
+
+function firstAgentFromSignals(values: unknown[], agents: Agent[]): Agent | undefined {
+  for (const value of values) {
+    if (Array.isArray(value)) {
+      const match = firstAgentFromSignals(value, agents);
+      if (match) return match;
+      continue;
+    }
+    const match = findAgentBySignal(value, agents);
+    if (match) return match;
+  }
+  return undefined;
+}
+
+function linkFromExchange(exchange: CoworkerContextExchange, agents: Agent[], index: number): MeshCommunicationLink | null {
+  const from = firstAgentFromSignals([
+    exchange.requester_agent_id,
+    exchange.requester_agent_name,
+    exchange.requester_agent_ids,
+    exchange.requester_agent_names,
+    exchange.requester_aubi,
+    exchange.source_aubi,
+    exchange.sender,
+    exchange.from,
+  ], agents);
+  const to = firstAgentFromSignals([
+    exchange.responder_agent_id,
+    exchange.responder_agent_name,
+    exchange.responder_aubi,
+    exchange.target_aubi,
+    exchange.recipient,
+    exchange.to,
+  ], agents);
+  if (!from || !to || from.id === to.id) return null;
+  return {
+    id: `exchange-${index}-${from.id}-${to.id}`,
+    fromId: from.id,
+    toId: to.id,
+    label: exchange.request ?? exchange.context_shared ?? exchange.message,
+  };
+}
 
 export default function IncidentPage() {
   const [issueUrl, setIssueUrl] = useState("");
@@ -26,53 +120,45 @@ export default function IncidentPage() {
   const { events, isStreaming, result, error, start, approve, reset } = useIncidentStream();
   const { agents } = useAgents();
 
-  // ── Derive pulsingAgentId from live SSE events ────────────────────────────
-  const [pulsingAgentId, setPulsingAgentId] = useState<string | null>(null);
-  const pulseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const communicationLinks = useMemo(() => {
+    const messageLinks = [
+      ...(result?.agent_messages ?? []),
+      ...events
+        .filter((event) => event.eventType === "agent_message" && event.output)
+        .map((event) => event.output as unknown as AgentMessage),
+    ]
+      .map((message, index) => linkFromMessage(message, agents, index))
+      .filter((link): link is MeshCommunicationLink => Boolean(link));
 
-  const flashPulse = useCallback((agentId: string | null) => {
-    if (!agentId) return;
-    if (pulseTimerRef.current) clearTimeout(pulseTimerRef.current);
-    setPulsingAgentId(agentId);
-    pulseTimerRef.current = setTimeout(() => setPulsingAgentId(null), 1600);
-  }, []);
+    const exchangeLinks = [
+      ...(result?.coworker_exchanges ?? []),
+      ...(result?.coworker_contexts ?? []),
+      ...events
+        .filter((event) => (
+          (event.eventType === "coworker_exchange" || event.eventType === "coworker_context") &&
+          event.output
+        ))
+        .map((event) => event.output as unknown as CoworkerContextExchange),
+    ]
+      .map((exchange, index) => linkFromExchange(exchange, agents, index))
+      .filter((link): link is MeshCommunicationLink => Boolean(link));
 
-  useEffect(() => {
-    const latest = events[events.length - 1];
-    if (!latest) return;
+    const seen = new Set<string>();
+    return [...messageLinks, ...exchangeLinks]
+      .filter((link) => {
+        const key = `${link.fromId}->${link.toId}:${link.label ?? ""}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(-10)
+      .map((link, index, links) => ({
+        ...link,
+        active: index >= Math.max(0, links.length - 4),
+      }));
+  }, [agents, events, result?.agent_messages, result?.coworker_contexts, result?.coworker_exchanges]);
 
-    const { eventType, node } = latest;
-
-    // Pulse owner during ownership + fix phases
-    if (
-      (node === "query_single_agent" || node === "fix_generator" || node === "code_reader") &&
-      latest.status === "running"
-    ) {
-      const ownerId = result?.owners?.[0];
-      const owner = agents.find((a) => a.id === ownerId);
-      if (owner) flashPulse(owner.id);
-      return;
-    }
-
-    // Pulse the responder agent during each coworker exchange
-    if (eventType === "coworker_exchange" || eventType === "coworker_context") {
-      const exchange = latest.output as CoworkerContextExchange | null;
-      if (!exchange) return;
-      const responder = firstAgentFromValues(
-        [
-          exchange.responder_agent_id,
-          exchange.responder_agent_name,
-          exchange.responder_aubi,
-          exchange.target_aubi,
-          exchange.recipient,
-          exchange.to,
-        ],
-        agents
-      );
-      if (responder) flashPulse(responder.id);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [events]);
+  const pulsingAgentId = communicationLinks.at(-1)?.toId ?? null;
 
   const primaryOwner = result?.owners?.[0]
     ? agents.find((a) => a.id === result.owners[0])
@@ -184,30 +270,29 @@ export default function IncidentPage() {
           </div>
         )}
 
-        <CoworkerMeshPanel result={result} agents={agents} events={events} />
-        {result?.coworker_exchanges?.length ? (
-          <LiveExchangeFeed
-            exchanges={result.coworker_exchanges}
-            agents={agents}
-            result={result}
-          />
-        ) : null}
-
-        {/* Mini agent map */}
+        {/* Live agent map */}
         {agents.length > 0 && (
           <div className="flex flex-col gap-2">
-            <p className="font-mono text-[9px] text-[#4a6080] tracking-widest">{"// AGENT MESH"}</p>
-            <div className="h-[180px] border border-[#1e2d45] rounded bg-[#0a0e1a] overflow-hidden">
+            <div className="flex items-center justify-between gap-3">
+              <p className="font-mono text-[9px] text-[#4a6080] tracking-widest">{"// LIVE AGENT MESH"}</p>
+              <span className="font-mono text-[9px] text-[#4a6080]">
+                {communicationLinks.length} active path{communicationLinks.length === 1 ? "" : "s"}
+              </span>
+            </div>
+            <div className="h-[360px] border border-[#1e2d45] rounded bg-[#0a0e1a] overflow-hidden">
               <HexGrid
                 agents={agents}
                 selectedId={null}
                 onSelect={() => {}}
                 compact
                 pulsingAgentId={pulsingAgentId}
+                communicationLinks={communicationLinks}
               />
             </div>
           </div>
         )}
+
+        <CoworkerMeshPanel result={result} agents={agents} events={events} />
       </div>
 
       {/* ── RIGHT COLUMN ── */}
@@ -302,14 +387,6 @@ export default function IncidentPage() {
                       </pre>
                     )}
                   </div>
-
-                  {(result.coworker_exchanges?.length ?? 0) > 0 && (
-                    <ConsiderationsPanel
-                      exchanges={result.coworker_exchanges ?? []}
-                      agents={agents}
-                      result={result}
-                    />
-                  )}
 
                   {result.awaiting_approval && (
                     <button
