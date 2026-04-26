@@ -9,42 +9,17 @@
 
 | Role | Model | Why |
 |---|---|---|
-| **Orchestrator** (incident analysis, routing, drafting) | **GPT-5.5** (`gpt-5.5` via OpenAI Responses API) | Best reasoning + planning for the complex multi-step flow |
-| **Agent queries** (fast per-agent constitution look-up) | **Claude 3 Haiku** | Cheap, fast, good at following structured constitution |
-| **Constitution building** (GitHub → facts) | **GPT-5.5** | Long context, structured JSON output quality |
+| **Orchestrator** (incident analysis, routing, drafting) | **Claude Sonnet** (`claude-sonnet-4-5`) | Best reasoning + planning for the complex multi-step flow |
+| **Agent queries** (fast per-agent constitution look-up) | **Claude Haiku** | Cheap, fast, good at following structured constitution |
+| **Constitution building** (GitHub → facts) | **Claude Sonnet** | Long context, structured JSON output quality |
 
-> Both APIs needed: `OPENAI_API_KEY` (GPT-5.5) + `ANTHROPIC_API_KEY` (Haiku)
-
----
-
-## TL;DR — Reuse Assessment
-
-We have two existing repos on this machine. **Cognoxent/aubi is ~70% of what we need.** Do NOT build from scratch.
-
-| What AUBI needs | Already exists in | Reuse |
-|---|---|---|
-| Persistent AI agent per dev | `cognoxent/services/harness/app/graphs/aubi_agent.py` | ✅ Direct — just change system prompt |
-| Developer identity / constitution | `cognoxent/services/harness/app/graphs/prompt_builder.py` | ✅ Extend with constitution blocks |
-| Vector memory (semantic facts, episodes) | `cognoxent/services/knowledge/` (Qdrant) | ✅ Direct — use as constitution store |
-| Self-learning loop | `cognoxent/services/knowledge/app/extraction/post_session.py` | ✅ Direct — already extracts facts/lessons |
-| Memory context injection | `cognoxent/services/knowledge/app/retrieval/context_builder.py` | ✅ Direct |
-| Multi-agent orchestration | `Hack25/orchestrator-langgraph/app/graphs/` (LangGraph) | ✅ Patterns + state types |
-| SSE streaming / agent activity feed | `Hack25/orchestrator-langgraph/app/streaming/sse_events.py` | ✅ Direct — full event system |
-| FastAPI backend | Both repos — already set up | ✅ Copy + extend |
-| Specialized subagents | `cognoxent/services/harness/app/graphs/subagents.py` | ✅ Extend |
-| Next.js frontend with chat + tool cards | `cognoxent/apps/aubi-web` | ✅ Extend — add incident console |
-| **GitHub ingestion** | Nothing | ❌ BUILD NEW |
-| **Incident routing graph** | Nothing | ❌ BUILD NEW |
-| **Agent-to-agent query endpoint** | Nothing | ❌ BUILD NEW |
-| **Agent cards / constitution UI** | Nothing | ❌ BUILD NEW components |
-
-**Conclusion:** 3 people extend existing code, 1 person builds the only truly new pieces (GitHub ingestion + incident graph). We ship in 8 hours.
+> API needed: `ANTHROPIC_API_KEY`
 
 ---
 
-## Exported Files — Already Scaffolded
+## Scaffolded Files — Already Written
 
-These files are already written and in `backend/`. Each person starts here, not from scratch.
+These files are already written and in `backend/`. Each person starts here.
 
 ```
 backend/
@@ -53,31 +28,21 @@ backend/
 ├── .env.example                     ✅ WRITTEN — env template
 ├── graphs/
 │   ├── state.py                     ✅ WRITTEN — AUBIIncidentState TypedDict
-│   ├── incident_graph.py            ✅ WRITTEN — full LangGraph (5 nodes, GPT-5.5 + Haiku)
-│   ├── sse_events.py                ✅ COPIED from orchestrator-langgraph
-│   ├── deep_agent_event_mapper.py   ✅ COPIED — SSE event mapping patterns
-│   ├── prompt_builder.py            ✅ COPIED from cognoxent harness
-│   ├── memory_scopes.py             ✅ COPIED — memory namespace helpers
-│   ├── aubi_agent_reference.py      📖 REFERENCE — how cognoxent's Aubi agent works
-│   ├── subagents_reference.py       📖 REFERENCE — subagent patterns
-│   ├── orchestrator_v3_reference.py 📖 REFERENCE — supervisor pattern (LangGraph v3)
-│   ├── state_reference.py           📖 REFERENCE — state patterns from orchestrator
-│   └── ws_events_reference.py       📖 REFERENCE — WS event patterns
+│   ├── incident_graph.py            ✅ WRITTEN — full LangGraph (5 nodes)
+│   ├── sse_events.py                ✅ WRITTEN — SSE event types
+│   ├── deep_agent_event_mapper.py   ✅ WRITTEN — SSE event mapping
+│   ├── prompt_builder.py            ✅ WRITTEN — prompt assembly helpers
+│   └── memory_scopes.py             ✅ WRITTEN — memory namespace helpers
 ├── ingestion/
 │   └── github_ingest.py             ✅ WRITTEN — GitHub API → structured data
-├── constitution/
-│   ├── builder.py                   ✅ WRITTEN — GitHub data → GPT-5.5 → Qdrant facts
-│   ├── context_builder_reference.py 📖 REFERENCE — how cognoxent builds memory context
-│   ├── post_session_reference.py    📖 REFERENCE — self-learning loop pattern
-│   ├── embeddings_reference.py      📖 REFERENCE — embedding service
-│   └── qdrant_client_reference.py   📖 REFERENCE — Qdrant client patterns
-└── api/                             ← Person 1 + 3 add routes here if needed
+└── constitution/
+    └── builder.py                   ✅ WRITTEN — GitHub data → Claude → Qdrant facts
 ```
 
 **Person 1:** `incident_graph.py` is done. Wire it to FastAPI in `main.py` (already wired). Tune the node prompts.
-**Person 2:** `builder.py` is done. Add Qdrant storage using `qdrant_client_reference.py` + `embeddings_reference.py`.
+**Person 2:** `builder.py` is done. Add Qdrant storage using reference patterns.
 **Person 3:** `github_ingest.py` is done. Add `POST /agents` wiring + agent registry.
-**Person 4:** Start from `cognoxent/apps/aubi-web`. Add 2 new pages.
+**Person 4:** Build the two new pages: agent cards dashboard + incident console.
 
 ---
 
@@ -87,8 +52,8 @@ backend/
                      Incident Text (pasted Slack thread)
                               │
                     ┌─────────▼──────────┐
-                    │  Incident Graph     │  ← NEW (LangGraph)
-                    │  (new, ~200 lines)  │
+                    │  Incident Graph     │  ← LangGraph
+                    │  (~200 lines)       │
                     │  - analyze incident │
                     │  - query ownership  │
                     │  - call agent APIs  │
@@ -100,31 +65,29 @@ backend/
    Aubi Agent A         Aubi Agent B         Aubi Agent C
    (Dev Alice)          (Dev Bob)             (Dev Carol)
    ┌──────────┐         ┌──────────┐          ┌──────────┐
-   │ aubi_    │         │ aubi_    │          │ aubi_    │
-   │ agent.py │◄──────► │ agent.py │◄────────►│ agent.py │
-   │ (harness)│  NEW    │ (harness)│  NEW     │ (harness)│
-   └────┬─────┘  /query └────┬─────┘  /query  └────┬─────┘
-        │        endpoint         │                  │
-        └──────────────┬──────────┘──────────────────┘
+   │ Claude   │         │ Claude   │          │ Claude   │
+   │ Haiku    │◄──────► │ Haiku    │◄────────►│ Haiku    │
+   │ + const. │  /query │ + const. │  /query  │ + const. │
+   └────┬─────┘ endpoint└────┬─────┘  endpoint└────┬─────┘
+        │                    │                      │
+        └──────────────┬─────┘──────────────────────┘
                        │
               ┌────────▼─────────┐
-              │  Knowledge Svc    │  ← EXISTING (Qdrant)
-              │  - semantic_facts │    extended with
-              │  - episodes       │    constitution blocks
-              │  - procedures     │    from GitHub ingestion
+              │  Knowledge Svc    │  ← Qdrant
+              │  - semantic_facts │    populated from
+              │  - episodes       │    GitHub ingestion
+              │  - procedures     │    (Context Constitution)
               └──────────────────┘
 ```
 
-### What Each Agent Looks Like After Our Changes
+### What Each Agent Looks Like
 
-**Before (existing Aubi):** Generic AI coworker with web search and file tools
-
-**After (AUBI):** Dev-specialized coworker with a Context Constitution pre-loaded into its Qdrant memory:
+Each developer agent has a **Context Constitution** pre-loaded into its Qdrant memory:
 - `semantic_facts` → code ownership facts ("Alice owns auth/, billing/")
 - `episodes` → past incidents Alice was involved in
 - `procedures` → Alice's preferred debugging patterns
 
-The **constitution is just Qdrant facts**. We populate it from GitHub on agent creation. The self-learning loop (`post_session.py`) keeps it updated after every incident.
+The **constitution is just Qdrant facts**. We populate it from GitHub on agent creation. The self-learning loop keeps it updated after every incident.
 
 ---
 
@@ -167,18 +130,17 @@ Each fact is embedded and stored with `scope: "user", scope_id: alice_id`. The k
 ## Team Division of Work
 
 ### Person 1 — Incident Graph (LangGraph) + Agent Mesh API
-**Base off:** `Hack25/orchestrator-langgraph/app/graphs/orchestrator_v3.py` patterns
 
-**Goal:** The incident routing brain — the new LangGraph graph that takes a pasted incident and orchestrates the multi-agent response.
+**Goal:** The incident routing brain — the LangGraph graph that takes a pasted incident and orchestrates the multi-agent response.
 
 **Files to create:**
 ```
 backend/
 ├── graphs/
-│   ├── incident_graph.py    ← NEW - the main LangGraph
-│   └── state.py             ← NEW - AUBIIncidentState
+│   ├── incident_graph.py    ← main LangGraph
+│   └── state.py             ← AUBIIncidentState
 └── api/
-    └── incidents.py         ← NEW - FastAPI routes
+    └── incidents.py         ← FastAPI routes
 ```
 
 **Tasks:**
@@ -191,12 +153,12 @@ backend/
 - [ ] Wire the StateGraph, compile it
 - [ ] `POST /incidents/run` — blocking endpoint using `graph.ainvoke()`
 - [ ] `GET /incidents/stream` — SSE endpoint using `graph.astream_events()` → emit as text/event-stream
-- [ ] `POST /agents/{id}/query` — NEW endpoint: load agent `id`'s constitution from Qdrant, ask Claude "given this constitution, what context is relevant to incident X?", return answer
+- [ ] `POST /agents/{id}/query` — endpoint: load agent `id`'s constitution from Qdrant, ask Claude "given this constitution, what context is relevant to incident X?", return answer
 
 **Deliverable:** `POST /incidents/stream` streams agent activity; final state has Slack message + postmortem.
 
 ```python
-# incident_graph.py skeleton — adapt from orchestrator_v3.py patterns
+# incident_graph.py skeleton
 from langgraph.graph import StateGraph, END
 from langchain_anthropic import ChatAnthropic
 
@@ -222,18 +184,16 @@ graph = builder.compile()
 ---
 
 ### Person 2 — Constitution Builder + Knowledge Service Extension
-**Base off:** `cognoxent/services/knowledge/` (Qdrant) + `cognoxent/services/harness/app/graphs/prompt_builder.py`
 
-**Goal:** The pipeline that turns GitHub data → Context Constitution → Qdrant facts. Also extend the existing knowledge service to expose constitution-specific endpoints.
+**Goal:** The pipeline that turns GitHub data → Context Constitution → Qdrant facts. Also expose constitution-specific endpoints.
 
-**Files to modify/create:**
+**Files to create:**
 ```
-cognoxent/services/knowledge/app/
-├── constitution/
-│   ├── builder.py          ← NEW - GitHub data → Claude → Qdrant facts
-│   └── schema.py           ← NEW - Pydantic models for constitution facts
-└── api/routes/
-    └── constitution.py     ← NEW - REST routes for constitution CRUD
+backend/
+└── constitution/
+    ├── builder.py          ← GitHub data → Claude → Qdrant facts
+    ├── schema.py           ← Pydantic models for constitution facts
+    └── routes.py           ← REST routes for constitution CRUD
 ```
 
 **Tasks:**
@@ -253,18 +213,17 @@ cognoxent/services/knowledge/app/
   {"subject": "{username}", "predicate": "owns", "object": "auth/ directory", "category": "code_ownership", "confidence": 0.9}
   {"subject": "{username}", "predicate": "prefers", "object": "async communication with detailed context", "category": "collaboration", "confidence": 0.8}
   ```
-- [ ] `constitution.py` routes:
+- [ ] `routes.py` endpoints:
   - `POST /constitution/build` — body: `{github_username, user_id, tenant_id}` → triggers builder
   - `GET /constitution/{user_id}` → returns all facts grouped by category
   - `PATCH /constitution/{user_id}` → update specific facts (for memory_updater node)
-- [ ] Modify `cognoxent/services/harness/app/graphs/prompt_builder.py` — add a `DEVELOPER_CONSTITUTION` section that gets injected when the agent is a dev-mode Aubi (constitution facts pulled from Qdrant)
+- [ ] `prompt_builder.py` — add a `DEVELOPER_CONSTITUTION` section injected at agent session start (constitution facts pulled from Qdrant)
 
 **Deliverable:** `POST /constitution/build?github_username=alicechen` populates Qdrant and returns constitution JSON. `/constitution/{user_id}` returns the living profile.
 
 ---
 
 ### Person 3 — GitHub Ingestion + Agent Registry
-**Base off:** Nothing (truly new) — but use patterns from `cognoxent/services/knowledge/`
 
 **Goal:** Pull real GitHub data for developers, parse it into structured form, and create the agent registry so the incident graph knows which agents exist.
 
@@ -272,10 +231,10 @@ cognoxent/services/knowledge/app/
 ```
 backend/
 ├── ingestion/
-│   ├── github_ingest.py     ← NEW - GitHub API → structured data
-│   └── ownership_map.py     ← NEW - git log → file → owner map
+│   ├── github_ingest.py     ← GitHub API → structured data
+│   └── ownership_map.py     ← git log → file → owner map
 └── api/
-    └── agents.py            ← NEW - agent registry endpoints
+    └── agents.py            ← agent registry endpoints
 ```
 
 **Tasks:**
@@ -325,25 +284,24 @@ def ingest_developer(github_username: str, token: str) -> dict:
 ---
 
 ### Person 4 — Frontend: Agent Cards + Incident Console
-**Base off:** `cognoxent/apps/aubi-web` (Next.js 16 + Tailwind + shadcn/ui)
 
-**Goal:** Extend the existing Aubi web app with the two new views that make the demo work. Don't rebuild — add components on top.
+**Goal:** Build two polished views: an agent dashboard and an incident console. Next.js + Tailwind + shadcn/ui.
 
-**Files to create/modify:**
+**Files to create:**
 ```
-cognoxent/apps/aubi-web/src/
+frontend/src/
 ├── app/
-│   ├── page.tsx              ← MODIFY - add routing to new views
+│   ├── page.tsx              ← routing to new views
 │   ├── agents/
-│   │   └── page.tsx          ← NEW - agent cards dashboard
+│   │   └── page.tsx          ← agent cards dashboard
 │   └── incident/
-│       └── page.tsx          ← NEW - incident console
+│       └── page.tsx          ← incident console
 └── components/
-    ├── AgentCard.tsx          ← NEW
-    ├── ConstitutionPanel.tsx  ← NEW - expandable constitution viewer
-    ├── IncidentConsole.tsx    ← NEW - paste + trigger
-    ├── AgentActivityFeed.tsx  ← NEW - SSE stream display
-    └── ResponsePanel.tsx      ← NEW - Slack msg + postmortem output
+    ├── AgentCard.tsx
+    ├── ConstitutionPanel.tsx  ← expandable constitution viewer
+    ├── IncidentConsole.tsx    ← paste + trigger
+    ├── AgentActivityFeed.tsx  ← SSE stream display
+    └── ResponsePanel.tsx      ← Slack msg + postmortem output
 ```
 
 **Tasks:**
@@ -368,10 +326,10 @@ cognoxent/apps/aubi-web/src/
   - Left: Slack message in a Slack-style bubble mockup (dark sidebar, avatar, timestamp)
   - Right: Postmortem markdown rendered (use `react-markdown`)
   - Bottom strip: "Agent Alice's constitution updated" chips with memory block name
-- [ ] Nav bar: AUBI logo + "Agents" and "Incidents" nav links + dark mode already there
+- [ ] Nav bar: AUBI logo + "Agents" and "Incidents" nav links + dark mode
 - [ ] Wire SSE: `const es = new EventSource(\`/api/incidents/stream?incident_text=...\`)`
 
-**Deliverable:** Two polished pages demo-ready. The incident page streams agent activity in real time. Looks slick enough for a demo video.
+**Deliverable:** Two polished pages demo-ready. The incident page streams agent activity in real time.
 
 ---
 
@@ -379,7 +337,7 @@ cognoxent/apps/aubi-web/src/
 
 | Time | What's happening |
 |---|---|
-| **9:00–9:30** | Everyone: Clone repos, set up `.env`. Agree on the API contracts below. Person 4 opens `aubi-web` in browser to see existing UI. |
+| **9:00–9:30** | Everyone: Set up `.env`. Agree on the API contracts below. Person 4 scaffolds Next.js project. |
 | **9:30–11:30** | Parallel build — each person owns their section, zero blocking. |
 | **11:30–12:00** | Integration checkpoint #1: Person 1 + 2 wire incident graph → knowledge service. Person 3 + 4 wire agent registry → frontend cards. |
 | **12:00–1:00** | Full pipeline running with pre-loaded mock constitutions. Person 1 confirms SSE streams to Person 4's frontend. |
@@ -439,9 +397,6 @@ ANTHROPIC_API_KEY=sk-ant-...
 GITHUB_TOKEN=ghp_...                  # GitHub PAT — free
 QDRANT_URL=http://localhost:6333      # local Qdrant in Docker
 QDRANT_COLLECTION_PREFIX=aubi_hackathon
-
-# If using existing cognoxent knowledge service
-KNOWLEDGE_SERVICE_URL=http://localhost:8002
 ```
 
 ```bash
@@ -457,56 +412,16 @@ docker run -p 6333:6333 qdrant/qdrant
 # 1. Start Qdrant
 docker run -d -p 6333:6333 qdrant/qdrant
 
-# 2. Knowledge service (Person 2's base)
-cd /Users/intern/Desktop/xFoundry/aubi/cognoxent/services/knowledge
+# 2. Backend (Persons 1, 2, 3)
+cd backend
 python3.11 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
-cp .env.example .env && uvicorn app.main:app --port 8002 --reload
+pip install -r requirements.txt
+cp .env.example .env
+uvicorn main:app --port 8000 --reload
 
-# 3. Backend (Persons 1 + 3)
-mkdir -p /Users/intern/Desktop/xFoundry/aubi/cognoxent/services/incident-backend
-cd /Users/intern/Desktop/xFoundry/aubi/cognoxent/services/incident-backend
-python3.11 -m venv .venv && source .venv/bin/activate
-pip install langgraph langchain-anthropic langchain-core fastapi uvicorn PyGitHub python-dotenv httpx
-
-# 4. Frontend (Person 4)
-cd /Users/intern/Desktop/xFoundry/aubi/cognoxent/apps/aubi-web
+# 3. Frontend (Person 4)
+cd frontend
 npm install && npm run dev
-```
-
----
-
-## What We're Reusing vs. Building
-
-```
-FROM cognoxent/services/knowledge:
-  ✅ Qdrant client + collections setup       (5h of work saved)
-  ✅ Embedding service (sentence-transformers already wired)
-  ✅ Context builder (50k token budget injection)
-  ✅ Post-session extraction → self-learning loop
-  ✅ Scoped memory (per-user isolation)
-
-FROM cognoxent/services/harness:
-  ✅ FastAPI app structure                   (2h saved)
-  ✅ Aubi agent system prompt patterns
-  ✅ Deep Agents + subagents patterns
-  ✅ AG-UI SSE streaming events
-
-FROM Hack25/orchestrator-langgraph:
-  ✅ State TypedDict patterns                (1h saved)
-  ✅ SSE event types (AgentActivityData etc.)
-  ✅ LangGraph supervisor v3 patterns
-  ✅ Prompt registry pattern
-
-NEW code we write today:
-  ❌ GitHub ingestion (~150 lines, Person 3)
-  ❌ Constitution builder prompt + Qdrant writer (~100 lines, Person 2)
-  ❌ Incident routing LangGraph (~200 lines, Person 1)
-  ❌ Agent mesh /query endpoint (~50 lines, Person 1)
-  ❌ Frontend agent cards + incident console (~400 lines TSX, Person 4)
-
-Total new code: ~900 lines across 4 people = ~225 lines per person.
-Rest is configuration + wiring + prompts.
 ```
 
 ---
