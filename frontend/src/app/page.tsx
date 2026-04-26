@@ -93,9 +93,9 @@ const constitutionSignals = [
 const pipelineNodes = [
   { label: "Issue Reader", state: "done", icon: <IssueIcon /> },
   { label: "Ownership Router", state: "done", icon: <RouteIcon /> },
-  { label: "Coworker Mesh", state: "active", icon: <AgentsIcon /> },
-  { label: "Fix Generator", state: "idle", icon: <FixIcon /> },
-  { label: "PR Pusher", state: "idle", icon: <PrIcon /> },
+  { label: "Coworker Mesh", state: "done", icon: <AgentsIcon /> },
+  { label: "Fix Generator", state: "done", icon: <FixIcon /> },
+  { label: "PR Pusher", state: "done", icon: <PrIcon /> },
 ];
 
 const heroWords = [
