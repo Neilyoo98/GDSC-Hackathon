@@ -26,6 +26,8 @@ export interface Agent {
     pr_count: number;
     top_files: string[];
     languages: string[];
+    repos_considered?: string[];
+    target_repos?: string[];
   };
 }
 

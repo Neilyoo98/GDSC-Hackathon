@@ -89,8 +89,9 @@ export function DossierPanel({ agent, onClose, onDelete }: Props) {
                 {[
                   `${summary?.commit_count ?? 0} commits`,
                   `${summary?.pr_count ?? 0} PRs`,
+                  summary?.target_repos?.[0] ? `target: ${summary.target_repos[0]}` : "",
                   languages.slice(0, 2).join(" / "),
-                ].map((pill) => (
+                ].filter(Boolean).map((pill) => (
                   <span key={pill} className="font-mono text-[9px] text-[#4a6080] border border-[#1e2d45] bg-[#111827] px-2 py-0.5 rounded">
                     {pill}
                   </span>

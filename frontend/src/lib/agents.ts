@@ -151,6 +151,8 @@ function mergeAgents(left: Agent, right: Agent): Agent {
       pr_count: Math.max(primary.github_data_summary.pr_count, secondary.github_data_summary.pr_count),
       top_files: mergeStrings(primary.github_data_summary.top_files, secondary.github_data_summary.top_files),
       languages: mergeStrings(primary.github_data_summary.languages, secondary.github_data_summary.languages),
+      repos_considered: mergeStrings(primary.github_data_summary.repos_considered ?? [], secondary.github_data_summary.repos_considered ?? []),
+      target_repos: mergeStrings(primary.github_data_summary.target_repos ?? [], secondary.github_data_summary.target_repos ?? []),
     },
   };
 }
@@ -175,7 +177,9 @@ export function normalizeAgent(agent: unknown): Agent {
       commit_count: numberValue(summary.commit_count),
       pr_count: numberValue(summary.pr_count),
       top_files: stringArray(summary.top_files),
-      languages: stringArray(summary.languages)
+      languages: stringArray(summary.languages),
+      repos_considered: stringArray(summary.repos_considered),
+      target_repos: stringArray(summary.target_repos),
     }
   };
 }
