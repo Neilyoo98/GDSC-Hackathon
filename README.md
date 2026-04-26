@@ -1,2 +1,1 @@
-# GDSC-Hackathon
-Build With AI Hackathon 
+# AUBI - Autonomous  Understanding and Behavior Inference
