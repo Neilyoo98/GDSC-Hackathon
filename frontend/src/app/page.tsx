@@ -309,7 +309,7 @@ export default function Home() {
           ))}
         </h1>
 
-        <p className="mono-animate font-mono mx-auto mt-5 text-[10px] uppercase tracking-[4px] text-[#39ff14]" style={{ animationDelay: ".15s" }}>
+        <p className="mono-animate font-mono mx-auto mt-5 text-[12px] uppercase tracking-[4px] text-[#39ff14] md:text-[13px]" style={{ animationDelay: ".15s" }}>
           Autonomous Understanding &amp; Behaviour Inference
         </p>
 
@@ -332,46 +332,48 @@ export default function Home() {
       </section>
 
       {/* ── COWORKER MESH ── */}
-      <section className="relative z-10 px-6 py-20 md:px-10">
-        <SectionHeading eyebrow="The coworker mesh" title="Your team — as a living memory." />
-        <p className="mt-4 max-w-[560px] text-[14px] leading-[1.85] text-[#e8e4dc66]">
-          Each developer&apos;s GitHub history is turned into a Context Constitution — a structured memory of what they own, what they know, and how they work. These constitutions power the mesh.
-        </p>
-        <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {coworkerCards.map((cw, index) => (
-            <div
-              key={cw.name}
-              className="coworker-card landing-fade border border-[#1f1f1f] bg-[#080808] p-5"
-              style={{ animationDelay: `${0.05 + index * 0.08}s` }}
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <div className="flex h-9 w-9 items-center justify-center border border-[#e8e4dc22] font-syne text-[18px] tracking-[2px] text-[#39ff14]">
-                  {cw.initial}
-                </div>
-                <div>
-                  <p className="text-[14px] font-medium text-[#e8e4dc]">{cw.name}</p>
-                  <p className="font-mono text-[9px] uppercase tracking-[2px] text-[#e8e4dc55]">{cw.role}</p>
-                </div>
-              </div>
-              <div className="space-y-2">
-                {cw.owns.slice(0, 2).map((o) => (
-                  <div key={o} className="flex items-start gap-2">
-                    <span className="font-mono mt-0.5 text-[8px] uppercase tracking-[2px] text-[#39ff1466]">owns</span>
-                    <span className="text-[11px] text-[#e8e4dc88]">{o}</span>
+      <section className="relative z-10 px-6 py-20 text-center md:px-10">
+        <div className="mx-auto max-w-[1180px]">
+          <SectionHeading eyebrow="The coworker mesh" title="Your team — as a living memory." />
+          <p className="mx-auto mt-4 max-w-[560px] text-[14px] leading-[1.85] text-[#e8e4dc66]">
+            Each developer&apos;s GitHub history is turned into a Context Constitution — a structured memory of what they own, what they know, and how they work. These constitutions power the mesh.
+          </p>
+          <div className="mx-auto mt-10 grid max-w-[1040px] gap-4 text-left md:grid-cols-2 lg:grid-cols-4">
+            {coworkerCards.map((cw, index) => (
+              <div
+                key={cw.name}
+                className="coworker-card landing-fade border border-[#1f1f1f] bg-[#080808] p-5"
+                style={{ animationDelay: `${0.05 + index * 0.08}s` }}
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="flex h-9 w-9 items-center justify-center border border-[#e8e4dc22] font-syne text-[18px] tracking-[2px] text-[#39ff14]">
+                    {cw.initial}
                   </div>
-                ))}
-                <div className="flex items-start gap-2 pt-1 border-t border-[#1f1f1f]">
-                  <span className="font-mono mt-0.5 text-[8px] uppercase tracking-[2px] text-[#e8e4dc33]">knows</span>
-                  <span className="text-[10px] leading-relaxed text-[#e8e4dc55]">{cw.known}</span>
+                  <div>
+                    <p className="text-[14px] font-medium text-[#e8e4dc]">{cw.name}</p>
+                    <p className="font-mono text-[9px] uppercase tracking-[2px] text-[#e8e4dc55]">{cw.role}</p>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {cw.owns.slice(0, 2).map((o) => (
+                    <div key={o} className="flex items-start gap-2">
+                      <span className="font-mono mt-0.5 text-[8px] uppercase tracking-[2px] text-[#39ff1466]">owns</span>
+                      <span className="text-[11px] text-[#e8e4dc88]">{o}</span>
+                    </div>
+                  ))}
+                  <div className="flex items-start gap-2 pt-1 border-t border-[#1f1f1f]">
+                    <span className="font-mono mt-0.5 text-[8px] uppercase tracking-[2px] text-[#e8e4dc33]">knows</span>
+                    <span className="text-[10px] leading-relaxed text-[#e8e4dc55]">{cw.known}</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-        <div className="mt-6 flex justify-start">
-          <Link href="/team" className="aubi-button aubi-button-secondary font-mono px-4 py-2 text-[10px] uppercase tracking-[2px]">
-            Inspect full constitutions →
-          </Link>
+            ))}
+          </div>
+          <div className="mt-6 flex justify-center">
+            <Link href="/team" className="aubi-button aubi-button-secondary font-mono px-4 py-2 text-[10px] uppercase tracking-[2px]">
+              Inspect full constitutions →
+            </Link>
+          </div>
         </div>
       </section>
 
