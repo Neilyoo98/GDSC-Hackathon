@@ -179,6 +179,32 @@ function HeroMeshBackdrop() {
     <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-0 h-[720px] overflow-hidden">
       <PerspectiveGrid color="57,255,20" />
       <div className="mesh-scan absolute inset-x-0 top-0 h-px bg-[#39ff14]" />
+      <svg className="hero-side-mesh hero-side-mesh-left absolute left-0 top-28 h-[360px] w-[360px] md:left-8 md:w-[420px]" viewBox="0 0 420 360" fill="none">
+        <path className="hero-side-link" d="M18 86 C86 48 142 126 214 86 C284 48 326 72 396 34" />
+        <path className="hero-side-link hero-side-link-hot" d="M42 244 C112 164 184 282 256 196 C308 132 344 160 394 104" />
+        <path className="hero-side-link" d="M22 174 C96 238 156 102 232 168 C286 216 330 228 394 186" />
+        {[
+          [42, 86],[124, 118],[214, 86],[302, 68],[74, 244],[174, 238],[256, 196],[344, 160],[96, 198],[232, 168],
+        ].map(([cx, cy]) => (
+          <g key={`left-${cx}-${cy}`} className="hero-side-node">
+            <circle cx={cx} cy={cy} r="3.5" />
+            <path d={`M${cx} ${cy - 12} L${cx + 10} ${cy - 6} L${cx + 10} ${cy + 6} L${cx} ${cy + 12} L${cx - 10} ${cy + 6} L${cx - 10} ${cy - 6} Z`} />
+          </g>
+        ))}
+      </svg>
+      <svg className="hero-side-mesh hero-side-mesh-right absolute right-0 top-32 h-[360px] w-[360px] md:right-8 md:w-[420px]" viewBox="0 0 420 360" fill="none">
+        <path className="hero-side-link hero-side-link-hot" d="M24 54 C86 96 128 42 190 90 C264 148 322 76 396 118" />
+        <path className="hero-side-link" d="M18 186 C80 132 134 232 204 178 C278 120 324 200 396 146" />
+        <path className="hero-side-link" d="M32 282 C112 220 166 318 244 254 C306 204 346 246 392 214" />
+        {[
+          [44, 70],[118, 62],[190, 90],[304, 102],[62, 178],[146, 216],[204, 178],[318, 184],[88, 264],[244, 254],
+        ].map(([cx, cy]) => (
+          <g key={`right-${cx}-${cy}`} className="hero-side-node">
+            <circle cx={cx} cy={cy} r="3.5" />
+            <path d={`M${cx} ${cy - 12} L${cx + 10} ${cy - 6} L${cx + 10} ${cy + 6} L${cx} ${cy + 12} L${cx - 10} ${cy + 6} L${cx - 10} ${cy - 6} Z`} />
+          </g>
+        ))}
+      </svg>
       <svg className="absolute left-1/2 top-6 h-[620px] w-[min(1120px,120vw)] -translate-x-1/2" viewBox="0 0 1120 620" fill="none">
         <path className="mesh-path mesh-path-a" d="M130 388 C260 230 354 472 500 292 C642 118 774 390 986 196" />
         <path className="mesh-path mesh-path-b" d="M162 190 C320 320 416 150 578 322 C704 456 828 270 1006 420" />
@@ -214,9 +240,17 @@ export default function Home() {
         pageRef.current?.style.setProperty("--spotlight-y", `${y}px`);
         pageRef.current?.style.setProperty("--grid-shift-x", `${x * -0.035}px`);
         pageRef.current?.style.setProperty("--grid-shift-y", `${y * -0.035}px`);
+        pageRef.current?.style.setProperty("--mesh-drift-x", `${(x - rect.width / 2) * 0.014}px`);
+        pageRef.current?.style.setProperty("--mesh-drift-right-x", `${(rect.width / 2 - x) * 0.014}px`);
+        pageRef.current?.style.setProperty("--mesh-drift-y", `${(y - rect.height / 3) * 0.01}px`);
         pageRef.current?.style.setProperty("--spotlight-opacity", "1");
       }}
-      onPointerLeave={() => pageRef.current?.style.setProperty("--spotlight-opacity", "0")}
+      onPointerLeave={() => {
+        pageRef.current?.style.setProperty("--mesh-drift-x", "0px");
+        pageRef.current?.style.setProperty("--mesh-drift-right-x", "0px");
+        pageRef.current?.style.setProperty("--mesh-drift-y", "0px");
+        pageRef.current?.style.setProperty("--spotlight-opacity", "0");
+      }}
       style={
         {
           "--bg": "#080808",
@@ -227,6 +261,9 @@ export default function Home() {
           "--spotlight-y": "22%",
           "--grid-shift-x": "0px",
           "--grid-shift-y": "0px",
+          "--mesh-drift-x": "0px",
+          "--mesh-drift-right-x": "0px",
+          "--mesh-drift-y": "0px",
           "--spotlight-opacity": 0,
           background: "var(--bg)",
           color: "var(--text)",
@@ -273,6 +310,13 @@ export default function Home() {
         .metric-tile:hover{transform:translateY(-4px);background:#e8e4dc08}
         .hero-chip{animation:softFloat 4s ease-in-out infinite}
         .mesh-scan{animation:meshScan 6s ease-in-out infinite;box-shadow:0 0 18px #39ff1455}
+        .hero-side-mesh{opacity:.22;filter:drop-shadow(0 0 12px #39ff1420);transition:transform .16s linear}
+        .hero-side-mesh-left{transform:translate3d(var(--mesh-drift-x),var(--mesh-drift-y),0)}
+        .hero-side-mesh-right{transform:translate3d(var(--mesh-drift-right-x),var(--mesh-drift-y),0)}
+        .hero-side-link{stroke:#e8e4dc;stroke-opacity:.28;stroke-width:1;stroke-dasharray:8 18}
+        .hero-side-link-hot{stroke:#39ff14;stroke-opacity:.35}
+        .hero-side-node circle{fill:#39ff14;opacity:.72}
+        .hero-side-node path{fill:#080808;stroke:#e8e4dc;stroke-opacity:.24;stroke-width:1}
         .mesh-path{stroke:#e8e4dc;stroke-opacity:.32;stroke-width:1.8;stroke-dasharray:14 18;animation:pathFlow 10s linear infinite}
         .mesh-path-a{stroke:#39ff14;stroke-opacity:.45;stroke-width:2;animation-duration:8s}
         .mesh-path-b{stroke-opacity:.28;stroke-width:1.8;animation-duration:12s}
