@@ -7,23 +7,20 @@ export function Nav() {
   const path = usePathname();
 
   return (
-    <nav className="sticky top-0 z-50 h-[52px] flex items-center justify-between px-6 border-b border-[#1e2d45] bg-[#0a0e1acc] backdrop-blur-sm">
-      {/* Wordmark */}
+    <nav className="sticky top-0 z-50 flex h-[52px] items-center justify-between border-b border-[#1f1f1f] bg-[#080808] px-6">
       <div className="flex flex-col leading-none">
-        <span className="font-syne text-lg font-bold tracking-tight">
-          <span className="text-[#00f0ff]">A</span>
-          <span className="text-white">UBI</span>
-        </span>
-        <span className="font-mono text-[8px] text-[#4a6080] tracking-[0.18em] mt-0.5">
-          AUTONOMOUS · AGENT · MESH
+        <span className="font-syne text-2xl font-normal tracking-[4px] text-[#e8e4dc]">AUBI</span>
+        <span className="mt-1 font-mono text-[8px] uppercase tracking-[3px] text-[#e8e4dc99]">
+          Autonomous · Agent · Mesh
         </span>
       </div>
 
-      {/* Nav links */}
       <div className="flex gap-8">
         {[
+          { href: "/team", label: "TEAM" },
+          { href: "/demo", label: "DEMO" },
           { href: "/agents", label: "AGENTS" },
-          { href: "/incident", label: "INCIDENT" },
+          { href: "/incident", label: "INCIDENT" }
         ].map(({ href, label }) => {
           const active = path.startsWith(href);
           return (
@@ -31,10 +28,10 @@ export function Nav() {
               key={href}
               href={href}
               className={[
-                "font-mono text-xs tracking-widest transition-colors",
+                "border-b font-mono text-xs uppercase tracking-[3px] transition-colors",
                 active
-                  ? "text-[#00f0ff] border-b border-[#00f0ff] pb-px"
-                  : "text-[#4a6080] hover:text-[#8aa0c0]",
+                  ? "border-[#39ff14] text-[#39ff14]"
+                  : "border-transparent text-[#e8e4dc99] hover:text-[#e8e4dc]"
               ].join(" ")}
             >
               {label}
@@ -43,11 +40,10 @@ export function Nav() {
         })}
       </div>
 
-      {/* Status */}
       <div className="flex items-center gap-2">
-        <span className="w-2 h-2 rounded-full bg-[#10b981] animate-pulse" />
-        <span className="font-mono text-[9px] text-[#10b981] tracking-widest">
-          SYSTEM ONLINE
+        <span className="h-2 w-2 animate-pulse rounded-full bg-[#39ff14]" />
+        <span className="font-mono text-[9px] uppercase tracking-[3px] text-[#39ff14]">
+          System Online
         </span>
       </div>
     </nav>

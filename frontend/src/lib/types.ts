@@ -20,6 +20,7 @@ export interface Agent {
   name: string;
   role: string;
   constitution_facts: ConstitutionFact[];
+  constitution?: Partial<Record<ConstitutionCategory, ConstitutionFact[]>>;
   github_data_summary: {
     commit_count: number;
     pr_count: number;
@@ -27,6 +28,20 @@ export interface Agent {
     languages: string[];
   };
 }
+
+export interface AgentMessage {
+  sender: "orchestrator" | "alice_aubi" | "bob_aubi" | "carol_aubi" | string;
+  recipient: "orchestrator" | "alice_aubi" | "bob_aubi" | "carol_aubi" | string;
+  message: string;
+  timestamp?: number;
+}
+
+export type AUBIEvent =
+  | { event: "node_start"; node: string; data: null }
+  | { event: "node_done"; node: string; data: Record<string, unknown> | null }
+  | { event: "agent_message"; data: AgentMessage }
+  | { event: "complete"; data: null }
+  | { event: "error"; data: { message: string } };
 
 export type SSENode =
   | "incident_analyzer"

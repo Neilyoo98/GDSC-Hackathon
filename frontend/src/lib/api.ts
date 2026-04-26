@@ -1,7 +1,7 @@
 import type { Agent, IncidentResult, SSEEvent, StreamLike } from "./types";
 
 const BASE = "/api";
-const DEV_MODE = process.env.NEXT_PUBLIC_DEV_MODE === "true";
+const DEV_MODE = process.env.NEXT_PUBLIC_DEV_MODE !== "false";
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
