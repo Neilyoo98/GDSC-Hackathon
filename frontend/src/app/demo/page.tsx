@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { AgentCommFeed } from "@/components/aubi/AgentCommFeed";
 import { AgentMeshLines } from "@/components/aubi/AgentMeshLines";
 import { useAUBIStream } from "@/hooks/useAUBIStream";
+import type { AUBIEvent } from "@/lib/types";
 
 const FLOW_NODES = [
   ["issue_reader", "Issue Read"],
@@ -16,77 +17,77 @@ const FLOW_NODES = [
   ["pr_pusher", "PR Pushed"]
 ] as const;
 
-const DIFF_LINES = [
-  ["+", "const owner = await aubi.route(issue, constitutionStore);"],
-  ["+", "const context = await owner.agent.query({ issue, repo });"],
-  ["-", "return genericSlackPing(issue);"],
-  ["+", "return draftFixPullRequest({ owner, context, patch });"],
-  ["+", "await memory.write(owner.id, learnedFacts);"]
-] as const;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
 
-const PR_CHECKS = ["Issue linked", "Owner validated", "Patch generated", "Tests attached"] as const;
+function eventRecords(events: AUBIEvent[]): Record<string, unknown>[] {
+  return events.map((event) => event.data).filter(isRecord);
+}
 
-const DEMO_MESSAGES = [
-  {
-    sender: "orchestrator",
-    recipient: "alice_aubi",
-    message: "Issue reader found auth 401 failures in the student submission path. Checking ownership memory."
-  },
-  {
-    sender: "alice_aubi",
-    recipient: "orchestrator",
-    message: "I own auth middleware and recent token validation changes. Pulling context from the constitution."
-  },
-  {
-    sender: "orchestrator",
-    recipient: "bob_aubi",
-    message: "Cross-check payments side effects before fix generation. Need shared context on billing callbacks."
-  },
-  {
-    sender: "bob_aubi",
-    recipient: "orchestrator",
-    message: "No payment callback regression detected. Route fix back to Alice and generate the PR patch."
+function latestString(records: Record<string, unknown>[], keys: string[]): string {
+  for (const record of records.slice().reverse()) {
+    for (const key of keys) {
+      const value = record[key];
+      if (typeof value === "string" && value.trim()) return value;
+    }
   }
-];
+  return "";
+}
+
+function latestBoolean(records: Record<string, unknown>[], keys: string[]): boolean | undefined {
+  for (const record of records.slice().reverse()) {
+    for (const key of keys) {
+      const value = record[key];
+      if (typeof value === "boolean") return value;
+    }
+  }
+  return undefined;
+}
+
+function latestStringArray(records: Record<string, unknown>[], keys: string[]): string[] {
+  for (const record of records.slice().reverse()) {
+    for (const key of keys) {
+      const value = record[key];
+      if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string");
+    }
+  }
+  return [];
+}
 
 export default function DemoPage() {
   const [inputIssueUrl, setInputIssueUrl] = useState("");
   const [issueUrl, setIssueUrl] = useState<string | null>(null);
-  const [visualStep, setVisualStep] = useState(0);
-  const { events, agentMessages, nodeStatuses, isStreaming, reset } = useAUBIStream(issueUrl);
+  const { events, agentMessages, nodeStatuses, isStreaming, error, reset } = useAUBIStream(issueUrl);
   const hasRun = !!issueUrl || events.length > 0 || agentMessages.length > 0;
   const trimmedIssue = inputIssueUrl.trim();
-
-  useEffect(() => {
-    if (!hasRun) {
-      setVisualStep(0);
-      return;
-    }
-
-    const timer = window.setInterval(() => {
-      setVisualStep((current) => Math.min(FLOW_NODES.length, current + 1));
-    }, isStreaming ? 700 : 850);
-
-    return () => window.clearInterval(timer);
-  }, [hasRun, isStreaming, issueUrl]);
+  const records = useMemo(() => eventRecords(events), [events]);
+  const patchDiff = latestString(records, ["patch_diff"]);
+  const fixExplanation = latestString(records, ["fix_explanation"]);
+  const testOutput = latestString(records, ["test_output"]);
+  const testsPassed = latestBoolean(records, ["tests_passed"]);
+  const prUrl = latestString(records, ["pr_url"]);
+  const issueTitle = latestString(records, ["issue_title"]);
+  const owners = latestStringArray(records, ["owner_ids", "owners"]);
+  const awaitingApproval = events.some((event) => event.event === "awaiting_approval");
 
   const visualNodeStatuses = useMemo(() => {
     return Object.fromEntries(
       FLOW_NODES.map(([node], index) => {
         const realStatus = nodeStatuses[node];
-        const fallbackStatus =
-          !hasRun ? "idle" : index < visualStep ? "done" : index === visualStep ? "running" : "idle";
-        return [node, realStatus ?? fallbackStatus];
+        return [node, realStatus ?? "idle"];
       })
     ) as Record<(typeof FLOW_NODES)[number][0], "idle" | "running" | "done">;
-  }, [hasRun, nodeStatuses, visualStep]);
+  }, [nodeStatuses]);
 
   const statusText = useMemo(() => {
-    if (visualNodeStatuses.pr_pusher === "done") return "Fixed";
+    if (error) return "Stream Error";
+    if (prUrl) return "PR Ready";
+    if (awaitingApproval) return "Approval";
     if (isStreaming) return "Incident Active";
-    if (hasRun) return "Visual Replay";
+    if (hasRun) return "Awaiting Data";
     return "Watching Repo";
-  }, [hasRun, isStreaming, visualNodeStatuses]);
+  }, [awaitingApproval, error, hasRun, isStreaming, prUrl]);
 
   const completedCount = useMemo(
     () => FLOW_NODES.filter(([node]) => visualNodeStatuses[node] === "done").length,
@@ -94,15 +95,18 @@ export default function DemoPage() {
   );
 
   const progressPercent = Math.round((completedCount / FLOW_NODES.length) * 100);
-  const displayMessages = agentMessages.length > 0
-    ? agentMessages
-    : DEMO_MESSAGES.slice(0, hasRun ? Math.max(1, Math.min(DEMO_MESSAGES.length, visualStep + 1)) : 2);
-  const activeMessage = agentMessages.at(-1) ?? DEMO_MESSAGES[visualStep % DEMO_MESSAGES.length];
+  const activeMessage = agentMessages.at(-1) ?? null;
+  const diffLines = patchDiff.split("\n").filter(Boolean);
+  const checkItems = [
+    { label: "Issue linked", done: Boolean(issueUrl || latestString(records, ["repo_name"])) },
+    { label: "Owner validated", done: owners.length > 0 || visualNodeStatuses.ownership_router === "done" },
+    { label: "Patch generated", done: Boolean(patchDiff) },
+    { label: "Tests attached", done: typeof testsPassed === "boolean" || Boolean(testOutput) },
+  ];
 
   function runFlow() {
     if (!trimmedIssue || isStreaming) return;
     reset();
-    setVisualStep(0);
     setIssueUrl(null);
     window.setTimeout(() => setIssueUrl(trimmedIssue), 0);
   }
@@ -141,8 +145,8 @@ export default function DemoPage() {
 
       <div className="grid min-h-0 flex-1 grid-cols-[360px_1fr] gap-6 p-6">
         <div className="flex min-h-0 flex-col gap-6">
-          <AgentMeshLines activeMessage={activeMessage} />
-          <AgentCommFeed messages={displayMessages} isStreaming={isStreaming || hasRun} />
+          <AgentMeshLines messages={agentMessages} activeMessage={activeMessage} />
+          <AgentCommFeed messages={agentMessages} isStreaming={isStreaming} />
         </div>
 
         <section className="grid min-h-0 grid-rows-[auto_1fr] gap-6">
@@ -190,24 +194,29 @@ export default function DemoPage() {
               <header className="flex h-12 shrink-0 items-center justify-between border-b border-[#1f1f1f] px-4">
                 <p className="font-mono text-[10px] uppercase tracking-[3px] text-[#e8e4dc99]">{"// CODE DIFF"}</p>
                 <span className={`font-mono text-[10px] uppercase tracking-[2px] ${visualNodeStatuses.fix_generator === "done" || visualNodeStatuses.fix_generator === "running" ? "text-[#39ff14]" : "text-[#e8e4dc66]"}`}>
-                  {visualNodeStatuses.fix_generator === "done" ? "Generated" : visualNodeStatuses.fix_generator === "running" ? "Writing" : "Waiting"}
+                  {patchDiff ? "Generated" : visualNodeStatuses.fix_generator === "running" ? "Writing" : "Waiting"}
                 </span>
               </header>
               <div className="aubi-scrollbar flex-1 overflow-auto p-4 font-mono text-[11px] leading-7">
-                {!hasRun && <div className="flex h-full items-center justify-center uppercase tracking-[3px] text-[#e8e4dc66]">Run the flow to stream a patch</div>}
-                {hasRun && DIFF_LINES.map(([sign, text], index) => {
-                  const active = visualNodeStatuses.fix_generator === "running" || visualNodeStatuses.fix_generator === "done" || index < completedCount;
+                {!hasRun && <div className="flex h-full items-center justify-center uppercase tracking-[3px] text-[#e8e4dc66]">Run AUBI to stream a live patch</div>}
+                {hasRun && !patchDiff && (
+                  <div className="flex h-full items-center justify-center px-8 text-center uppercase tracking-[3px] text-[#e8e4dc66]">
+                    {error ?? "Waiting for fix generator output"}
+                  </div>
+                )}
+                {diffLines.map((line, index) => {
+                  const sign = line.startsWith("+") ? "+" : line.startsWith("-") ? "-" : " ";
                   return (
                     <motion.div
-                      key={text}
+                      key={`${line}-${index}`}
                       initial={{ opacity: 0, x: -12 }}
-                      animate={{ opacity: active ? 1 : 0.25, x: 0 }}
+                      animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: index * 0.12 }}
                       className={sign === "+" ? "text-[#39ff14]" : "text-[#e8e4dc66]"}
                     >
                       <span className="mr-3 text-[#e8e4dc55]">{String(index + 1).padStart(2, "0")}</span>
                       <span className="mr-3">{sign}</span>
-                      <span>{text}</span>
+                      <span>{line.replace(/^[+-]/, "")}</span>
                     </motion.div>
                   );
                 })}
@@ -218,7 +227,7 @@ export default function DemoPage() {
               <header className="flex h-12 shrink-0 items-center justify-between border-b border-[#1f1f1f] px-4">
                 <p className="font-mono text-[10px] uppercase tracking-[3px] text-[#e8e4dc99]">{"// PR PREVIEW"}</p>
                 <span className={`font-mono text-[10px] uppercase tracking-[2px] ${visualNodeStatuses.pr_pusher === "done" ? "text-[#39ff14]" : "text-[#e8e4dc66]"}`}>
-                  {visualNodeStatuses.pr_pusher === "done" ? "Ready" : "Drafting"}
+                  {prUrl ? "Ready" : awaitingApproval ? "Approval" : "Waiting"}
                 </span>
               </header>
               <div className="flex flex-1 flex-col gap-4 p-4">
@@ -228,30 +237,45 @@ export default function DemoPage() {
                   className="border border-[#1f1f1f] p-4"
                 >
                   <p className="mb-2 font-mono text-[9px] uppercase tracking-[3px] text-[#e8e4dc66]">Pull request title</p>
-                  <p className="text-sm font-medium text-[#e8e4dc]">Fix routed issue with AUBI-generated patch</p>
+                  <p className="text-sm font-medium text-[#e8e4dc]">
+                    {issueTitle ? `Fix ${issueTitle}` : prUrl ? "PR created by AUBI" : awaitingApproval ? "Approval required before PR push" : "Waiting for generated PR"}
+                  </p>
                   <p className="mt-2 font-mono text-[10px] uppercase tracking-[2px] text-[#e8e4dc66]">{trimmedIssue || "No issue selected"}</p>
+                  {prUrl && (
+                    <a href={prUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex font-mono text-[10px] uppercase tracking-[2px] text-[#39ff14]">
+                      Open PR
+                    </a>
+                  )}
+                  {fixExplanation && <p className="mt-3 text-xs leading-relaxed text-[#e8e4dc99]">{fixExplanation}</p>}
                 </motion.div>
                 <div className="grid gap-2">
-                  {PR_CHECKS.map((check, index) => {
-                    const done = completedCount > index + 1 || visualNodeStatuses.pr_pusher === "done";
+                  {checkItems.map((check, index) => {
                     return (
                       <motion.div
-                        key={check}
+                        key={check.label}
                         initial={{ opacity: 0, x: 10 }}
                         animate={{ opacity: hasRun ? 1 : 0.4, x: 0 }}
                         transition={{ delay: index * 0.1 }}
                         className="flex items-center justify-between border border-[#1f1f1f] px-3 py-2 font-mono text-[10px] uppercase tracking-[2px]"
                       >
-                        <span className={done ? "text-[#39ff14]" : "text-[#e8e4dc99]"}>{check}</span>
+                        <span className={check.done ? "text-[#39ff14]" : "text-[#e8e4dc99]"}>{check.label}</span>
                         <motion.span
-                          className={`h-2 w-2 rounded-full ${done ? "bg-[#39ff14]" : "bg-[#1f1f1f]"}`}
-                          animate={done ? { scale: [1, 1.4, 1] } : { scale: 1 }}
-                          transition={{ duration: 0.7, repeat: done && isStreaming ? Infinity : 0 }}
+                          className={`h-2 w-2 rounded-full ${check.done ? "bg-[#39ff14]" : "bg-[#1f1f1f]"}`}
+                          animate={check.done ? { scale: [1, 1.4, 1] } : { scale: 1 }}
+                          transition={{ duration: 0.7, repeat: check.done && isStreaming ? Infinity : 0 }}
                         />
                       </motion.div>
                     );
                   })}
                 </div>
+                {(typeof testsPassed === "boolean" || testOutput) && (
+                  <div className="border border-[#1f1f1f] p-3">
+                    <p className={`font-mono text-[10px] uppercase tracking-[2px] ${testsPassed ? "text-[#39ff14]" : "text-amber-300"}`}>
+                      {typeof testsPassed === "boolean" ? (testsPassed ? "Verification passed" : "Verification failed") : "Verification output"}
+                    </p>
+                    {testOutput && <pre className="mt-2 max-h-24 overflow-auto whitespace-pre-wrap text-[10px] leading-relaxed text-[#e8e4dc99]">{testOutput}</pre>}
+                  </div>
+                )}
                 <div className="mt-auto border border-[#1f1f1f] p-3">
                   <p className="font-mono text-[9px] uppercase tracking-[3px] text-[#e8e4dc66]">Live stream</p>
                   <div className="mt-3 space-y-2">
