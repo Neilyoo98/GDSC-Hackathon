@@ -14,7 +14,7 @@ export function ResponsePanel({
 }) {
   const learned = events.filter((event) => (
     event.status === "done" &&
-    (event.eventType === "memory_update" || event.eventType === "aubi_learned" || event.node === "memory_updater")
+    (event.eventType === "memory_write" || event.eventType === "memory_update" || event.eventType === "aubi_learned" || event.node === "memory_updater")
   ));
   const owner = agents.find((agent) => result?.owners?.includes(agent.id)) ?? agents[0];
 

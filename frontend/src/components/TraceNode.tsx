@@ -11,6 +11,7 @@ const NODE_META: Record<string, { label: string; bg: string; text: string; borde
   ownership_router:  { label: "ROUTER",      bg: "bg-amber-500/10",   text: "text-amber-400",  border: "border-amber-500/20" },
   query_single_agent:{ label: "AGENT QUERY", bg: "bg-violet-500/10",  text: "text-violet-400", border: "border-violet-500/20" },
   agent_querier:     { label: "AGENT QUERY", bg: "bg-violet-500/10",  text: "text-violet-400", border: "border-violet-500/20" },
+  coworker_mesh_exchange: { label: "MESH",   bg: "bg-violet-500/10",  text: "text-violet-300", border: "border-violet-500/20" },
   code_reader:        { label: "CODE READ",   bg: "bg-sky-500/10",     text: "text-sky-400",    border: "border-sky-500/20" },
   fix_generator:      { label: "FIX GEN",     bg: "bg-cyan-500/10",    text: "text-cyan-400",   border: "border-cyan-500/20" },
   test_runner:        { label: "TESTS",       bg: "bg-emerald-500/10", text: "text-emerald-400",border: "border-emerald-500/20" },
@@ -29,6 +30,7 @@ const DOT_COLORS: Record<string, string> = {
   ownership_router:  "#ffaa00",
   query_single_agent:"#8b5cf6",
   agent_querier:     "#8b5cf6",
+  coworker_mesh_exchange: "#a78bfa",
   code_reader:       "#38bdf8",
   fix_generator:     "#00f0ff",
   test_runner:       "#10b981",
@@ -162,16 +164,17 @@ function ConstellationAnimation() {
 function outputSummary(event: SSEEvent): string {
   if (!event.output) return "";
   const o = event.output;
-  if (event.eventType === "coworker_context") {
-    const from = o.requester_aubi ?? o.source_aubi ?? o.sender ?? o.from ?? "coworker";
-    const to = o.responder_aubi ?? o.target_aubi ?? o.recipient ?? o.to ?? "coworker";
-    return `${String(from)} -> ${String(to)} · ${String(o.reason ?? o.why ?? o.context ?? "").slice(0, 80)}...`;
+  if (event.eventType === "coworker_exchange" || event.eventType === "coworker_context") {
+    const from = o.requester_agent_name ?? o.requester_aubi ?? o.source_aubi ?? o.sender ?? o.from ?? "coworker";
+    const to = o.responder_agent_name ?? o.responder_aubi ?? o.target_aubi ?? o.recipient ?? o.to ?? "coworker";
+    const context = o.context_shared ?? o.shared_context ?? o.context ?? o.reason ?? o.why ?? "";
+    return `${String(from)} -> ${String(to)} · ${String(context).slice(0, 80)}...`;
   }
-  if (event.eventType === "shared_memory") {
-    const memory = o.memory ?? o.content ?? o.summary ?? o.title ?? "memory matched";
+  if (event.eventType === "shared_memory_hit" || event.eventType === "shared_memory") {
+    const memory = o.object ?? o.memory ?? o.content ?? o.summary ?? o.title ?? "memory matched";
     return `TEAM MEMORY: ${String(memory).slice(0, 90)}...`;
   }
-  if (event.eventType === "memory_update" || event.eventType === "aubi_learned") {
+  if (event.eventType === "memory_write" || event.eventType === "memory_update" || event.eventType === "aubi_learned") {
     const update = o.update ?? o.episode ?? o.memory ?? o.object ?? "memory written";
     return `LEARNED: ${String(update).slice(0, 90)}...`;
   }
@@ -184,6 +187,8 @@ function outputSummary(event: SSEEvent): string {
     case "agent_querier":
     case "query_single_agent":
       return `CONTEXT: ${String(o.context ?? "").slice(0, 80)}...`;
+    case "coworker_mesh_exchange":
+      return `MESH: ${Array.isArray(o.coworker_exchanges) ? o.coworker_exchanges.length : 0} exchanges · ${Array.isArray(o.shared_memory_hits) ? o.shared_memory_hits.length : 0} shared memories`;
     case "code_reader":
       return `FILES: ${
         o.file_contents && typeof o.file_contents === "object"
@@ -264,6 +269,7 @@ export function TraceNode({ event, index }: Props) {
             {event.node === "ownership_router" && <RouterAnimation />}
             {event.node === "agent_querier" && <AgentQueryAnimation agentName={event.agent} />}
             {event.node === "query_single_agent" && <AgentQueryAnimation agentName={event.agent} />}
+            {event.node === "coworker_mesh_exchange" && <AgentQueryAnimation agentName={event.agent ?? "coworker mesh"} />}
             {event.node === "response_drafter" && <TypewriterAnimation text={slackText} />}
             {event.node === "fix_generator" && <TypewriterAnimation text={slackText} />}
             {event.node === "memory_updater" && <ConstellationAnimation />}

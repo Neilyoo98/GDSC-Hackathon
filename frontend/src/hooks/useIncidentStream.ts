@@ -25,6 +25,7 @@ const GRAPH_NODES = new Set<SSENode>([
   "ownership_router",
   "query_single_agent",
   "agent_querier",
+  "coworker_mesh_exchange",
   "code_reader",
   "fix_generator",
   "test_runner",
@@ -75,13 +76,13 @@ function normalizeBackendEvent(raw: BackendEvent): SSEEvent {
   if (eventType === "routing_evidence") {
     return { eventType, node: "ownership_router", status: "done", output: asOutput(raw.data) };
   }
-  if (eventType === "coworker_context") {
-    return { eventType, node: "agent_querier", status: "done", output: asOutput(raw.data) };
+  if (eventType === "coworker_exchange" || eventType === "coworker_context") {
+    return { eventType, node: "coworker_mesh_exchange", status: "done", output: asOutput(raw.data) };
   }
-  if (eventType === "shared_memory") {
-    return { eventType, node: "ownership_router", status: "done", output: asOutput(raw.data) };
+  if (eventType === "shared_memory_hit" || eventType === "shared_memory") {
+    return { eventType, node: "coworker_mesh_exchange", status: "done", output: asOutput(raw.data) };
   }
-  if (eventType === "memory_update") {
+  if (eventType === "memory_write" || eventType === "memory_update") {
     return { eventType, node: "memory_updater", status: "done", output: asOutput(raw.data) };
   }
   if (eventType === "aubi_learned") {
@@ -110,6 +111,17 @@ function appendPayload<T>(left: T[] | undefined, event: SSEEvent, eventTypes: st
   return [...(left ?? []), event.output as T];
 }
 
+function dedupeRecords<T>(records: T[] | undefined): T[] | undefined {
+  if (!records) return records;
+  const seen = new Set<string>();
+  return records.filter((record) => {
+    const key = JSON.stringify(record);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function mergeResult(event: SSEEvent, current: IncidentResult | null): IncidentResult {
   const output = event.output ?? {};
   const next: IncidentResult = current ?? { owners: [], stream_log: [] };
@@ -130,26 +142,37 @@ function mergeResult(event: SSEEvent, current: IncidentResult | null): IncidentR
     owners: owners ?? next.owners,
     agent_messages: mergeArrays(next.agent_messages, output.agent_messages),
     routing_evidence: mergeArrays(next.routing_evidence, output.routing_evidence),
-    coworker_contexts: appendPayload<CoworkerContextExchange>(
-      mergeArrays(next.coworker_contexts, output.coworker_contexts ?? output.agent_contexts),
+    coworker_exchanges: dedupeRecords(appendPayload<CoworkerContextExchange>(
+      mergeArrays(next.coworker_exchanges, output.coworker_exchanges),
       event,
-      ["coworker_context"]
-    ),
-    shared_memory: appendPayload<SharedMemoryHit>(
+      ["coworker_exchange", "coworker_context"]
+    )),
+    coworker_contexts: dedupeRecords(appendPayload<CoworkerContextExchange>(
+      mergeArrays(next.coworker_contexts, output.coworker_contexts ?? output.coworker_exchanges ?? output.agent_contexts),
+      event,
+      ["coworker_exchange", "coworker_context"]
+    )),
+    shared_memory_hits: dedupeRecords(appendPayload<SharedMemoryHit>(
+      mergeArrays(next.shared_memory_hits, output.shared_memory_hits),
+      event,
+      ["shared_memory_hit", "shared_memory"]
+    )),
+    shared_memory: dedupeRecords(appendPayload<SharedMemoryHit>(
       mergeArrays(next.shared_memory, output.shared_memory ?? output.shared_memory_hits),
       event,
-      ["shared_memory"]
-    ),
-    memory_updates: appendPayload<MemoryUpdate>(
-      mergeArrays(next.memory_updates, output.memory_updates),
+      ["shared_memory_hit", "shared_memory"]
+    )),
+    memory_writes: dedupeRecords(appendPayload<MemoryUpdate>(
+      mergeArrays(next.memory_writes, output.memory_writes),
       event,
-      ["memory_update", "aubi_learned"]
-    ),
-    learned_facts: appendPayload<Record<string, unknown>>(
-      mergeArrays(next.learned_facts, output.learned_facts),
+      ["memory_write", "memory_update", "aubi_learned"]
+    )),
+    memory_updates: dedupeRecords(appendPayload<MemoryUpdate>(
+      mergeArrays(next.memory_updates, output.memory_updates ?? output.memory_writes),
       event,
-      ["aubi_learned"]
-    ),
+      ["memory_write", "memory_update", "aubi_learned"]
+    )),
+    learned_facts: mergeArrays(next.learned_facts, output.learned_facts),
     stream_log: mergeArrays(next.stream_log, output.stream_log) ?? next.stream_log,
   };
 }

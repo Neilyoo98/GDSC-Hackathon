@@ -21,15 +21,15 @@ function coworkerName(value: unknown, agents: Agent[]): string {
 }
 
 function contextText(exchange: CoworkerContextExchange): string {
-  return text(exchange.shared_context ?? exchange.context ?? exchange.summary ?? exchange.message, "Waiting for shared context...");
+  return text(exchange.context_shared ?? exchange.shared_context ?? exchange.context ?? exchange.summary ?? exchange.message, "Waiting for shared context...");
 }
 
 function sourceName(exchange: CoworkerContextExchange, agents: Agent[]): string {
-  return coworkerName(exchange.requester_aubi ?? exchange.source_aubi ?? exchange.sender ?? exchange.from, agents);
+  return coworkerName(exchange.requester_agent_name ?? exchange.requester_aubi ?? exchange.source_aubi ?? exchange.sender ?? exchange.from, agents);
 }
 
 function targetName(exchange: CoworkerContextExchange, agents: Agent[]): string {
-  return coworkerName(exchange.responder_aubi ?? exchange.target_aubi ?? exchange.recipient ?? exchange.to, agents);
+  return coworkerName(exchange.responder_agent_name ?? exchange.responder_aubi ?? exchange.target_aubi ?? exchange.recipient ?? exchange.to, agents);
 }
 
 function memorySummary(memory: SharedMemoryHit): string {
@@ -37,11 +37,11 @@ function memorySummary(memory: SharedMemoryHit): string {
   if (fact) {
     return text(fact.object ?? fact.summary ?? fact.content, "Team memory matched");
   }
-  return text(memory.memory ?? memory.content ?? memory.summary ?? memory.title, "Team memory matched");
+  return text(memory.object ?? memory.memory ?? memory.content ?? memory.summary ?? memory.title, "Team memory matched");
 }
 
 function memorySource(memory: SharedMemoryHit): string {
-  return text(memory.agent_name ?? memory.source ?? memory.agent_id, "Shared team memory");
+  return text(memory.agent_name ?? memory.source ?? memory.agent_id ?? memory._collection, "Shared team memory");
 }
 
 function updateText(update: MemoryUpdate): string {
@@ -53,6 +53,7 @@ function updateOwner(update: MemoryUpdate, agents: Agent[]): string {
 }
 
 function derivedExchange(result: IncidentResult | null, agents: Agent[]): CoworkerContextExchange[] {
+  if (result?.coworker_exchanges?.length) return result.coworker_exchanges;
   if (result?.coworker_contexts?.length) return result.coworker_contexts;
 
   const routed = result?.routing_evidence?.[0];
@@ -72,11 +73,13 @@ function derivedExchange(result: IncidentResult | null, agents: Agent[]): Cowork
 }
 
 function derivedSharedMemory(result: IncidentResult | null): SharedMemoryHit[] {
+  if (result?.shared_memory_hits?.length) return result.shared_memory_hits;
   if (result?.shared_memory?.length) return result.shared_memory;
   return (result?.routing_evidence ?? []).map((evidence) => evidence as SharedMemoryHit);
 }
 
 function derivedUpdates(result: IncidentResult | null): MemoryUpdate[] {
+  if (result?.memory_writes?.length) return result.memory_writes;
   if (result?.memory_updates?.length) return result.memory_updates;
   return (result?.learned_facts ?? []).map((fact) => fact as MemoryUpdate);
 }
@@ -107,12 +110,16 @@ export function CoworkerMeshPanel({
           <p className="mt-1 text-xs text-[#8aa0c0]">AUBI coworkers exchange context and learn from the incident.</p>
         </div>
         <div className="flex shrink-0 gap-1.5">
-          {["coworker_context", "shared_memory", "memory_update"].map((type) => (
+          {[
+            ["CTX", "coworker_exchange"],
+            ["MEM", "shared_memory_hit"],
+            ["WRITE", "memory_write"],
+          ].map(([label, type]) => (
             <span
               key={type}
               className="rounded border border-[#1e2d45] px-2 py-1 font-mono text-[9px] text-[#4a6080]"
             >
-              {eventCount(events, type)}
+              {label} {eventCount(events, type)}
             </span>
           ))}
         </div>
@@ -137,7 +144,7 @@ export function CoworkerMeshPanel({
                 {sourceName(exchange, agents)} asked {targetName(exchange, agents)}
               </p>
               <p className="mt-1 text-[11px] leading-relaxed text-[#8aa0c0]">
-                Why: {text(exchange.reason ?? exchange.why, "relevant ownership context")}
+                Why: {text(exchange.reason ?? exchange.why ?? exchange.why_it_matters, "relevant ownership context")}
               </p>
               <p className="mt-2 text-xs leading-relaxed text-[#c8d6e8]">{contextText(exchange)}</p>
             </motion.div>
