@@ -1,7 +1,7 @@
 # AUBI 2.0 — Autonomous Understanding & Behaviour Inference
 ### GDSC Hackathon 2026 · UMD · April 26
 
-**Target prizes:** Best App for Developer Productivity · Best Use of Gemini (we use Claude — still qualifies for dev productivity + most creative)
+**Target prizes:** Best App for Developer Productivity · Most Creative · Best Use of Gemini (multiagent)
 
 ---
 
@@ -9,380 +9,516 @@
 
 | Role | Model | Why |
 |---|---|---|
-| **Orchestrator** (incident analysis, routing, drafting) | **Claude Sonnet** (`claude-sonnet-4-5`) | Best reasoning + planning for the complex multi-step flow |
-| **Agent queries** (fast per-agent constitution look-up) | **Claude Haiku** | Cheap, fast, good at following structured constitution |
-| **Constitution building** (GitHub → facts) | **Claude Sonnet** | Long context, structured JSON output quality |
+| **Orchestrator** (issue analysis, routing, fix gen, PR) | **Claude Sonnet** (`claude-sonnet-4-5-20251001`) | Best reasoning for multi-step autonomous flow |
+| **Agent constitution queries** (fast per-agent look-up) | **Claude Haiku** (`claude-haiku-20240307`) | Cheap, fast, good at structured context |
+| **Constitution building** (GitHub → facts) | **Claude Sonnet** | Long context, structured JSON output |
 
-> API needed: `ANTHROPIC_API_KEY`
+> One API key: `ANTHROPIC_API_KEY`
 
 ---
 
-## Scaffolded Files — Already Written
+## The Demo — Full Story (what judges see)
 
-These files are already written and in `backend/`. Each person starts here.
+This is a 90-second end-to-end demo. Prep a demo GitHub repo with a planted bug beforehand.
+
+---
+
+### Scene 1 — Meet the Team (20 sec)
+
+Open AUBI dashboard. Three developer cards on screen.
+
+> "Every developer on this team has an AI co-worker — an Aubi. Each Aubi knows who they are, what they own, and how they work."
+
+Click **Alice's card** → expand her **Context Constitution**:
+```
+Code Ownership:   auth/  billing/  api/gateway/
+Expertise:        Go · Kafka · distributed systems
+Current Focus:    Refactoring payment retry logic
+Collaboration:    Async-first, needs context before meetings
+Known Issues:     Auth token race condition (unresolved)
+```
+
+> "This wasn't manually filled in. Aubi inferred it from Alice's GitHub commits, PRs, and review patterns."
+
+Click **Bob's card** → shows:
+```
+Code Ownership:   frontend/  api/users/
+Expertise:        TypeScript · React · REST APIs
+Current Focus:    User profile redesign
+```
+
+> "And critically — these Aubis know each other. They can consult each other's constitutions."
+
+---
+
+### Scene 2 — The Issue Drops (10 sec)
+
+Switch to the **Issue Feed** panel. A new GitHub issue appears (live, from a real repo):
 
 ```
-backend/
-├── main.py                          ✅ WRITTEN — FastAPI app with all endpoints
-├── requirements.txt                 ✅ WRITTEN — all deps
-├── .env.example                     ✅ WRITTEN — env template
-├── graphs/
-│   ├── state.py                     ✅ WRITTEN — AUBIIncidentState TypedDict
-│   ├── incident_graph.py            ✅ WRITTEN — full LangGraph (5 nodes)
-│   ├── sse_events.py                ✅ WRITTEN — SSE event types
-│   ├── deep_agent_event_mapper.py   ✅ WRITTEN — SSE event mapping
-│   ├── prompt_builder.py            ✅ WRITTEN — prompt assembly helpers
-│   └── memory_scopes.py             ✅ WRITTEN — memory namespace helpers
-├── ingestion/
-│   └── github_ingest.py             ✅ WRITTEN — GitHub API → structured data
-└── constitution/
-    └── builder.py                   ✅ WRITTEN — GitHub data → Claude → Qdrant facts
+Issue #47 — Professor Chen
+"Authentication endpoint returning 401 for valid tokens
+ after yesterday's deployment. Blocking 3 students from
+ submitting their assignments. Urgent."
 ```
 
-**Person 1:** `incident_graph.py` is done. Wire it to FastAPI in `main.py` (already wired). Tune the node prompts.
-**Person 2:** `builder.py` is done. Add Qdrant storage using reference patterns.
-**Person 3:** `github_ingest.py` is done. Add `POST /agents` wiring + agent registry.
-**Person 4:** Build the two new pages: agent cards dashboard + incident console.
+> "Professor Chen just filed a GitHub issue. She doesn't know who to ping. She just needs it fixed."
+
+AUBI picks it up automatically.
+
+---
+
+### Scene 3 — Agent Communication (30 sec)
+
+The **Agent Comm Feed** lights up — this is the centerpiece visual.
+
+Real-time bubbles showing Aubis talking to each other, like a group chat but between AI agents:
+
+```
+🧠 Orchestrator Aubi
+  "New issue: auth 401 after deployment. Reading codebase..."
+  → Querying ownership for auth/
+
+🤖 Alice's Aubi  [owns: auth/]
+  "This matches the token race condition I've been tracking.
+   The refresh logic in auth/token.go line 142 — if two
+   requests hit simultaneously, the old token gets cached."
+
+🤖 Bob's Aubi  [owns: api/users/]
+  "I touched api/users/auth_middleware.go in PR #44 yesterday.
+   Could be related — I changed how headers are passed."
+
+🧠 Orchestrator Aubi
+  "Root cause identified. Alice owns the fix. Bob's PR #44
+   is likely the trigger. Reading auth/token.go..."
+```
+
+> "The Aubis figured out who owns what, consulted each other's knowledge, and traced the root cause — without paging a single human."
+
+---
+
+### Scene 4 — The Fix (20 sec)
+
+**Code panel** slides in:
+- Shows `auth/token.go` with the buggy section highlighted
+- Aubi generates a diff (actual code fix, not pseudocode)
+- Diff shown inline with syntax highlighting
+
+```diff
+- if cached := tokenCache.Get(userID); cached != "" {
+-     return cached, nil
+- }
++ tokenCache.mu.Lock()
++ defer tokenCache.mu.Unlock()
++ if cached := tokenCache.Get(userID); cached != "" {
++     return cached, nil
++ }
+```
+
+> "Aubi read the code, understood the race condition Alice's constitution flagged, and generated the fix."
+
+---
+
+### Scene 5 — PR Pushed (10 sec)
+
+Click **"Push Fix"** (or it auto-pushes after 3-second countdown).
+
+GitHub PR appears on screen (real URL):
+- Title: `fix: resolve auth token race condition (fixes #47)`
+- Body written in Alice's communication style (per her constitution)
+- Reviewers auto-assigned: Alice (owner) + Bob (touched adjacent code)
+- Issue #47 linked and auto-closed on merge
+
+> "One GitHub issue. Zero Slack messages. No one manually debugged it. The Aubis handled everything."
 
 ---
 
 ## Architecture
 
 ```
-                     Incident Text (pasted Slack thread)
-                              │
-                    ┌─────────▼──────────┐
-                    │  Incident Graph     │  ← LangGraph
-                    │  (~200 lines)       │
-                    │  - analyze incident │
-                    │  - query ownership  │
-                    │  - call agent APIs  │
-                    │  - draft response   │
-                    └─────────┬──────────┘
-                              │
-          ┌───────────────────┼────────────────────┐
-          ▼                   ▼                    ▼
-   Aubi Agent A         Aubi Agent B         Aubi Agent C
-   (Dev Alice)          (Dev Bob)             (Dev Carol)
-   ┌──────────┐         ┌──────────┐          ┌──────────┐
-   │ Claude   │         │ Claude   │          │ Claude   │
-   │ Haiku    │◄──────► │ Haiku    │◄────────►│ Haiku    │
-   │ + const. │  /query │ + const. │  /query  │ + const. │
-   └────┬─────┘ endpoint└────┬─────┘  endpoint└────┬─────┘
-        │                    │                      │
-        └──────────────┬─────┘──────────────────────┘
-                       │
-              ┌────────▼─────────┐
-              │  Knowledge Svc    │  ← Qdrant
-              │  - semantic_facts │    populated from
-              │  - episodes       │    GitHub ingestion
-              │  - procedures     │    (Context Constitution)
-              └──────────────────┘
+GitHub Issue Webhook / Poll
+         │
+         ▼
+┌─────────────────────────────────────────────────────┐
+│              AUBI Incident Graph (LangGraph)         │
+│                                                      │
+│  issue_reader → ownership_router → agent_consultor   │
+│       → code_reader → fix_generator → pr_pusher      │
+└──────────────────────────┬──────────────────────────┘
+                           │  agent-to-agent queries
+          ┌────────────────┼────────────────┐
+          ▼                ▼                ▼
+   Alice's Aubi      Bob's Aubi       Carol's Aubi
+   (Haiku + const.)  (Haiku + const.) (Haiku + const.)
+          │                │
+          └────────────────┘
+               shared Qdrant memory
+         (constitutions + past incidents)
+                           │
+                    GitHub API (PyGitHub)
+                    read files + push PR
 ```
 
-### What Each Agent Looks Like
+### Extended State (adds to existing AUBIIncidentState)
 
-Each developer agent has a **Context Constitution** pre-loaded into its Qdrant memory:
-- `semantic_facts` → code ownership facts ("Alice owns auth/, billing/")
-- `episodes` → past incidents Alice was involved in
-- `procedures` → Alice's preferred debugging patterns
+```python
+class AUBIIssueState(TypedDict):
+    # Input
+    issue_url: str
+    issue_title: str
+    issue_body: str
+    repo_name: str          # "owner/repo"
 
-The **constitution is just Qdrant facts**. We populate it from GitHub on agent creation. The self-learning loop keeps it updated after every incident.
+    # Analyzer output
+    affected_files: list[str]
+    error_type: str
+
+    # Router output
+    owner_ids: list[str]
+
+    # Agent comms — list of {sender, recipient, message}
+    agent_messages: Annotated[list[dict], operator.add]
+
+    # Code reader output
+    file_contents: dict[str, str]   # {filepath: code}
+
+    # Fix generator output
+    patch_diff: str
+    fix_explanation: str
+
+    # PR pusher output
+    pr_url: str
+    branch_name: str
+
+    # Stream log for frontend
+    stream_log: Annotated[list[str], operator.add]
+```
 
 ---
 
-## New: Context Constitution
-
-Stored as Qdrant `semantic_facts` with category tags. Built from GitHub by Claude. Example points:
+## Graph: 6 Nodes (extended from 5-node incident graph)
 
 ```
-{subject: "alice", predicate: "owns", object: "auth/ directory", category: "code_ownership", confidence: 0.95}
-{subject: "alice", predicate: "expertise", object: "Go, Kafka, distributed systems", category: "expertise", confidence: 0.9}
-{subject: "alice", predicate: "prefers", object: "async comms, detailed write-ups before asking", category: "collaboration", confidence: 0.8}
-{subject: "alice", predicate: "currently_working_on", object: "payment retry logic refactor", category: "current_focus", confidence: 0.85}
-{subject: "alice", predicate: "knows_issue", object: "auth token race condition on mobile", category: "known_issues", confidence: 0.9}
+issue_reader         reads GitHub issue, extracts affected area
+      ↓
+ownership_router     checks Qdrant ownership, finds Alice + Bob
+      ↓
+agent_consultor      queries each agent's Aubi in parallel
+      ↓                (this produces the "agent comms" feed)
+code_reader          reads affected files from GitHub repo
+      ↓
+fix_generator        Claude Sonnet: issue + code + agent context → diff
+      ↓
+pr_pusher            creates branch, commits diff, opens PR via GitHub API
 ```
-
-Each fact is embedded and stored with `scope: "user", scope_id: alice_id`. The knowledge service's `context_builder.py` assembles these into a memory context injected into Alice's Aubi at session start.
 
 ---
 
-## Demo Flow (what judges see — ~15 seconds end-to-end)
+## Scaffolded Files — Already Written
 
-1. **Dashboard** shows 3 developer cards, each with their auto-generated constitution: code ownership tags, expertise pills, current focus, collaboration style — all pulled from GitHub via Claude.
-
-2. **Incident console** — user pastes:
-   > `"prod down, payment service 500s, started 20min ago, no idea why"`
-
-3. **Agent activity feed streams live** (from SSE events):
-   - `incident_analyzer` → "Payment service, 500 errors, billing/ affected"
-   - `ownership_router` → "Checking Qdrant... Alice owns billing/. Querying her agent."
-   - `agent_querier[Alice]` → "Alice's constitution: tracking retry logic bug. Known issue matches pattern."
-   - `response_drafter` → "Drafting Slack in Alice's communication style..."
-
-4. **Response panel** shows:
-   - ✅ Slack message written in Alice's voice and style
-   - ✅ Postmortem skeleton with timeline + action items pre-assigned
-   - ✅ "Constitution updated: Alice's retry logic issue marked resolved"
+```
+backend/
+├── main.py                          ✅ WRITTEN — FastAPI + all endpoints
+├── requirements.txt                 ✅ WRITTEN
+├── .env.example                     ✅ WRITTEN
+├── graphs/
+│   ├── state.py                     ✅ WRITTEN — extend with AUBIIssueState
+│   ├── incident_graph.py            ✅ WRITTEN — 5-node base (extend to 6)
+│   ├── sse_events.py                ✅ COPIED from orchestrator-langgraph
+│   ├── deep_agent_event_mapper.py   ✅ COPIED
+│   ├── prompt_builder.py            ✅ COPIED from cognoxent
+│   └── memory_scopes.py             ✅ COPIED
+├── ingestion/
+│   ├── github_ingest.py             ✅ WRITTEN — dev profile ingestion
+│   └── github_issue.py              ❌ BUILD — issue reader + code reader + PR pusher
+└── constitution/
+    └── builder.py                   ✅ WRITTEN — GitHub → Claude → Qdrant facts
+```
 
 ---
 
 ## Team Division of Work
 
-### Person 1 — Incident Graph (LangGraph) + Agent Mesh API
+### Person 1 — Extended Graph + Agent Comms
+**Base off:** `backend/graphs/incident_graph.py` (already written, extend it)
 
-**Goal:** The incident routing brain — the LangGraph graph that takes a pasted incident and orchestrates the multi-agent response.
-
-**Files to create:**
-```
-backend/
-├── graphs/
-│   ├── incident_graph.py    ← main LangGraph
-│   └── state.py             ← AUBIIncidentState
-└── api/
-    └── incidents.py         ← FastAPI routes
-```
+**Goal:** Extend the 5-node incident graph to the 6-node issue→PR graph. Add the agent consultor that produces the agent-to-agent communication feed.
 
 **Tasks:**
-- [ ] Define `AUBIIncidentState` (incident_text, affected_files, owners, agent_contexts, drafted_response, postmortem, stream_log)
-- [ ] `incident_analyzer` node — Claude Haiku extracts: service, error type, affected files from raw text
-- [ ] `ownership_router` node — queries Qdrant `semantic_facts` for `predicate: "owns"` facts matching affected files → returns list of agent IDs
-- [ ] `agent_querier` node — for each relevant agent, HTTP call to `/agents/{id}/query` endpoint with the incident summary; collects their constitution-based context
-- [ ] `response_drafter` node — Claude Sonnet: draft Slack response in primary owner's communication style + generate postmortem markdown
-- [ ] `memory_updater` node — after response is accepted, post to knowledge service to update episode/fact stores
-- [ ] Wire the StateGraph, compile it
-- [ ] `POST /incidents/run` — blocking endpoint using `graph.ainvoke()`
-- [ ] `GET /incidents/stream` — SSE endpoint using `graph.astream_events()` → emit as text/event-stream
-- [ ] `POST /agents/{id}/query` — endpoint: load agent `id`'s constitution from Qdrant, ask Claude "given this constitution, what context is relevant to incident X?", return answer
+- [ ] Extend `state.py` → add `AUBIIssueState` fields (issue_url, repo_name, file_contents, patch_diff, pr_url, agent_messages)
+- [ ] Rename/extend `incident_analyzer` → `issue_reader` node:
+  - Accepts `issue_url` instead of raw text
+  - Calls Person 3's `github_issue.read_issue()` to get title + body + repo
+  - Claude Haiku: extract affected service / files from issue body
+- [ ] `agent_consultor` node — PARALLEL agent queries using LangGraph `Send` API:
+  - For each owner, call `POST /agents/{id}/query` with issue summary
+  - Each response goes into `agent_messages` list (appended via `operator.add`)
+  - Each message: `{sender: "alice_aubi", recipient: "orchestrator", message: "...", timestamp}`
+  - This produces the real-time agent comm feed
+- [ ] `fix_generator` node — Claude Sonnet prompt:
+  - Input: issue body + file_contents + all agent_messages (their context)
+  - Output: unified diff (patch) + fix_explanation
+  - Must produce real, syntactically valid code — use a demo repo with a known bug
+- [ ] Wire updated 6-node graph and expose via existing SSE endpoint
+- [ ] Add `agent_messages` events to the SSE stream so frontend can show them
 
-**Deliverable:** `POST /incidents/stream` streams agent activity; final state has Slack message + postmortem.
-
+**Key pattern for parallel agent queries (Send API):**
 ```python
-# incident_graph.py skeleton
-from langgraph.graph import StateGraph, END
-from langchain_anthropic import ChatAnthropic
+from langgraph.types import Send
 
-sonnet = ChatAnthropic(model="claude-sonnet-4-5-20251001")
-haiku  = ChatAnthropic(model="claude-haiku-20240307")
+def route_to_agents(state: AUBIIssueState):
+    return [Send("query_single_agent", {"agent_id": id, **state})
+            for id in state["owner_ids"]]
 
-builder = StateGraph(AUBIIncidentState)
-builder.add_node("incident_analyzer", incident_analyzer)
-builder.add_node("ownership_router", ownership_router)
-builder.add_node("agent_querier", agent_querier)
-builder.add_node("response_drafter", response_drafter)
-builder.add_node("memory_updater", memory_updater)
-
-builder.set_entry_point("incident_analyzer")
-builder.add_edge("incident_analyzer", "ownership_router")
-builder.add_edge("ownership_router", "agent_querier")
-builder.add_edge("agent_querier", "response_drafter")
-builder.add_edge("response_drafter", "memory_updater")
-builder.add_edge("memory_updater", END)
-graph = builder.compile()
+builder.add_conditional_edges("ownership_router", route_to_agents)
+builder.add_node("query_single_agent", query_single_agent_node)
+builder.add_edge("query_single_agent", "code_reader")
 ```
+
+**Deliverable:** Full 6-node graph streaming agent messages + diff + PR URL via SSE.
 
 ---
 
-### Person 2 — Constitution Builder + Knowledge Service Extension
+### Person 2 — Constitution Store (Qdrant) + Knowledge Service
+**Base off:** `backend/constitution/builder.py` (written) + `constitution/*_reference.py` files
 
-**Goal:** The pipeline that turns GitHub data → Context Constitution → Qdrant facts. Also expose constitution-specific endpoints.
-
-**Files to create:**
-```
-backend/
-└── constitution/
-    ├── builder.py          ← GitHub data → Claude → Qdrant facts
-    ├── schema.py           ← Pydantic models for constitution facts
-    └── routes.py           ← REST routes for constitution CRUD
-```
+**Goal:** Make the Qdrant storage actually work so constitutions persist and are queryable by the graph nodes.
 
 **Tasks:**
-- [ ] `schema.py` — Pydantic models: `ConstitutionFact`, `ContextConstitution`
-- [ ] `builder.py`:
-  - Accept structured GitHub data (from Person 3's ingestion)
-  - Claude Sonnet prompt: "Given this GitHub activity, extract structured facts about this developer"
-  - Parse JSON response → list of `ConstitutionFact` objects
-  - Store each fact as a Qdrant point in `semantic_facts` with `category` tag and `scope: "user"`
-  - Return summary of how many facts were stored per category
-- [ ] Claude prompt for constitution building (in `builder.py`):
-  ```
-  Analyze this GitHub data and extract structured facts about developer {username}.
-  Return JSON array of facts. Each fact: {subject, predicate, object, confidence, category}
-  Categories: code_ownership, expertise, collaboration, current_focus, known_issues
-  Examples:
-  {"subject": "{username}", "predicate": "owns", "object": "auth/ directory", "category": "code_ownership", "confidence": 0.9}
-  {"subject": "{username}", "predicate": "prefers", "object": "async communication with detailed context", "category": "collaboration", "confidence": 0.8}
-  ```
-- [ ] `routes.py` endpoints:
-  - `POST /constitution/build` — body: `{github_username, user_id, tenant_id}` → triggers builder
-  - `GET /constitution/{user_id}` → returns all facts grouped by category
-  - `PATCH /constitution/{user_id}` → update specific facts (for memory_updater node)
-- [ ] `prompt_builder.py` — add a `DEVELOPER_CONSTITUTION` section injected at agent session start (constitution facts pulled from Qdrant)
+- [ ] Set up Qdrant locally: `docker run -d -p 6333:6333 qdrant/qdrant`
+- [ ] Create collections using reference: `qdrant_client_reference.py` → create `semantic_facts`, `episodes` collections
+- [ ] `constitution/store.py` — extend `builder.py` with:
+  - `store_facts(facts, user_id, tenant_id)` → embed each fact with sentence-transformers → upsert to Qdrant
+  - `get_facts(user_id)` → search Qdrant, return facts grouped by category
+  - `search_ownership(filepath)` → semantic search `semantic_facts` where predicate="owns" and object contains filepath
+  - `add_episode(user_id, incident_summary)` → store in `episodes` collection
+- [ ] Expose via FastAPI in `main.py`:
+  - `GET /constitution/{agent_id}` → `store.get_facts(agent_id)`
+  - `PATCH /constitution/{agent_id}` → `store.add_episode()`
+  - `POST /constitution/store` → bulk store facts (called after `POST /agents`)
+- [ ] Pre-populate 3 demo agent constitutions in Qdrant (hardcoded facts for Alice, Bob, Carol for demo reliability)
+- [ ] Update `ownership_router` in incident graph to call `store.search_ownership()` instead of the mock HTTP call
 
-**Deliverable:** `POST /constitution/build?github_username=alicechen` populates Qdrant and returns constitution JSON. `/constitution/{user_id}` returns the living profile.
+**Key code from reference:**
+```python
+# embeddings_reference.py pattern
+from sentence_transformers import SentenceTransformer
+_model = SentenceTransformer("all-MiniLM-L6-v2")
+def embed_text(text: str) -> list[float]:
+    return _model.encode(text).tolist()
+```
+
+**Deliverable:** `POST /agents` fully creates an agent with real Qdrant storage. Ownership queries return real results.
 
 ---
 
-### Person 3 — GitHub Ingestion + Agent Registry
+### Person 3 — GitHub Integration (Issue + Code + PR)
+**Base off:** `backend/ingestion/github_ingest.py` (written) — extend with issue/PR logic
 
-**Goal:** Pull real GitHub data for developers, parse it into structured form, and create the agent registry so the incident graph knows which agents exist.
+**Goal:** The GitHub layer — read issues, read code files, push PRs. This is the "wow" that makes it real.
 
-**Files to create:**
+**File to create:**
 ```
-backend/
-├── ingestion/
-│   ├── github_ingest.py     ← GitHub API → structured data
-│   └── ownership_map.py     ← git log → file → owner map
-└── api/
-    └── agents.py            ← agent registry endpoints
+backend/ingestion/github_issue.py
 ```
 
 **Tasks:**
-- [ ] `github_ingest.py` — given a GitHub username, pull via `PyGitHub`:
-  - Last 90 days of commits (messages, files changed)
-  - PRs authored (title, description, files touched)
-  - PR review comments (what they nitpick = expertise signals)
-  - Repository languages (from repos they contribute to most)
-  - Return structured dict ready for Person 2's constitution builder
-- [ ] `ownership_map.py` — given a git repo path or GitHub repo:
-  - Run `git log --follow --name-only` or use GitHub API's commit history
-  - Build `{filepath → primary_owner_github_handle}` map (whoever touched it most = owner)
-  - Cache in a simple JSON file or in-memory dict for demo
-- [ ] `agents.py` FastAPI routes:
-  - `GET /agents` → list all registered agents with summary constitution (name, role, top 3 owned files, expertise tags)
-  - `GET /agents/{id}` → full constitution JSON (calls `/constitution/{user_id}` on knowledge service)
-  - `POST /agents` → body: `{github_username, name, role}` → calls GitHub ingestion + constitution builder + returns agent
-- [ ] Pre-load 3 demo agents from real public GitHub profiles before demo (find 3 devs on a popular Go/Python OSS project)
-- [ ] Health + ready endpoints for deployment
+- [ ] `read_issue(issue_url)` → parse `owner/repo#number` or full URL, return `{title, body, repo_name, issue_number, author}`
+- [ ] `read_repo_files(repo_name, filepaths)` → given a list of file paths, return `{filepath: content}` dict using GitHub API
+- [ ] `create_fix_pr(repo_name, issue_number, patch_diff, fix_explanation, pr_body_style)`:
+  - Create new branch: `aubi/fix-issue-{number}`
+  - Apply the diff to the right file(s) using GitHub Contents API
+  - Create commit: `fix: resolve {issue_title} (closes #{issue_number})`
+  - Open PR with auto-generated body (written in primary owner's communication style)
+  - Add reviewers (owner_ids mapped to GitHub handles)
+  - Return PR URL
+- [ ] `POST /github/issue` endpoint in `main.py` — accepts `{issue_url}` → triggers the full graph
+- [ ] `GET /github/poll` — polls a configured repo for new issues every 30 sec (for live demo: open an issue during demo, AUBI auto-picks it up)
+- [ ] Pre-prep demo repo: a public GitHub repo with a planted bug that Claude can find and fix deterministically
 
 **Key code:**
 ```python
-# github_ingest.py
-from github import Github
+from github import Github, GithubException
+from github.InputGitAuthor import InputGitAuthor
+import base64
 
-def ingest_developer(github_username: str, token: str) -> dict:
-    g = Github(token)
-    user = g.get_user(github_username)
-    
-    commits_data, prs_data, files_touched = [], [], []
-    # ... pull data
-    
-    return {
-        "username": github_username,
-        "name": user.name,
-        "bio": user.bio,
-        "commits": commits_data,      # [{message, files, repo, date}]
-        "prs": prs_data,              # [{title, body, files, repo}]
-        "files_touched": files_touched,  # [{path, count, repo}]
-        "languages": dict(user.get_repos()),
-        "review_comments": [...],
-    }
+def create_fix_pr(repo_name, issue_number, file_path, new_content, commit_msg, pr_title, pr_body):
+    g = Github(os.getenv("GITHUB_TOKEN"))
+    repo = g.get_repo(repo_name)
+
+    # Get base branch SHA
+    base = repo.get_branch("main")
+    branch_name = f"aubi/fix-issue-{issue_number}"
+
+    # Create branch
+    repo.create_git_ref(f"refs/heads/{branch_name}", base.commit.sha)
+
+    # Update file
+    contents = repo.get_contents(file_path, ref="main")
+    repo.update_file(
+        contents.path, commit_msg, new_content,
+        contents.sha, branch=branch_name,
+        author=InputGitAuthor("Aubi Bot", "aubi@cognoxent.ai"),
+    )
+
+    # Open PR
+    pr = repo.create_pull(
+        title=pr_title, body=pr_body,
+        head=branch_name, base="main",
+        issue=repo.get_issue(issue_number),
+    )
+    return pr.html_url
 ```
 
-**Deliverable:** `POST /agents` with a GitHub username creates a new agent, populates its constitution, and returns it ready for the incident graph to use.
+**Deliverable:** Given a GitHub issue URL, system reads the code, generates a fix, and pushes a real PR. Works end-to-end in the demo.
 
 ---
 
-### Person 4 — Frontend: Agent Cards + Incident Console
+### Person 4 — Frontend: Full Demo UI
+**Base off:** `cognoxent/apps/aubi-web` (Next.js 16 + Tailwind + shadcn/ui)
 
-**Goal:** Build two polished views: an agent dashboard and an incident console. Next.js + Tailwind + shadcn/ui.
+**Goal:** Three views that tell the demo story visually. The agent comm feed is the centrepiece.
 
-**Files to create:**
+**Pages/components:**
+
 ```
-frontend/src/
-├── app/
-│   ├── page.tsx              ← routing to new views
-│   ├── agents/
-│   │   └── page.tsx          ← agent cards dashboard
-│   └── incident/
-│       └── page.tsx          ← incident console
-└── components/
-    ├── AgentCard.tsx
-    ├── ConstitutionPanel.tsx  ← expandable constitution viewer
-    ├── IncidentConsole.tsx    ← paste + trigger
-    ├── AgentActivityFeed.tsx  ← SSE stream display
-    └── ResponsePanel.tsx      ← Slack msg + postmortem output
+/team                 ← Agent cards (Scene 1)
+/issue-feed           ← Live issue watcher (Scene 2)
+/aubi-comms           ← Agent communication + fix + PR (Scenes 3-5)
 ```
 
 **Tasks:**
-- [ ] **Agent Cards view** (`/agents`):
-  - Fetch `GET /agents` → render cards in a grid
-  - Each card: GitHub avatar, name, role tag, 3 ownership file badges, expertise tags, collaboration style snippet
-  - Click card → expand `ConstitutionPanel` showing full grouped facts
-  - "Memory version N" badge + last-updated timestamp
-  - Pulsing green "online" dot on each card
-- [ ] **Incident Console** (`/incident`):
-  - Full-width dark textarea: "Paste Slack thread or error message..."
-  - Big red "Trigger Incident →" button (Cmd+Enter shortcut)
-  - Clears and shows loading skeleton on submit
-- [ ] **Agent Activity Feed** (on `/incident` page, right side):
-  - Connect to `GET /incidents/stream` SSE
-  - Each LangGraph event → rendered as a timeline item with:
-    - Node name badge (colored: blue=analyze, yellow=route, purple=query, green=draft)
-    - Short description of what the node did
-    - Animated spinner while node is active
-  - Auto-scroll to latest
-- [ ] **Response Panel** (bottom of `/incident`):
-  - Left: Slack message in a Slack-style bubble mockup (dark sidebar, avatar, timestamp)
-  - Right: Postmortem markdown rendered (use `react-markdown`)
-  - Bottom strip: "Agent Alice's constitution updated" chips with memory block name
-- [ ] Nav bar: AUBI logo + "Agents" and "Incidents" nav links + dark mode
-- [ ] Wire SSE: `const es = new EventSource(\`/api/incidents/stream?incident_text=...\`)`
 
-**Deliverable:** Two polished pages demo-ready. The incident page streams agent activity in real time.
+**`/team` page:**
+- [ ] `AgentCard` — GitHub avatar, name, role, expertise tag pills, code ownership badges, collaboration style blurb
+- [ ] `ConstitutionPanel` — expandable drawer showing all constitution facts grouped by category, confidence bars
+- [ ] "Memory version N · Updated 2 min ago" footer on each card
+- [ ] Animated connection lines between cards (SVG) showing the agent mesh
+
+**`/issue-feed` panel (embedded on `/aubi-comms`):**
+- [ ] Polls `GET /github/poll` every 5 seconds
+- [ ] New issue appears with slide-in animation: repo icon + issue title + author + "🔴 Open"
+- [ ] "AUBI is on it" badge appears after 1 second with a loading spinner
+
+**`/aubi-comms` page (main demo view):**
+- [ ] Left panel: **Agent Comm Feed** — the centrepiece
+  - Each message is a chat bubble: agent avatar (colored per agent) + name + message text
+  - Bubbles animate in from left/right depending on sender
+  - Orchestrator = center/top, agents on sides
+  - Shows agent thinking (animated "..." before each message appears)
+  - Color coded: Orchestrator = indigo, Alice = emerald, Bob = amber, Carol = rose
+- [ ] Center panel: **Code Diff** (shows up after code_reader node)
+  - Syntax-highlighted diff view (use `react-syntax-highlighter` or `shiki`)
+  - Removed lines red, added lines green
+  - File name + line numbers
+- [ ] Right panel: **PR Preview**
+  - Mockup GitHub PR card: title, branch name, "Draft → Ready" badge
+  - PR body rendered as markdown
+  - Reviewers section with avatars
+  - "Push Fix →" button (calls `POST /incidents/run` or auto-pushes)
+  - After push: actual GitHub PR link appears with confetti animation
+- [ ] SSE wiring: `EventSource` on `/incidents/stream` → route each event to the right panel:
+  - `agent_consultor` events → Agent Comm Feed
+  - `code_reader` done → Code Diff panel
+  - `fix_generator` done → PR Preview panel
+  - `pr_pusher` done → real PR URL + confetti
+
+**Deliverable:** Demo-ready UI. Judges see agents chatting, code being fixed, PR being pushed — all in one view, in real time.
 
 ---
 
-## Revised Timeline
+## Timeline (updated for new flow)
 
-| Time | What's happening |
+| Time | What |
 |---|---|
-| **9:00–9:30** | Everyone: Set up `.env`. Agree on the API contracts below. Person 4 scaffolds Next.js project. |
-| **9:30–11:30** | Parallel build — each person owns their section, zero blocking. |
-| **11:30–12:00** | Integration checkpoint #1: Person 1 + 2 wire incident graph → knowledge service. Person 3 + 4 wire agent registry → frontend cards. |
-| **12:00–1:00** | Full pipeline running with pre-loaded mock constitutions. Person 1 confirms SSE streams to Person 4's frontend. |
+| **9:00–9:30** | Install deps. Spin up Qdrant docker. Agree API contracts. Person 3: create demo GitHub repo with planted bug. |
+| **9:30–11:30** | Parallel build. Person 2 gets Qdrant working first (others depend on it). |
+| **11:30–12:00** | Integration #1: Graph SSE → frontend. Hardcoded agent contexts OK for now. |
+| **12:00–1:00** | Full pipeline: real GitHub issue → graph → draft PR (no actual push yet). |
 | **1:00–1:30** | Lunch |
-| **1:30–3:00** | Person 3 loads real GitHub data for 3 demo devs. Everyone tunes Claude prompts for better output quality. |
-| **3:00–4:30** | 3x full demo run-throughs. Fix bugs. Person 4 final UI polish. |
-| **4:30–5:30** | Deploy to Railway or Vercel. Confirm prod URLs work. |
-| **5:30–6:30** | Record demo video (Loom). Write DevPost. |
-| **6:30–7:00** | Submit. |
+| **1:30–2:30** | Person 3: actual PR push working. Person 4: agent comm animation polished. |
+| **2:30–4:00** | Full demo rehearsal 3x. Tune prompts so fix quality is good. |
+| **4:00–5:00** | Deploy. Record demo video. |
+| **5:00–7:00** | DevPost write-up + submit. |
 
 ---
 
-## Agreed API Contracts (lock at 9:30am)
+## Prep: Demo Repo Setup (Person 3, do at 9:00am)
 
-```
-# Backend — port 8000
+Create a public GitHub repo: `AUBI-Demo` with a planted bug:
 
-# Agents
-GET  /agents                          → [{id, github_username, name, role, expertise[], code_ownership[]}]
-GET  /agents/{id}                     → full ContextConstitution JSON
-POST /agents                          → body: {github_username, name, role} → creates agent, returns constitution
-POST /agents/{id}/query               → body: {incident_text} → returns agent's relevant context string
-
-# Incidents
-POST /incidents/run                   → body: {incident_text} → blocks, returns full result
-GET  /incidents/stream                → query: incident_text → SSE stream of LangGraph events
-
-# Constitution (internal, called by incident graph)
-GET  /constitution/{user_id}          → all facts grouped by category
-PATCH /constitution/{user_id}         → update specific facts
-
-# Ownership
-GET  /ownership                       → query: filepath → {owner_agent_id, confidence}
+```go
+// auth/token.go — buggy version (race condition)
+func (c *TokenCache) GetOrRefresh(userID string) (string, error) {
+    if cached := c.cache[userID]; cached != "" {
+        return cached, nil   // BUG: no mutex — race condition under concurrent load
+    }
+    token, err := c.refreshToken(userID)
+    if err != nil {
+        return "", err
+    }
+    c.cache[userID] = token
+    return token, nil
+}
 ```
 
+Pre-register Alice as the owner of `auth/` in the demo. When the graph runs `fix_generator`, Claude will see the race condition from Alice's constitution context and generate the correct mutex fix. This makes the demo deterministic.
+
+---
+
+## API Contracts
+
 ```
-# SSE Event format (from Person 1, consumed by Person 4 frontend)
-data: {"node": "incident_analyzer", "status": "running", "output": null}
-data: {"node": "incident_analyzer", "status": "done", "output": {"service": "payment", "files": ["billing/"]}}
-data: {"node": "ownership_router", "status": "running", "output": null}
-data: {"node": "ownership_router", "status": "done", "output": {"owners": ["alice_id"]}}
-data: {"node": "agent_querier", "status": "running", "output": null, "agent": "alice"}
-data: {"node": "agent_querier", "status": "done", "output": {"context": "Alice owns retry logic..."}}
-data: {"node": "response_drafter", "status": "done", "output": {"slack_msg": "...", "postmortem": "..."}}
-data: {"node": "memory_updater", "status": "done", "output": {"updated": ["alice_id"]}}
+POST /github/issue               body: {issue_url} → triggers full graph, returns stream_id
+GET  /incidents/stream           query: issue_url → SSE stream
+POST /incidents/run              body: {issue_url} → blocking, returns {slack_msg, pr_url, patch}
+
+GET  /agents                     → [{id, name, role, expertise[], code_ownership[]}]
+GET  /agents/{id}                → full agent + grouped constitution
+POST /agents                     → body: {github_username, name, role}
+POST /agents/{id}/query          → body: {incident_text} → agent context
+
+GET  /constitution/{id}          → facts grouped by category
+PATCH /constitution/{id}         → body: {fact} → append fact
+POST /constitution/store         → body: {user_id, tenant_id, facts[]}
+
+GET  /ownership                  → query: filepath → {owner_agent_id, confidence}
+GET  /github/poll                → returns latest open issue on demo repo
+GET  /health
+```
+
+---
+
+## SSE Event Format (Person 1 emits, Person 4 consumes)
+
+```jsonc
+// Graph node lifecycle
+{"event": "node_start",  "node": "issue_reader",    "data": null}
+{"event": "node_done",   "node": "issue_reader",    "data": {"title": "401 errors...", "repo": "..."}}
+{"event": "node_start",  "node": "ownership_router", "data": null}
+{"event": "node_done",   "node": "ownership_router", "data": {"owners": ["alice_id", "bob_id"]}}
+
+// Agent comms (new — generated by agent_consultor)
+{"event": "agent_message", "data": {
+  "sender":    "orchestrator",
+  "recipient": "alice_aubi",
+  "message":   "New issue: auth 401 after deploy. Is this yours?",
+  "timestamp": 1714150000
+}}
+{"event": "agent_message", "data": {
+  "sender":    "alice_aubi",
+  "recipient": "orchestrator",
+  "message":   "Yes — this matches the race condition in auth/token.go I've been tracking.",
+  "timestamp": 1714150003
+}}
+
+// Code + fix
+{"event": "node_done",   "node": "code_reader",      "data": {"files": {"auth/token.go": "..."}}}
+{"event": "node_done",   "node": "fix_generator",     "data": {"diff": "...", "explanation": "..."}}
+{"event": "node_done",   "node": "pr_pusher",         "data": {"pr_url": "https://github.com/..."}}
+
+// Terminal
+{"event": "complete", "data": null}
 ```
 
 ---
@@ -390,129 +526,40 @@ data: {"node": "memory_updater", "status": "done", "output": {"updated": ["alice
 ## Environment Variables
 
 ```bash
-# .env — only ONE paid API key needed
-ANTHROPIC_API_KEY=sk-ant-...
-
-# Free services
-GITHUB_TOKEN=ghp_...                  # GitHub PAT — free
-QDRANT_URL=http://localhost:6333      # local Qdrant in Docker
-QDRANT_COLLECTION_PREFIX=aubi_hackathon
-```
-
-```bash
-# Start Qdrant locally (one command)
-docker run -p 6333:6333 qdrant/qdrant
+ANTHROPIC_API_KEY=sk-ant-...     # Claude Sonnet + Haiku
+GITHUB_TOKEN=ghp_...             # GitHub PAT (needs repo write access for PR push)
+DEMO_REPO=your-org/AUBI-Demo    # the repo with the planted bug
+KNOWLEDGE_SERVICE_URL=http://localhost:8002
+QDRANT_URL=http://localhost:6333
 ```
 
 ---
 
-## Quick Start Commands (run at 9:00am)
+## Quick Start
 
 ```bash
-# 1. Start Qdrant
+# 1. Qdrant
 docker run -d -p 6333:6333 qdrant/qdrant
 
-# 2. Backend (Persons 1, 2, 3)
+# 2. Backend
 cd backend
 python3.11 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env
+cp .env.example .env   # fill in keys
 uvicorn main:app --port 8000 --reload
 
-# 3. Frontend (Person 4)
-cd frontend
+# 3. Frontend
+cd /Users/intern/Desktop/xFoundry/aubi/cognoxent/apps/aubi-web
 npm install && npm run dev
 ```
 
 ---
 
-## Claude Prompt Templates
+## What Makes This Win
 
-### Constitution Builder (Person 2)
-```
-Analyze this GitHub developer data and extract structured facts.
-
-Developer: {github_username}
-GitHub data:
-- Commits (last 90 days): {commits_summary}
-- Files most touched: {top_files}
-- PR titles authored: {pr_titles}
-- Review comment patterns: {review_comments_sample}
-- Primary languages: {languages}
-
-Return a JSON array of facts. Each fact:
-{
-  "subject": "{github_username}",
-  "predicate": "<verb>",
-  "object": "<value>",
-  "confidence": 0.0-1.0,
-  "category": "code_ownership|expertise|collaboration|current_focus|known_issues"
-}
-
-Example good facts:
-{"subject": "alicechen", "predicate": "owns", "object": "auth/ directory (85% of commits)", "confidence": 0.95, "category": "code_ownership"}
-{"predicate": "prefers", "object": "async communication with detailed context before meetings", "confidence": 0.8, "category": "collaboration"}
-{"predicate": "currently_working_on", "object": "refactoring payment retry logic based on recent commit messages", "confidence": 0.85, "category": "current_focus"}
-
-Be specific. Infer from patterns. Return JSON only, no markdown.
-```
-
-### Incident Analyzer (Person 1)
-```
-You are analyzing a production incident. Extract:
-- affected_service: which service is failing
-- error_type: 500/timeout/crash/etc.
-- affected_files: likely file paths (infer from service name and error)
-- urgency: P1/P2/P3
-- started_at: when it started (if mentioned)
-
-Incident text: {incident_text}
-
-Return JSON only.
-```
-
-### Agent Querier (Person 1)
-```
-You are {agent_name}'s AI representative. Here is their Context Constitution:
-{constitution_facts}
-
-An incident has occurred:
-{incident_summary}
-
-Based solely on this person's constitution, answer:
-1. Is this incident in their domain? (yes/no/partial)
-2. What relevant context do they have about this?
-3. What would they likely say when paged?
-
-Be concise. Speak as if you are the developer's knowledgeable representative.
-```
-
-### Response Drafter (Person 1)
-```
-Draft a Slack incident response.
-
-Primary owner's communication style: "{communication_pref}"
-Their known context: {agent_context}
-Incident summary: {incident_summary}
-
-Write the Slack message AS IF you are {owner_name} — match their style exactly.
-Then write a postmortem skeleton in markdown with: Timeline, Root Cause (TBD), 
-Action Items (assigned to the right people per their ownership).
-
-Format:
-SLACK:
-<message here>
-
-POSTMORTEM:
-<markdown here>
-```
-
----
-
-## Stretch Goals (only if core done by 3pm)
-
-- [ ] Voice input: Web Speech API in browser → incident text (zero API cost)
-- [ ] Constitution diff: "Here's what Agent Alice learned from this incident" — before/after facts
-- [ ] Cross-agent query: "Does anyone on the team have context on Redis connection pooling?"
-- [ ] Agent health score: completeness of constitution (% of categories filled, last updated)
-- [ ] Real Slack webhook receiver instead of paste box
+1. **Complete autonomous loop** — issue filed by a human → agents communicate → code fixed → PR pushed, zero manual intervention
+2. **Agent-to-agent communication is visible** — not a black box, judges see the Aubis talking in real time
+3. **Context Constitution is the differentiator** — the agents know who owns what and why because they learned it
+4. **Real output** — an actual GitHub PR with a real diff, not a mock
+5. **Story arc** — Prof files issue → students' assignment unblocked → all in 90 seconds
+6. **Research-grounded** — Letta Context Constitution + MemGPT memory blocks + OpenAgents mesh

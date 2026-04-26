@@ -67,7 +67,7 @@ export default function IncidentPage() {
         {/* Mini agent map */}
         {agents.length > 0 && (
           <div className="flex flex-col gap-2">
-            <p className="font-mono text-[9px] text-[#4a6080] tracking-widest">// AGENT MESH</p>
+            <p className="font-mono text-[9px] text-[#4a6080] tracking-widest">{"// AGENT MESH"}</p>
             <div className="h-[180px] border border-[#1e2d45] rounded bg-[#0a0e1a] overflow-hidden">
               <HexGrid
                 agents={agents}
@@ -103,7 +103,7 @@ export default function IncidentPage() {
             >
               {/* Response header */}
               <div className="flex items-center justify-between px-5 py-2.5 border-b border-[#1e2d45] flex-shrink-0">
-                <span className="font-mono text-[9px] text-[#4a6080] tracking-widest">// INCIDENT RESPONSE</span>
+                <span className="font-mono text-[9px] text-[#4a6080] tracking-widest">{"// INCIDENT RESPONSE"}</span>
                 <button
                   onClick={() => navigator.clipboard.writeText(result.slack_message)}
                   className="font-mono text-[9px] text-[#4a6080] border border-[#1e2d45] px-2 py-1 rounded hover:text-[#00f0ff] hover:border-[#00f0ff33] transition-colors"

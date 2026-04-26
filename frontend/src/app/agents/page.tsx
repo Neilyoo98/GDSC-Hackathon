@@ -109,7 +109,7 @@ export default function AgentsPage() {
               className="bg-[#0d1224] border border-[#1e2d45] rounded-lg w-full max-w-sm mx-4 overflow-hidden"
             >
               <div className="flex items-center justify-between px-5 py-4 border-b border-[#1e2d45]">
-                <span className="font-mono text-[10px] text-[#4a6080] tracking-widest">// REGISTER AGENT</span>
+                <span className="font-mono text-[10px] text-[#4a6080] tracking-widest">{"// REGISTER AGENT"}</span>
                 <button onClick={() => setShowModal(false)} className="text-[#4a6080] hover:text-white">×</button>
               </div>
               <form onSubmit={handleCreate} className="p-5 space-y-4">
