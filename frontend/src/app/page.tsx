@@ -254,10 +254,89 @@ export default function Home() {
           18%, 72% { opacity: 1; }
           100% { transform: translateY(-12px); opacity: 0; }
         }
+        @keyframes borderSweep {
+          0% { transform: translateX(-120%); }
+          100% { transform: translateX(220%); }
+        }
+        @keyframes softFloat {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-4px); }
+        }
+        @keyframes activeNode {
+          0%, 100% { border-color: #39ff14; background: #39ff1412; }
+          50% { border-color: #e8e4dc99; background: #39ff1420; }
+        }
         .landing-fade {
           opacity: 0;
           animation: fadeup .7s ease forwards;
           will-change: opacity, transform;
+        }
+        .aubi-button {
+          position: relative;
+          isolation: isolate;
+          overflow: hidden;
+          border: 1px solid #e8e4dc33;
+          transition: transform .22s ease, border-color .22s ease, background .22s ease, color .22s ease;
+        }
+        .aubi-button::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          z-index: -1;
+          background: linear-gradient(90deg, transparent, #e8e4dc22, transparent);
+          transform: translateX(-120%);
+          transition: transform .42s ease;
+        }
+        .aubi-button:hover {
+          transform: translateY(-2px);
+          border-color: #39ff14;
+        }
+        .aubi-button:hover::after {
+          transform: translateX(120%);
+        }
+        .aubi-button-primary {
+          border-color: #39ff14;
+          background: #39ff14;
+          color: #080808;
+        }
+        .aubi-button-secondary {
+          background: #080808cc;
+          color: #e8e4dc;
+        }
+        .mission-card {
+          background:
+            linear-gradient(180deg, #e8e4dc0a, transparent 42%),
+            linear-gradient(90deg, #39ff1408, transparent 36%, #e8e4dc06);
+        }
+        .mission-card::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          background: linear-gradient(90deg, transparent, #39ff1428, transparent);
+          height: 1px;
+          animation: borderSweep 5s linear infinite;
+        }
+        .interactive-surface {
+          transition: transform .24s ease, border-color .24s ease, background .24s ease;
+        }
+        .interactive-surface:hover {
+          transform: translateY(-3px);
+          border-color: #39ff1455;
+          background: #0b0b0b;
+        }
+        .active-pipeline-node {
+          animation: activeNode 2.8s ease-in-out infinite;
+        }
+        .metric-tile {
+          transition: transform .24s ease, background .24s ease;
+        }
+        .metric-tile:hover {
+          transform: translateY(-4px);
+          background: #e8e4dc08;
+        }
+        .hero-chip {
+          animation: softFloat 4s ease-in-out infinite;
         }
         .mesh-scan {
           animation: meshScan 6s ease-in-out infinite;
@@ -302,7 +381,7 @@ export default function Home() {
       <HeroMeshBackdrop />
 
       <section className="relative z-10 px-6 pb-24 pt-24 text-center md:px-10">
-        <div className="landing-fade mx-auto inline-flex items-center gap-3 rounded-full border border-[#e8e4dc33] px-4 py-2" style={{ animationDelay: "0s" }}>
+        <div className="hero-chip landing-fade mx-auto inline-flex items-center gap-3 border border-[#e8e4dc33] bg-[#080808aa] px-4 py-2" style={{ animationDelay: "0s" }}>
           <span className="h-[5px] w-[5px] rounded-full bg-[#39ff14]" style={{ animation: "breathe 2s ease-in-out infinite" }} />
           <span className="font-mono text-[10px] uppercase tracking-[3px] text-[#e8e4dccc]">Live at GDSC Hackathon / UMD / April 26</span>
         </div>
@@ -319,13 +398,16 @@ export default function Home() {
           A GitHub issue drops. AUBI&apos;s agent mesh finds the right developer by memory, generates the fix, and pushes the PR. No Slack. No guessing. No human routing.
         </p>
 
-        <div className="mt-8 flex flex-wrap justify-center gap-4">
-          <Link href="/demo" className="border border-[#39ff14] bg-[#39ff14] px-6 py-3 text-[13px] font-medium text-[#080808]">
-            Watch the 90s demo
+        <div className="mt-8 flex flex-wrap justify-center gap-3">
+          <Link href="/demo" className="aubi-button aubi-button-primary px-6 py-3 text-[13px] font-medium">
+            Launch Demo
           </Link>
-          <a href="#architecture" className="border border-[#e8e4dc33] px-6 py-3 text-[13px] font-medium text-[#e8e4dc99] hover:text-[#e8e4dc]">
-            Read the architecture
-          </a>
+          <Link href="/incident" className="aubi-button aubi-button-secondary px-6 py-3 text-[13px] font-medium">
+            Open War Room
+          </Link>
+          <Link href="/agents" className="aubi-button aubi-button-secondary px-6 py-3 text-[13px] font-medium">
+            View Agent Mesh
+          </Link>
         </div>
 
         <div className="font-mono mt-6 flex flex-wrap items-center justify-center gap-3 text-[9px] uppercase tracking-[2px] text-[#e8e4dc66]">
@@ -338,7 +420,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="architecture" className="relative z-10 mx-6 mb-16 overflow-hidden border border-[#e8e4dc33] bg-[#080808cc] md:mx-10">
+      <section id="architecture" className="mission-card relative z-10 mx-6 mb-16 overflow-hidden border border-[#e8e4dc33] bg-[#080808dd] md:mx-10">
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#39ff14] to-transparent opacity-70" />
         <div className="font-mono flex items-center justify-between border-b border-[#1f1f1f] px-6 py-4 text-[10px] uppercase tracking-[3px] text-[#e8e4dc66]">
           <span>LangGraph Pipeline / Live Execution</span>
@@ -352,7 +434,7 @@ export default function Home() {
               <p className="font-mono mt-1 text-[9px] uppercase tracking-[2px] text-[#e8e4dc66]">prof-chen opened now / repository: AUBI-Demo</p>
             </div>
           </div>
-          <Link href="/demo" className="font-mono border border-[#39ff14] px-3 py-2 text-[9px] uppercase tracking-[2px] text-[#39ff14]">
+          <Link href="/demo" className="aubi-button font-mono border-[#39ff14] px-3 py-2 text-[9px] uppercase tracking-[2px] text-[#39ff14]">
             Trigger AUBI
           </Link>
         </div>
@@ -361,7 +443,10 @@ export default function Home() {
             <div key={node.label} className="landing-fade flex flex-1 items-center" style={{ animationDelay: `${0.1 + index * 0.08}s` }}>
               <div className="relative flex min-w-[96px] flex-col items-center text-center">
                 <div
-                  className="relative flex h-12 w-12 items-center justify-center border transition-transform duration-300 hover:-translate-y-1"
+                  className={[
+                    "relative flex h-12 w-12 items-center justify-center border transition-transform duration-300 hover:-translate-y-1",
+                    node.state === "active" ? "active-pipeline-node" : "",
+                  ].join(" ")}
                   style={{
                     borderColor: node.state === "idle" ? "#1f1f1f" : "#39ff14",
                     background: node.state === "active" ? "#39ff1414" : "transparent",
@@ -388,7 +473,7 @@ export default function Home() {
           ["INF", "Memory facts per developer in Qdrant"],
             ["90s", "From GitHub issue open to merged PR"]
           ].map(([number, description], index) => (
-          <div key={number} className={`${index > 0 ? "md:border-l md:border-[#1f1f1f]" : ""} landing-fade px-6 py-4`} style={{ animationDelay: `${index * 0.08}s` }}>
+          <div key={number} className={`${index > 0 ? "md:border-l md:border-[#1f1f1f]" : ""} metric-tile landing-fade px-6 py-4`} style={{ animationDelay: `${index * 0.08}s` }}>
             <div className="font-syne text-[52px] font-normal leading-none tracking-[4px] text-[#e8e4dc] transition-colors duration-300 hover:text-[#39ff14]">{number}</div>
             <p className="mt-2 text-[13px] leading-[1.6] text-[#e8e4dc66]">{description}</p>
           </div>
@@ -399,7 +484,7 @@ export default function Home() {
         <SectionHeading eyebrow="How it works" title="From issue to pull request." />
         <div className="mt-10">
           {steps.map((step) => (
-            <div key={step.number} className="grid grid-cols-[96px_1px_1fr] border-t border-[#1f1f1f] py-8 md:grid-cols-[120px_1px_1fr]">
+            <div key={step.number} className="interactive-surface grid grid-cols-[96px_1px_1fr] border-t border-[#1f1f1f] py-8 md:grid-cols-[120px_1px_1fr]">
               <div className="font-syne text-[64px] font-normal leading-none tracking-[4px] text-[#e8e4dc14] md:text-[72px]">{step.number}</div>
               <div className="bg-[#1f1f1f]" />
               <div className="pl-6 md:pl-8">
@@ -416,7 +501,7 @@ export default function Home() {
         <SectionHeading eyebrow="Context Constitution" title="Agents with real memory." />
         <div className="mt-10">
           {agents.map((agent, index) => (
-            <div key={agent.name} className={`${index > 0 ? "border-t border-[#1f1f1f]" : ""} grid gap-8 py-8 md:grid-cols-[280px_1px_1fr]`}>
+            <div key={agent.name} className={`${index > 0 ? "border-t border-[#1f1f1f]" : ""} interactive-surface grid gap-8 py-8 md:grid-cols-[280px_1px_1fr]`}>
               <div className="flex flex-col items-start gap-4 pr-8">
                 <HexNode />
                 <div>
@@ -459,7 +544,7 @@ export default function Home() {
         <SectionHeading eyebrow="Team" title="The team." />
         <div className="mt-10 grid grid-cols-1 border-y border-[#1f1f1f] md:grid-cols-4">
           {team.map((member, index) => (
-            <div key={member.name} className={`${index > 0 ? "md:border-l md:border-[#1f1f1f]" : ""} px-8 py-7`}>
+              <div key={member.name} className={`${index > 0 ? "md:border-l md:border-[#1f1f1f]" : ""} interactive-surface px-8 py-7`}>
               <div className="font-syne text-[52px] font-normal leading-none tracking-[4px] text-[#e8e4dc14]">{member.initial}</div>
               <h3 className="mt-4 text-[14px] font-medium text-[#e8e4dc]">{member.name}</h3>
               <p className="font-mono mt-2 text-[8px] uppercase tracking-[2px] text-[#39ff14]">{member.domain}</p>
