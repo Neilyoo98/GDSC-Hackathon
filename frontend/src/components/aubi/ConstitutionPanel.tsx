@@ -5,7 +5,7 @@ import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
 import { api } from "@/lib/api";
 import type { Agent } from "@/lib/types";
-import { CONSTITUTION_CATEGORIES, factsFor } from "@/lib/agents";
+import { CONSTITUTION_CATEGORIES, coworkerName, factsFor, humanSourceLabel } from "@/lib/agents";
 
 export function ConstitutionPanel({
   agent,
@@ -59,13 +59,14 @@ export function ConstitutionPanel({
                 <div className="mt-4 flex items-center gap-4">
                   <Image
                     src={`https://github.com/${visible.github_username}.png?size=96`}
-                    alt={visible.name}
+                    alt={coworkerName(visible)}
                     width={48}
                     height={48}
                     className="border border-[#e8e4dc33]"
                   />
                   <div>
-                    <h2 className="font-syne text-4xl font-normal leading-none text-[#e8e4dc]">{visible.name}</h2>
+                    <h2 className="font-syne text-4xl font-normal leading-none text-[#e8e4dc]">{coworkerName(visible)}</h2>
+                    <p className="font-mono text-[10px] uppercase tracking-[2px] text-[#e8e4dc66]">{humanSourceLabel(visible)}</p>
                     <p className="font-mono text-[11px] uppercase tracking-[2px] text-[#e8e4dc99]">{visible.role}</p>
                   </div>
                 </div>
@@ -97,8 +98,8 @@ export function ConstitutionPanel({
                         transition={{ delay: index * 0.04 }}
                         className="border border-[#e8e4dc33] bg-[#080808] p-4"
                       >
-                        <div className="grid grid-cols-[112px_1fr] gap-4">
-                          <span className="font-mono text-[10px] uppercase tracking-[2px] text-[#e8e4dc99]">{fact.predicate}</span>
+                        <div className="flex flex-col gap-1.5">
+                          <span className="font-mono text-[9px] uppercase tracking-[2px] text-[#e8e4dc55] truncate">{fact.predicate}</span>
                           <span className="text-[13px] leading-relaxed text-[#e8e4dc]">{fact.object}</span>
                         </div>
                         <div className="mt-4 flex items-center gap-2">
