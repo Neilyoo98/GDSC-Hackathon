@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useRef } from "react";
 import type { CSSProperties } from "react";
 
 const coworkerCards = [
@@ -148,8 +151,8 @@ function PrIcon() {
 function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) {
   return (
     <>
-      <p className="font-mono text-[8px] uppercase tracking-[4px] text-[#39ff14]">{eyebrow}</p>
-      <h2 className="font-syne mt-4 text-[42px] font-normal leading-[1.12] text-[#e8e4dc] md:text-[52px]">
+      <p className="typography-rise mono-animate font-mono text-[8px] uppercase tracking-[4px] text-[#39ff14]">{eyebrow}</p>
+      <h2 className="typography-rise typography-scan font-syne mt-4 text-[42px] font-normal leading-[1.12] text-[#e8e4dc] md:text-[52px]">
         {title}
       </h2>
     </>
@@ -182,15 +185,28 @@ function HeroMeshBackdrop() {
 }
 
 export default function Home() {
+  const pageRef = useRef<HTMLDivElement | null>(null);
+
   return (
     <div
+      ref={pageRef}
       className="relative overflow-hidden"
+      onPointerMove={(event) => {
+        const rect = event.currentTarget.getBoundingClientRect();
+        pageRef.current?.style.setProperty("--spotlight-x", `${event.clientX - rect.left}px`);
+        pageRef.current?.style.setProperty("--spotlight-y", `${event.clientY - rect.top}px`);
+        pageRef.current?.style.setProperty("--spotlight-opacity", "1");
+      }}
+      onPointerLeave={() => pageRef.current?.style.setProperty("--spotlight-opacity", "0")}
       style={
         {
           "--bg": "#080808",
           "--text": "#e8e4dc",
           "--accent": "#39ff14",
           "--divider": "#1f1f1f",
+          "--spotlight-x": "50%",
+          "--spotlight-y": "22%",
+          "--spotlight-opacity": 0,
           background: "var(--bg)",
           color: "var(--text)",
           minHeight: "calc(100vh - 52px)",
@@ -208,7 +224,16 @@ export default function Home() {
         @keyframes borderSweep { 0%{transform:translateX(-120%)}100%{transform:translateX(220%)} }
         @keyframes softFloat { 0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)} }
         @keyframes activeNode { 0%,100%{border-color:#39ff14;background:#39ff1412}50%{border-color:#e8e4dc99;background:#39ff1420} }
+        @keyframes textReveal { from{opacity:0;transform:translateY(18px);filter:blur(7px)} to{opacity:1;transform:translateY(0);filter:blur(0)} }
+        @keyframes textSweep { 0%{transform:translateX(-115%);opacity:0}22%{opacity:.72}100%{transform:translateX(115%);opacity:0} }
+        @keyframes glyphGlow { 0%,100%{text-shadow:none}50%{text-shadow:0 0 18px #39ff1444,0 0 36px #39ff141f} }
+        @keyframes monoBlink { 0%,100%{opacity:.62}50%{opacity:1} }
         .landing-fade{opacity:0;animation:fadeup .7s ease forwards;will-change:opacity,transform}
+        .typography-rise{opacity:0;animation:textReveal .82s cubic-bezier(.16,1,.3,1) forwards;will-change:opacity,transform,filter}
+        .typography-scan{position:relative;display:inline-block;overflow:hidden}
+        .typography-scan::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,#39ff1430,transparent);transform:translateX(-115%);animation:textSweep 1.25s ease .28s forwards;pointer-events:none}
+        .hot-text{animation:glyphGlow 3.4s ease-in-out infinite}
+        .mono-animate{animation:textReveal .72s cubic-bezier(.16,1,.3,1) forwards,monoBlink 3.2s ease-in-out 1s infinite}
         .aubi-button{position:relative;isolation:isolate;overflow:hidden;border:1px solid #e8e4dc33;transition:transform .22s ease,border-color .22s ease,background .22s ease,color .22s ease}
         .aubi-button::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(90deg,transparent,#e8e4dc22,transparent);transform:translateX(-120%);transition:transform .42s ease}
         .aubi-button:hover{transform:translateY(-2px);border-color:#39ff14}
@@ -230,11 +255,13 @@ export default function Home() {
         .mesh-node path{fill:#080808;stroke:#e8e4dc;stroke-opacity:.22;stroke-width:1}
         .mesh-node circle{fill:#39ff14}
         .signal-rise{animation:signalRise 2.6s ease-in-out infinite}
+        .cursor-spotlight{opacity:var(--spotlight-opacity);background:radial-gradient(420px circle at var(--spotlight-x) var(--spotlight-y),#39ff1426 0%,#e8e4dc12 34%,transparent 68%);transition:opacity .24s ease;mix-blend-mode:screen}
         .landing-connector::after{content:"";position:absolute;top:0;bottom:0;width:55%;background:linear-gradient(90deg,transparent,#39ff14,transparent);animation:slide 2.4s linear infinite}
         .coworker-card{transition:transform .24s ease,border-color .24s ease}
         .coworker-card:hover{transform:translateY(-4px);border-color:#39ff1444}
       ` }} />
 
+      <div aria-hidden="true" className="cursor-spotlight pointer-events-none absolute inset-0 z-[1]" />
       <HeroMeshBackdrop />
 
       {/* ── HERO ── */}
@@ -244,15 +271,15 @@ export default function Home() {
           <span className="font-mono text-[10px] uppercase tracking-[3px] text-[#e8e4dccc]">Live at GDSC Hackathon · UMD · April 26</span>
         </div>
 
-        <h1 className="font-syne landing-fade mx-auto mt-8 max-w-[860px] text-[56px] font-normal leading-[1.18] tracking-[4px] text-[#e8e4dc] md:text-[84px]" style={{ animationDelay: ".1s" }}>
-          Every developer gets an AI coworker that <span className="text-[#39ff14]">actually knows them.</span>
+        <h1 className="typography-rise typography-scan font-syne mx-auto mt-8 max-w-[860px] text-[56px] font-normal leading-[1.18] tracking-[4px] text-[#e8e4dc] md:text-[84px]" style={{ animationDelay: ".1s" }}>
+          Every developer gets an AI coworker that <span className="hot-text text-[#39ff14]">actually knows them.</span>
         </h1>
 
-        <p className="font-mono landing-fade mx-auto mt-5 text-[10px] uppercase tracking-[4px] text-[#39ff14]" style={{ animationDelay: ".15s" }}>
+        <p className="mono-animate font-mono mx-auto mt-5 text-[10px] uppercase tracking-[4px] text-[#39ff14]" style={{ animationDelay: ".15s" }}>
           Autonomous Understanding &amp; Behaviour Inference
         </p>
 
-        <p className="landing-fade mx-auto mt-6 max-w-[580px] text-[16px] leading-[1.85] text-[#e8e4dc99]" style={{ animationDelay: ".2s" }}>
+        <p className="typography-rise mx-auto mt-6 max-w-[580px] text-[16px] leading-[1.85] text-[#e8e4dc99]" style={{ animationDelay: ".2s" }}>
           AUBI reads your team&apos;s GitHub history and builds a persistent AI coworker for each developer. These coworkers know who owns what, share context with each other, and step in when something breaks — without anyone having to ask.
         </p>
 
