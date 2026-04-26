@@ -132,7 +132,7 @@ flowchart LR
 
     subgraph API["FastAPI Backend"]
         agents["Agent registry"]
-        graph["LangGraph incident graph"]
+        incidentGraph["LangGraph incident graph"]
         ingest["GitHub ingestion"]
         sse["SSE event stream"]
     end
@@ -155,18 +155,18 @@ flowchart LR
     flow --> proxy
     warroom --> proxy
     proxy --> agents
-    proxy --> graph
-    graph --> sse
+    proxy --> incidentGraph
+    incidentGraph --> sse
     sse --> flow
     sse --> warroom
     agents --> ingest
     ingest --> GitHub
     ingest --> Memory
-    graph <--> Memory
-    graph <--> issues
-    graph <--> files
-    graph --> branch
-    graph --> pr
+    incidentGraph <--> Memory
+    incidentGraph <--> issues
+    incidentGraph <--> files
+    incidentGraph --> branch
+    incidentGraph --> pr
 ```
 
 ---
