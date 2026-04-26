@@ -98,6 +98,27 @@ def _flatten_constitution(grouped: dict[str, Any]) -> list[dict[str, Any]]:
     return facts
 
 
+def _group_facts_by_category(facts: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for fact in facts:
+        grouped.setdefault(str(fact.get("category", "general")), []).append(fact)
+    return grouped
+
+
+def _agent_record_from_facts(agent_id: str, facts: list[dict[str, Any]]) -> dict[str, Any]:
+    username = str(next((fact.get("subject") for fact in facts if fact.get("subject")), agent_id))
+    expertise = next((fact.get("object") for fact in facts if fact.get("category") == "expertise"), "")
+    return {
+        "id": agent_id,
+        "github_username": username,
+        "name": username,
+        "role": str(expertise or "Software Engineer"),
+        "github_data_summary": {},
+        "constitution_facts": facts,
+        "constitution": _group_facts_by_category(facts),
+    }
+
+
 def _register_agent_record(
     *,
     agent_id: str,
@@ -206,17 +227,25 @@ async def create_agent(req: CreateAgentRequest):
 
 @app.get("/agents")
 async def list_agents():
-    return list(_agents.values())
+    records = {agent_id: agent.copy() for agent_id, agent in _agents.items()}
+    for agent_id, facts in get_store().list_user_facts("hackathon").items():
+        if agent_id not in records:
+            records[agent_id] = _agent_record_from_facts(agent_id, facts)
+        else:
+            records[agent_id]["constitution_facts"] = facts
+            records[agent_id]["constitution"] = _group_facts_by_category(facts)
+    return list(records.values())
 
 
 @app.get("/agents/{agent_id}")
 async def get_agent(agent_id: str):
-    if agent_id not in _agents:
-        raise HTTPException(status_code=404, detail="Agent not found")
-    agent = _agents[agent_id].copy()
     live_constitution = _get_constitution_from_store(agent_id)
     if not live_constitution:
         raise HTTPException(status_code=404, detail=f"No constitution facts found for agent {agent_id}")
+    if agent_id in _agents:
+        agent = _agents[agent_id].copy()
+    else:
+        agent = _agent_record_from_facts(agent_id, _flatten_constitution(live_constitution))
     agent["constitution"] = live_constitution
     agent["constitution_facts"] = _flatten_constitution(live_constitution)
     return agent
@@ -225,13 +254,10 @@ async def get_agent(agent_id: str):
 @app.post("/agents/{agent_id}/query")
 async def query_agent(agent_id: str, req: QueryAgentRequest):
     """Ask an agent what context it has relevant to an incident."""
-    if agent_id not in _agents:
-        raise HTTPException(status_code=404, detail="Agent not found")
-
-    agent = _agents[agent_id]
     facts = _flatten_constitution(_get_constitution_from_store(agent_id))
     if not facts:
         raise HTTPException(status_code=404, detail=f"No constitution facts found for agent {agent_id}")
+    agent = _agents.get(agent_id) or _agent_record_from_facts(agent_id, facts)
     constitution = json.dumps(facts[:20], indent=2)
 
     from langchain_core.messages import HumanMessage, SystemMessage
