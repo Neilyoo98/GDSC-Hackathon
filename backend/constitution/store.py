@@ -28,22 +28,61 @@ logger = logging.getLogger(__name__)
 
 COLLECTION_FACTS    = "semantic_facts"
 COLLECTION_EPISODES = "episodes"
-EMBEDDING_DIM       = 384   # all-MiniLM-L6-v2
+EMBEDDING_DIM       = 384
 FILTER_INDEX_FIELDS = ("user_id", "tenant_id", "scope_id", "category", "predicate")
 
 
 # ---------------------------------------------------------------------------
-# Embeddings (local, free — no API credits)
+# Embeddings
 # ---------------------------------------------------------------------------
 
 @lru_cache(maxsize=1)
-def _get_model():
+def _get_openai_client():
+    from openai import OpenAI
+
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY is required for OpenAI embeddings")
+    return OpenAI(
+        api_key=api_key,
+        base_url=os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+        timeout=30,
+    )
+
+
+@lru_cache(maxsize=1)
+def _get_local_model():
     from sentence_transformers import SentenceTransformer
     return SentenceTransformer("all-MiniLM-L6-v2")
 
 
+def _embedding_provider() -> str:
+    configured = os.getenv("EMBEDDING_PROVIDER", "").strip().lower()
+    if configured:
+        return configured
+    return "openai" if os.getenv("OPENAI_API_KEY") else "sentence-transformers"
+
+
+def _embed_openai(text: str) -> list[float]:
+    response = _get_openai_client().embeddings.create(
+        model=os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small"),
+        input=text,
+        dimensions=EMBEDDING_DIM,
+    )
+    return list(response.data[0].embedding)
+
+
+def _embed_local(text: str) -> list[float]:
+    return _get_local_model().encode(text, normalize_embeddings=True).tolist()
+
+
 def embed(text: str) -> list[float]:
-    return _get_model().encode(text, normalize_embeddings=True).tolist()
+    provider = _embedding_provider()
+    if provider == "openai":
+        return _embed_openai(text)
+    if provider in {"sentence-transformers", "sentence_transformers", "local", "sbert"}:
+        return _embed_local(text)
+    raise RuntimeError(f"Unsupported EMBEDDING_PROVIDER: {provider}")
 
 
 # ---------------------------------------------------------------------------

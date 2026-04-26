@@ -8,10 +8,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python deps, including the real embedding model runtime.
+# Install production Python deps. The sentence-transformers package remains
+# available as a local fallback, but Railway uses OpenAI embeddings to avoid
+# shipping a multi-GB PyTorch/CUDA image.
 COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+RUN pip install --no-cache-dir $(grep -v "sentence-transformers" requirements.txt | grep -v "^#" | grep -v "^$" | tr '\n' ' ')
 
 # Copy source
 COPY backend/ .
