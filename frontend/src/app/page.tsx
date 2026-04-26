@@ -333,7 +333,7 @@ export default function Home() {
           <div className="flex items-center gap-4">
             <span className="h-2 w-2 rounded-full bg-[#39ff14]" style={{ animation: "breathe 2s ease-in-out infinite" }} />
             <div>
-              <p className="text-[14px] font-medium text-[#e8e4dc]">Issue #1 — auth 401s blocking users after latest deploy</p>
+              <p className="text-[14px] font-medium text-[#e8e4dc]">Latest configured issue routed through AUBI memory</p>
               <p className="font-mono mt-1 text-[9px] uppercase tracking-[2px] text-[#e8e4dc66]">repo: configured target · AUBI routing through live memory</p>
             </div>
           </div>
