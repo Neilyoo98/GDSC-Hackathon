@@ -8,15 +8,17 @@ import type { SSEEvent } from "@/lib/types";
 interface Props {
   events: SSEEvent[];
   isStreaming: boolean;
+  autoScroll?: boolean;
 }
 
-export function NeuralTrace({ events, isStreaming }: Props) {
+export function NeuralTrace({ events, isStreaming, autoScroll = true }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const visible = events.filter((e) => e.node !== "complete");
 
   useEffect(() => {
+    if (!autoScroll) return;
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [events.length]);
+  }, [autoScroll, events.length]);
 
   if (events.length === 0) {
     return (
@@ -45,7 +47,7 @@ export function NeuralTrace({ events, isStreaming }: Props) {
   return (
     <div className="h-full overflow-y-auto aubi-scrollbar pr-2">
       {/* Timeline header */}
-      <div className="flex items-center gap-2 mb-4 pb-2 border-b border-[#1e2d45]">
+      <div className="mb-3 flex items-center gap-2 border-b border-[#1e2d45] pb-2">
         <span className="font-mono text-[9px] text-[#4a6080] tracking-widest">{"// NEURAL TRACE"}</span>
         {isStreaming && (
           <motion.span
@@ -58,14 +60,16 @@ export function NeuralTrace({ events, isStreaming }: Props) {
         )}
       </div>
 
-      <AnimatePresence>
-        {visible.map((event, i) => (
-          <TraceNode key={`${event.node}-${i}`} event={event} index={i} />
-        ))}
-      </AnimatePresence>
+      <div className="space-y-2">
+        <AnimatePresence>
+          {visible.map((event, i) => (
+            <TraceNode key={`${event.node}-${i}`} event={event} index={i} />
+          ))}
+        </AnimatePresence>
+      </div>
 
       {isStreaming && (
-        <div className="flex gap-3 items-center pl-0.5">
+        <div className="mt-2 flex items-center gap-3 border border-[#1e2d45] bg-[#050912] px-3 py-3">
           <div className="w-2.5 h-2.5 rounded-full flex-shrink-0">
             <motion.div
               className="w-2.5 h-2.5 rounded-full bg-[#00f0ff]"

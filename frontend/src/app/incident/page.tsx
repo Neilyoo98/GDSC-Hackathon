@@ -314,9 +314,8 @@ export default function IncidentPage() {
       </div>
 
       <div className="min-h-0 overflow-y-auto p-5 aubi-scrollbar">
-        <div className="grid min-h-full grid-rows-[minmax(520px,1fr)_minmax(260px,0.45fr)] gap-4">
-          <div className="grid min-h-0 grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)] gap-4">
-            <section className="min-h-0 overflow-y-auto border border-violet-500/30 bg-[#0a0e1a] p-5 shadow-[0_0_36px_rgba(139,92,246,0.08)] aubi-scrollbar">
+        <div className="flex min-h-full flex-col gap-4">
+          <section className="border border-violet-500/30 bg-[#0a0e1a] p-5 shadow-[0_0_36px_rgba(139,92,246,0.08)]">
               {coworkerExchanges.length > 0 ? (
                 <LiveExchangeFeed
                   exchanges={coworkerExchanges}
@@ -334,7 +333,8 @@ export default function IncidentPage() {
               )}
             </section>
 
-            <div className="flex min-h-0 flex-col gap-4 overflow-y-auto pr-1 aubi-scrollbar">
+          <div className="grid gap-4 xl:grid-cols-[minmax(320px,0.85fr)_minmax(0,1.15fr)]">
+            <div className="flex min-h-0 flex-col gap-4">
               <CoworkerMeshPanel result={result} agents={agents} events={events} />
 
               {agents.length > 0 && (
@@ -357,6 +357,7 @@ export default function IncidentPage() {
                   </div>
                 </section>
               )}
+            </div>
 
               {coworkerExchanges.length > 0 ? (
                 <ConsiderationsPanel
@@ -372,10 +373,9 @@ export default function IncidentPage() {
                   </p>
                 </section>
               )}
-            </div>
           </div>
 
-          <section className="min-h-0 overflow-hidden border border-[#1e2d45] bg-[#0a0e1a]">
+          <section className="min-h-[300px] overflow-hidden border border-[#1e2d45] bg-[#0a0e1a]">
             <div className="flex h-11 items-center justify-between border-b border-[#1e2d45] px-4">
               <p className="font-mono text-[9px] uppercase tracking-[3px] text-[#4a6080]">{"// LIVE REASONING TRACE"}</p>
               <p className={["font-mono text-[9px] uppercase tracking-[2px]", isStreaming ? "text-[#00f0ff]" : "text-[#4a6080]"].join(" ")}>
@@ -383,7 +383,7 @@ export default function IncidentPage() {
               </p>
             </div>
             <div className="h-[calc(100%-44px)] p-4">
-              <NeuralTrace events={events} isStreaming={isStreaming} />
+              <NeuralTrace events={events} isStreaming={isStreaming} autoScroll={false} />
             </div>
           </section>
         </div>

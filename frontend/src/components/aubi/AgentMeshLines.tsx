@@ -134,7 +134,7 @@ function endpointLabel(value: string, directory: Map<string, string>) {
   if (displayName) return coworkerLabel(displayName);
 
   const cleaned = stripAUBISuffix(value);
-  if (!cleaned || isCrypticId(cleaned)) return "Selected Coworker's AUBI";
+  if (!cleaned || isCrypticId(cleaned)) return "AUBI Coworker";
   return coworkerLabel(cleaned);
 }
 
@@ -148,7 +148,14 @@ function uniqueEndpoints(messages: AgentMessage[], activeMessage: AgentMessage |
     const key = canonicalKey(value, directory);
     byKey.set(key, { key, label: endpointLabel(value, directory) });
   });
-  return Array.from(byKey.values());
+  let genericIndex = 0;
+  return Array.from(byKey.values()).map((endpoint) => {
+    if (endpoint.key === "orchestrator" || endpoint.label !== "AUBI Coworker") return endpoint;
+    const genericLabels = ["Source AUBI", "Peer AUBI", "Context AUBI", "Memory AUBI"];
+    const label = genericLabels[genericIndex] ?? `Coworker ${genericIndex + 1} AUBI`;
+    genericIndex += 1;
+    return { ...endpoint, label };
+  });
 }
 
 function positionsFor(endpoints: Array<{ key: string; label: string }>): Record<string, Position> {
@@ -159,22 +166,29 @@ function positionsFor(endpoints: Array<{ key: string; label: string }>): Record<
   if (orchestrator) {
     positions.orchestrator = {
       x: 50,
-      y: 50,
+      y: 58,
       label: orchestrator.label,
       description: "Routes the issue and coordinates context",
       role: "orchestrator",
     };
   }
 
+  const layouts: Record<number, Array<{ x: number; y: number }>> = {
+    1: [{ x: 50, y: 28 }],
+    2: [{ x: 26, y: 36 }, { x: 74, y: 36 }],
+    3: [{ x: 50, y: 24 }, { x: 24, y: 70 }, { x: 76, y: 70 }],
+    4: [{ x: 50, y: 22 }, { x: 23, y: 48 }, { x: 77, y: 48 }, { x: 50, y: 82 }],
+  };
+
   coworkers.forEach((endpoint, index) => {
     const count = Math.max(coworkers.length, 1);
+    const fixed = layouts[Math.min(count, 4)]?.[index];
     const angle = -Math.PI / 2 + (index / count) * Math.PI * 2;
-    const radius = orchestrator ? 32 : 28;
     positions[endpoint.key] = {
-      x: 50 + Math.cos(angle) * radius,
-      y: 50 + Math.sin(angle) * radius,
+      x: fixed?.x ?? 50 + Math.cos(angle) * 34,
+      y: fixed?.y ?? 52 + Math.sin(angle) * 32,
       label: endpoint.label,
-      description: "Coworker context node",
+      description: "Context memory node",
       role: "coworker",
     };
   });
@@ -192,6 +206,18 @@ function edgesFor(messages: AgentMessage[], directory: Map<string, string>): Arr
     seen.add(key);
     return [[from, to] as [string, string]];
   });
+}
+
+function routePath(a: Position, b: Position) {
+  const midX = (a.x + b.x) / 2;
+  const lift = Math.abs(a.y - b.y) > 18 ? 0 : a.y < 50 ? -10 : 10;
+  return `M ${a.x} ${a.y} C ${midX} ${a.y + lift}, ${midX} ${b.y - lift}, ${b.x} ${b.y}`;
+}
+
+function compactMessage(message: string | undefined) {
+  const trimmed = message?.replace(/\s+/g, " ").trim() ?? "";
+  if (!trimmed) return "Waiting for the next coworker context packet.";
+  return trimmed.length > 130 ? `${trimmed.slice(0, 127)}...` : trimmed;
 }
 
 export function AgentMeshLines({
@@ -223,9 +249,13 @@ export function AgentMeshLines({
   if (endpoints.length === 0) {
     return (
       <div className={`relative flex items-center justify-center overflow-hidden border border-[#e8e4dc33] bg-[#080808] ${className}`}>
-        <div className="text-center">
-          <p className="font-mono text-[10px] uppercase tracking-[3px] text-[#e8e4dc66]">Awaiting Coworker Mesh</p>
-          <p className="mt-2 font-mono text-[9px] uppercase tracking-[2px] text-[#e8e4dc44]">Run a live issue to draw message paths</p>
+        <div className="absolute left-4 top-4">
+          <p className="font-mono text-[10px] uppercase tracking-[3px] text-[#e8e4dc99]">{"// COWORKER MESSAGE MESH"}</p>
+          <p className="mt-1 font-mono text-[9px] uppercase tracking-[2px] text-[#e8e4dc55]">Issue route {"->"} owner AUBI {"->"} peer context</p>
+        </div>
+        <div className="border border-dashed border-[#1f1f1f] px-8 py-6 text-center">
+          <p className="font-mono text-[10px] uppercase tracking-[3px] text-[#e8e4dc66]">Awaiting coworker exchange</p>
+          <p className="mt-2 font-mono text-[9px] uppercase tracking-[2px] text-[#e8e4dc44]">Run AUBI to stream message paths</p>
         </div>
       </div>
     );
@@ -233,12 +263,24 @@ export function AgentMeshLines({
 
   return (
     <div className={`relative overflow-hidden border border-[#e8e4dc33] bg-[#080808] ${className}`}>
-      <div className="absolute left-4 top-4 z-10 max-w-[calc(100%-2rem)]">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(57,255,20,0.08),transparent_48%)]" />
+      <div className="absolute left-4 right-4 top-4 z-10 flex items-start justify-between gap-4">
+        <div className="min-w-0">
         <p className="font-mono text-[10px] uppercase tracking-[3px] text-[#e8e4dc99]">{"// COWORKER MESSAGE MESH"}</p>
-        <p className="mt-1 font-mono text-[9px] uppercase tracking-[2px] text-[#e8e4dc66]">{activeRoute}</p>
+          <p className="mt-1 truncate font-mono text-[9px] uppercase tracking-[2px] text-[#e8e4dc66]">{activeRoute}</p>
+        </div>
+        <div className="shrink-0 border border-[#1f1f1f] px-3 py-1.5 text-right">
+          <p className="font-mono text-[8px] uppercase tracking-[2px] text-[#39ff14]">{Math.max(endpoints.length - 1, 0)} coworkers</p>
+          <p className="mt-0.5 font-mono text-[8px] uppercase tracking-[2px] text-[#e8e4dc44]">{edges.length} paths</p>
+        </div>
       </div>
 
       <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <defs>
+          <marker id="mesh-arrow" markerHeight="6" markerWidth="6" orient="auto" refX="5" refY="3">
+            <path d="M 0 0 L 6 3 L 0 6 z" fill="#39ff14" opacity="0.9" />
+          </marker>
+        </defs>
         {edges.map(([from, to]) => {
           const a = positions[from];
           const b = positions[to];
@@ -249,13 +291,13 @@ export function AgentMeshLines({
 
           return (
             <g key={`${from}-${to}`}>
-              <line
-                x1={a.x}
-                y1={a.y}
-                x2={b.x}
-                y2={b.y}
+              <path
+                d={routePath(a, b)}
+                fill="none"
                 stroke={active ? "#39ff14" : "#1f1f1f"}
-                strokeWidth={active ? 1.5 : 1}
+                strokeWidth={active ? 1.8 : 1}
+                strokeDasharray={active ? "none" : "4 5"}
+                markerEnd={active ? "url(#mesh-arrow)" : undefined}
                 vectorEffect="non-scaling-stroke"
               />
               {active && (
@@ -281,13 +323,16 @@ export function AgentMeshLines({
             key={key}
             animate={active ? { scale: [1, 1.08, 1] } : { scale: 1 }}
             transition={{ duration: 0.8, repeat: active ? Infinity : 0, repeatDelay: 0.4 }}
-            className="absolute flex w-28 -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2 text-center"
+            className={[
+              "absolute flex w-36 -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2 border px-3 py-3 text-center",
+              active ? "border-[#39ff14]/70 bg-[#081108] shadow-[0_0_24px_rgba(57,255,20,0.14)]" : "border-[#1f1f1f] bg-[#080808]/88",
+            ].join(" ")}
             style={{ left: `${node.x}%`, top: `${node.y}%` }}
           >
             <span
               className={[
-                "h-4 w-4 rounded-full border",
-                node.role === "orchestrator" ? "h-5 w-5" : "",
+                "h-3 w-3 rounded-full border",
+                node.role === "orchestrator" ? "h-4 w-4" : "",
                 active ? "border-[#39ff14] bg-[#39ff14]" : "border-[#e8e4dc33] bg-[#080808]",
               ].join(" ")}
             />
@@ -300,6 +345,19 @@ export function AgentMeshLines({
           </motion.div>
         );
       })}
+
+      <div className="absolute bottom-4 left-4 right-4 z-10 grid gap-3 md:grid-cols-[minmax(0,1fr)_180px]">
+        <div className="min-h-[72px] border border-[#1f1f1f] bg-[#050505]/85 p-3">
+          <p className="font-mono text-[8px] uppercase tracking-[2px] text-[#e8e4dc55]">Active context packet</p>
+          <p className="mt-2 line-clamp-2 text-xs leading-5 text-[#e8e4dcbb]">{compactMessage(activeMessage?.message)}</p>
+        </div>
+        <div className="border border-[#1f1f1f] bg-[#050505]/85 p-3">
+          <p className="font-mono text-[8px] uppercase tracking-[2px] text-[#e8e4dc55]">Route state</p>
+          <p className="mt-2 font-mono text-[10px] uppercase tracking-[2px] text-[#39ff14]">
+            {activeMessage ? "Exchanging" : "Mapped"}
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

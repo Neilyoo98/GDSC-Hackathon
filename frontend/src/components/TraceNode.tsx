@@ -164,19 +164,27 @@ function ConstellationAnimation() {
 function outputSummary(event: SSEEvent): string {
   if (!event.output) return "";
   const o = event.output;
+  const textFrom = (keys: string[]) => {
+    for (const key of keys) {
+      const value = o[key];
+      if (typeof value === "string" && value.trim()) return value.trim();
+    }
+    return "";
+  };
+
   if (event.eventType === "coworker_exchange" || event.eventType === "coworker_context") {
     const from = o.requester_agent_name ?? o.requester_aubi ?? o.source_aubi ?? o.sender ?? o.from ?? "coworker";
     const to = o.responder_agent_name ?? o.responder_aubi ?? o.target_aubi ?? o.recipient ?? o.to ?? "coworker";
     const context = o.context_shared ?? o.shared_context ?? o.context ?? o.reason ?? o.why ?? "";
-    return `${String(from)} -> ${String(to)} · ${String(context).slice(0, 80)}...`;
+    return `${String(from)} -> ${String(to)} · ${String(context).slice(0, 110)}`;
   }
   if (event.eventType === "shared_memory_hit" || event.eventType === "shared_memory") {
     const memory = o.object ?? o.memory ?? o.content ?? o.summary ?? o.title ?? "memory matched";
-    return `TEAM MEMORY: ${String(memory).slice(0, 90)}...`;
+    return `TEAM MEMORY: ${String(memory).slice(0, 110)}`;
   }
   if (event.eventType === "memory_write" || event.eventType === "memory_update" || event.eventType === "aubi_learned") {
     const update = o.update ?? o.episode ?? o.memory ?? o.object ?? "memory written";
-    return `LEARNED: ${String(update).slice(0, 90)}...`;
+    return `LEARNED: ${String(update).slice(0, 110)}`;
   }
   switch (event.node) {
     case "incident_analyzer":
@@ -186,7 +194,13 @@ function outputSummary(event: SSEEvent): string {
       return `OWNERS: ${Array.isArray(o.owner_ids) ? (o.owner_ids as string[]).join(", ") : o.agent_id ?? "matched"}`;
     case "agent_querier":
     case "query_single_agent":
-      return `CONTEXT: ${String(o.context ?? "").slice(0, 80)}...`;
+      {
+        const context = textFrom(["context", "response", "answer", "summary", "message", "reason", "why"]);
+        const agent = event.agent ?? o.agent_name ?? o.agent_id ?? o.owner_id ?? "coworker";
+        return context
+          ? `${String(agent)} · ${context.slice(0, 110)}`
+          : `Queried ${String(agent)} for ownership and adjacent context`;
+      }
     case "coworker_mesh_exchange":
       return `MESH: ${Array.isArray(o.coworker_exchanges) ? o.coworker_exchanges.length : 0} exchanges · ${Array.isArray(o.shared_memory_hits) ? o.shared_memory_hits.length : 0} shared memories`;
     case "code_reader":
@@ -196,9 +210,9 @@ function outputSummary(event: SSEEvent): string {
           : "read"
       }`;
     case "fix_generator":
-      return `FIX: ${String(o.fix_explanation ?? "").slice(0, 90)}...`;
+      return `FIX: ${String(o.fix_explanation ?? "generated patch").slice(0, 110)}`;
     case "test_runner":
-      return `${o.tests_passed ? "PASS" : "FAIL"} · ${String(o.test_output ?? "").slice(0, 90)}...`;
+      return `${o.tests_passed ? "PASS" : "FAIL"} · ${String(o.test_output ?? "test output attached").slice(0, 110)}`;
     case "approval_gate":
       return `AWAITING APPROVAL · ${o.tests_passed ? "tests passed" : "tests not passing"}`;
     case "pr_pusher":
@@ -222,65 +236,44 @@ export function TraceNode({ event, index }: Props) {
   const dotColor = DOT_COLORS[event.node] ?? "#4a6080";
   const isRunning = event.status === "running";
   const isDone = event.status === "done";
-  const summary = isDone ? outputSummary(event) : null;
-  const slackText = event.node === "response_drafter" && isRunning
-    ? String((event.output as Record<string, unknown>)?.slack_message ?? "")
-    : "";
+  const summary = outputSummary(event);
+  const statusLabel = isRunning ? "Processing" : isDone ? "Complete" : event.status;
 
   return (
     <motion.div
       initial={{ opacity: 0, x: -12 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.25, delay: index * 0.03 }}
-      className="flex gap-3"
+      className="group relative grid grid-cols-[18px_132px_minmax(0,1fr)_72px] gap-3 border border-[#1e2d45] bg-[#050912] px-3 py-3"
     >
-      {/* Timeline dot */}
-      <div className="flex flex-col items-center flex-shrink-0">
+      <div className="flex items-center justify-center">
         <div
-          className="w-2.5 h-2.5 rounded-full mt-1 flex-shrink-0"
+          className="h-2.5 w-2.5 rounded-full"
           style={{ backgroundColor: dotColor, boxShadow: `0 0 6px ${dotColor}99` }}
         />
-        <div className="w-px flex-1 bg-[#1e2d45] mt-1" />
       </div>
 
-      {/* Content */}
-      <div className="pb-5 flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-2">
-          <span className={`font-mono text-[9px] tracking-widest uppercase px-2 py-0.5 rounded border ${meta.bg} ${meta.text} ${meta.border}`}>
-            {meta.label}
-          </span>
-          {isRunning && (
-            <span className="flex items-center gap-1 font-mono text-[9px] text-[#4a6080]">
-              <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: dotColor }} />
-              PROCESSING
-            </span>
-          )}
-          {isDone && <span className="font-mono text-[9px] text-[#2a3f5f]">COMPLETE ✓</span>}
-          {event.receivedAt != null && (
-            <span className="font-mono text-[9px] text-[#2a3f5f] ml-auto">+{event.receivedAt}ms</span>
-          )}
-        </div>
+      <div className="min-w-0">
+        <span className={`inline-flex border px-2 py-1 font-mono text-[10px] uppercase tracking-[2px] ${meta.bg} ${meta.text} ${meta.border}`}>
+          {meta.label}
+        </span>
+        <p className={["mt-2 font-mono text-[9px] uppercase tracking-[2px]", isRunning ? "text-[#c8d6e8]" : "text-[#4a6080]"].join(" ")}>
+          {statusLabel}
+        </p>
+      </div>
 
-        {/* Unique animation */}
-        {isRunning && (
-          <div className="mb-2">
-            {event.node === "incident_analyzer" && <RadarAnimation />}
-            {event.node === "issue_reader" && <RadarAnimation />}
-            {event.node === "ownership_router" && <RouterAnimation />}
-            {event.node === "agent_querier" && <AgentQueryAnimation agentName={event.agent} />}
-            {event.node === "query_single_agent" && <AgentQueryAnimation agentName={event.agent} />}
-            {event.node === "coworker_mesh_exchange" && <AgentQueryAnimation agentName={event.agent ?? "coworker mesh"} />}
-            {event.node === "response_drafter" && <TypewriterAnimation text={slackText} />}
-            {event.node === "fix_generator" && <TypewriterAnimation text={slackText} />}
-            {event.node === "memory_updater" && <ConstellationAnimation />}
-            {event.node === "test_runner" && <ConstellationAnimation />}
-          </div>
+      <div className="min-w-0 self-center">
+        {summary ? (
+          <p className="truncate font-mono text-[11px] leading-5 text-[#8aa0c0]">{summary}</p>
+        ) : (
+          <p className="font-mono text-[11px] uppercase tracking-[2px] text-[#2a3f5f]">
+            {isRunning ? "Working on this step..." : "Step recorded"}
+          </p>
         )}
+      </div>
 
-        {/* Output summary */}
-        {summary && (
-          <p className="font-mono text-[10px] text-[#4a6080] leading-snug">{summary}</p>
-        )}
+      <div className="self-center text-right font-mono text-[10px] text-[#4a6080]">
+        {event.receivedAt != null ? `+${event.receivedAt}ms` : ""}
       </div>
     </motion.div>
   );

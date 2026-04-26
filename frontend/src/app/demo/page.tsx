@@ -328,15 +328,18 @@ export default function DemoPage() {
             </div>
           </div>
 
-          <div className="grid min-h-0 gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+          <div className="grid min-h-0 gap-6 xl:grid-cols-[0.92fr_1.08fr]">
             <section className="flex min-h-0 flex-col overflow-hidden border border-[#e8e4dc33] bg-[#080808]">
               <header className="flex h-12 shrink-0 items-center justify-between border-b border-[#1f1f1f] px-4">
-                <p className="font-mono text-[10px] uppercase tracking-[3px] text-[#e8e4dc99]">{"// CODE DIFF"}</p>
+                <div>
+                  <p className="font-mono text-[10px] uppercase tracking-[3px] text-[#e8e4dc99]">{"// CODE DIFF"}</p>
+                  {patchDiff && <p className="mt-0.5 font-mono text-[8px] uppercase tracking-[2px] text-[#e8e4dc44]">{diffLines.length} lines streamed from fix generator</p>}
+                </div>
                 <span className={`font-mono text-[10px] uppercase tracking-[2px] ${visualNodeStatuses.fix_generator === "done" || visualNodeStatuses.fix_generator === "running" ? "text-[#39ff14]" : "text-[#e8e4dc66]"}`}>
                   {patchDiff ? "Generated" : visualNodeStatuses.fix_generator === "running" ? "Writing" : "Waiting"}
                 </span>
               </header>
-              <div className="aubi-scrollbar flex-1 overflow-auto p-4 font-mono text-[11px] leading-7">
+              <div className="aubi-scrollbar flex-1 overflow-auto p-4 font-mono text-[11px] leading-6">
                 {!hasRun && <div className="flex h-full items-center justify-center uppercase tracking-[3px] text-[#e8e4dc66]">Run AUBI to stream a live patch</div>}
                 {hasRun && !patchDiff && (
                   <div className="flex h-full items-center justify-center px-8 text-center">
@@ -350,22 +353,33 @@ export default function DemoPage() {
                     )}
                   </div>
                 )}
+                <div className="min-w-max space-y-0.5">
                 {diffLines.map((line, index) => {
                   const sign = line.startsWith("+") ? "+" : line.startsWith("-") ? "-" : " ";
+                  const addition = sign === "+";
+                  const removal = sign === "-";
                   return (
                     <motion.div
                       key={`${line}-${index}`}
                       initial={{ opacity: 0, x: -12 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: index * 0.12 }}
-                      className={sign === "+" ? "text-[#39ff14]" : "text-[#e8e4dc66]"}
+                      className={[
+                        "grid grid-cols-[38px_24px_minmax(0,1fr)] items-start gap-2 border-l px-2 py-0.5",
+                        addition
+                          ? "border-[#39ff14] bg-[#39ff1408] text-[#39ff14]"
+                          : removal
+                            ? "border-[#ff3366]/45 bg-[#ff336606] text-[#e8e4dc66]"
+                            : "border-transparent text-[#e8e4dc55]",
+                      ].join(" ")}
                     >
-                      <span className="mr-3 text-[#e8e4dc55]">{String(index + 1).padStart(2, "0")}</span>
-                      <span className="mr-3">{sign}</span>
-                      <span>{line.replace(/^[+-]/, "")}</span>
+                      <span className="select-none text-right text-[#e8e4dc44]">{String(index + 1).padStart(2, "0")}</span>
+                      <span className="select-none text-center">{sign}</span>
+                      <span className="whitespace-pre pr-6">{line.replace(/^[+-]/, "")}</span>
                     </motion.div>
                   );
                 })}
+                </div>
               </div>
             </section>
 

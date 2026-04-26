@@ -36,11 +36,22 @@ export function LiveExchangeFeed({ exchanges, agents, result }: Props) {
   if (!exchanges.length) return null;
 
   return (
-    <div className="mt-3 space-y-3">
-      <p className="font-mono text-[9px] text-[#4a6080] tracking-widest">{"// LIVE CONTEXT EXCHANGE"}</p>
+    <div className="space-y-5">
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-[3px] text-[#6f89b3]">{"// LIVE CONTEXT EXCHANGE"}</p>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[#8aa0c0]">
+            Coworker AUBIs exchange ownership, adjacent memory, and review risks before the fix is generated.
+          </p>
+        </div>
+        <div className="border border-[#1e2d45] bg-[#050912] px-3 py-2 text-right">
+          <p className="font-mono text-[12px] text-[#c8d6e8]">{exchanges.length}</p>
+          <p className="font-mono text-[8px] uppercase tracking-[2px] text-[#6f89b3]">exchanges</p>
+        </div>
+      </div>
 
       <AnimatePresence initial={false}>
-        {exchanges.slice(0, 4).map((exchange, i) => {
+        {exchanges.slice(0, 3).map((exchange, i) => {
           const src = resolveSourceAgent(exchange, result, agents, i);
           const tgt = resolveTargetAgent(exchange, result, agents, i, src);
           const checks = exchange.should_check ?? [];
@@ -60,19 +71,19 @@ export function LiveExchangeFeed({ exchanges, agents, result }: Props) {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.12, duration: 0.35, ease: "easeOut" }}
-              className="rounded border border-violet-500/20 bg-violet-500/5 overflow-hidden"
+              className="overflow-hidden border border-violet-500/25 bg-violet-500/5 shadow-[0_0_32px_rgba(139,92,246,0.06)]"
             >
               {/* Header: sender → recipient */}
-              <div className="flex items-center gap-2 px-3 py-2 border-b border-violet-500/10">
+              <div className="flex items-center gap-3 border-b border-violet-500/10 px-5 py-3">
                 <img
                   src={avatarUrl(src)}
                   alt={safeName(src)}
-                  className="w-5 h-5 rounded-full border border-violet-500/30 flex-shrink-0"
+                  className="h-7 w-7 flex-shrink-0 rounded-full border border-violet-500/30"
                   onError={(e) => { (e.target as HTMLImageElement).src = "https://github.com/ghost.png?size=48"; }}
                 />
-                <span className="font-mono text-[9px] text-violet-300 truncate">{safeName(src)}</span>
+                <span className="truncate font-mono text-[13px] text-violet-200">{safeName(src)}</span>
                 <motion.span
-                  className="font-mono text-[9px] text-violet-400/60"
+                  className="font-mono text-[11px] text-violet-400/60"
                   animate={{ opacity: [0.4, 1, 0.4] }}
                   transition={{ duration: 1.4, repeat: Infinity }}
                 >
@@ -81,28 +92,28 @@ export function LiveExchangeFeed({ exchanges, agents, result }: Props) {
                 <img
                   src={avatarUrl(tgt)}
                   alt={safeName(tgt)}
-                  className="w-5 h-5 rounded-full border border-violet-500/30 flex-shrink-0"
+                  className="h-7 w-7 flex-shrink-0 rounded-full border border-violet-500/30"
                   onError={(e) => { (e.target as HTMLImageElement).src = "https://github.com/ghost.png?size=48"; }}
                 />
-                <span className="font-mono text-[9px] text-violet-300 truncate">{safeName(tgt)}</span>
+                <span className="truncate font-mono text-[13px] text-violet-200">{safeName(tgt)}</span>
 
                 {confidence !== null && (
-                  <span className="ml-auto font-mono text-[9px] text-[#4a6080] flex-shrink-0">
+                  <span className="ml-auto flex-shrink-0 font-mono text-[12px] text-[#6f89b3]">
                     {Math.round(confidence * 100)}%
                   </span>
                 )}
               </div>
 
               {/* Context shared */}
-              <div className="px-3 py-2">
-                <p className="text-[11px] leading-relaxed text-[#c8d6e8]">{contextText(exchange)}</p>
+              <div className="px-5 py-4">
+                <p className="max-w-6xl text-[16px] leading-8 text-[#d7e3f4]">{contextText(exchange)}</p>
               </div>
 
               {/* Why it matters */}
               {why && (
-                <div className="px-3 pb-2">
-                  <p className="text-[10px] leading-snug text-amber-400/80">
-                    <span className="font-mono text-[9px] text-amber-500/60 mr-1">WHY</span>
+                <div className="px-5 pb-4">
+                  <p className="text-[13px] leading-6 text-amber-300/90">
+                    <span className="mr-2 font-mono text-[10px] uppercase tracking-[2px] text-amber-500/70">Why</span>
                     {why}
                   </p>
                 </div>
@@ -110,16 +121,16 @@ export function LiveExchangeFeed({ exchanges, agents, result }: Props) {
 
               {/* Should-check chips */}
               {checks.length > 0 && (
-                <div className="px-3 pb-2.5 flex flex-wrap gap-1">
+                <div className="flex flex-wrap gap-2 px-5 pb-5">
                   {checks.map((item, j) => (
                     <motion.span
                       key={j}
                       initial={{ opacity: 0, scale: 0.85 }}
                       animate={{ opacity: 1, scale: 1 }}
                       transition={{ delay: i * 0.12 + j * 0.06 }}
-                      className="font-mono text-[8px] text-rose-300 border border-rose-500/25 bg-rose-500/8 px-1.5 py-0.5 rounded"
+                      className="border border-rose-500/25 bg-rose-500/8 px-2.5 py-1 font-mono text-[11px] leading-5 text-rose-200"
                     >
-                      ⚑ {item}
+                      Check {item}
                     </motion.span>
                   ))}
                 </div>

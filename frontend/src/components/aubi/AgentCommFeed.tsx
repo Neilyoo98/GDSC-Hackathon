@@ -6,12 +6,15 @@ import type { AgentMessage } from "@/lib/types";
 
 function labelFor(value: string) {
   const key = value.toLowerCase().trim();
-  if (key === "orchestrator") return "Orchestrator";
+  if (key === "orchestrator") return "AUBI Orchestrator";
   const cleaned = value
     .replace(/[_-]?aubi$/i, "")
     .replace(/[_-]+/g, " ")
     .trim();
-  if (!cleaned) return "AUBI";
+  const compact = cleaned.replace(/[^a-z0-9]/gi, "");
+  if (!cleaned || /^[a-f0-9]{7,}$/i.test(compact) || /^[a-z0-9]{12,}$/i.test(compact)) {
+    return "Routed AUBI";
+  }
   const base = cleaned.split(/\s+/).find(Boolean) ?? cleaned;
   const name = base.charAt(0).toUpperCase() + base.slice(1);
   return `${name}${name.toLowerCase().endsWith("s") ? "'" : "'s"} AUBI`;
@@ -19,6 +22,11 @@ function labelFor(value: string) {
 
 function isOrchestrator(value: string) {
   return value.toLowerCase().trim() === "orchestrator";
+}
+
+function compactMessage(message: string) {
+  const trimmed = message.replace(/\s+/g, " ").trim();
+  return trimmed.length > 360 ? `${trimmed.slice(0, 357)}...` : trimmed;
 }
 
 export function AgentCommFeed({
@@ -66,13 +74,13 @@ export function AgentCommFeed({
       </div>
 
       {/* feed */}
-      <div
-        ref={scrollRef}
-        className="aubi-scrollbar flex-1 space-y-3 overflow-y-auto px-4 py-4"
-      >
+      <div ref={scrollRef} className="aubi-scrollbar flex-1 space-y-3 overflow-y-auto px-4 py-4">
         {messages.length === 0 && (
-          <div className="flex h-full items-center justify-center font-mono text-[10px] uppercase tracking-[3px] text-[#e8e4dc22]">
-            Awaiting agent traffic
+          <div className="flex h-full items-center justify-center">
+            <div className="border border-dashed border-[#1f1f1f] px-6 py-5 text-center">
+              <p className="font-mono text-[10px] uppercase tracking-[3px] text-[#e8e4dc33]">Awaiting agent traffic</p>
+              <p className="mt-2 font-mono text-[8px] uppercase tracking-[2px] text-[#e8e4dc22]">Messages appear as each AUBI answers</p>
+            </div>
           </div>
         )}
 
@@ -88,7 +96,7 @@ export function AgentCommFeed({
                 transition={{ duration: 0.22, ease: "easeOut" }}
                 className={`flex ${fromLeft ? "justify-start" : "justify-end"}`}
               >
-                <div className="max-w-[85%]">
+                <div className="max-w-[92%]">
                   {/* sender → recipient row */}
                   <div
                     className={`mb-1.5 flex items-center gap-1.5 ${
@@ -111,7 +119,7 @@ export function AgentCommFeed({
                   {/* bubble */}
                   <div
                     className={[
-                      "relative border px-4 py-3 text-[12px] leading-[1.65] text-[#e8e4dc]",
+                      "relative border bg-[#050505] px-3.5 py-3 text-[11px] leading-[1.6] text-[#e8e4dcdd]",
                       fromLeft
                         ? "border-[#e8e4dc22] border-l-[#e8e4dc55]"
                         : isStreaming
@@ -119,7 +127,7 @@ export function AgentCommFeed({
                         : "border-[#e8e4dc22] border-r-[#e8e4dc44]",
                     ].join(" ")}
                   >
-                    {msg.message}
+                    <p className="line-clamp-7">{compactMessage(msg.message)}</p>
                   </div>
                 </div>
               </motion.div>

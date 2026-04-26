@@ -67,7 +67,7 @@ export function ConsiderationsPanel({ exchanges, agents, result }: Props) {
   const resolvedCount = items.filter((i) => i.resolved).length;
 
   return (
-    <div className="border border-[#1e2d45] bg-[#0a0e1a] rounded p-4">
+    <div className="self-start border border-[#1e2d45] bg-[#0a0e1a] p-4">
       <div className="flex items-center justify-between mb-3">
         <p className="font-mono text-[9px] text-[#4a6080] tracking-widest">{"// CONSIDERATIONS"}</p>
         {hasfix && (
