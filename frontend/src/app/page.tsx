@@ -264,8 +264,9 @@ export default function Home() {
         .aubi-button:hover::after{transform:translateX(120%)}
         .aubi-button-primary{background:#080808cc;color:#e8e4dc}
         .aubi-button-secondary{background:#080808cc;color:#e8e4dc}
-        .interactive-surface{transition:transform .24s ease,border-color .24s ease,background .24s ease}
-        .interactive-surface:hover{transform:translateY(-3px);border-color:#39ff1455;background:#0b0b0b}
+        .interactive-surface{position:relative;transition:transform .24s ease,border-color .24s ease,background .24s ease,box-shadow .24s ease}
+        .interactive-surface:hover{z-index:2;transform:translateY(-6px) scale(1.04);border-color:#39ff14;background:#39ff14;box-shadow:0 18px 45px #39ff1426}
+        .interactive-surface:hover p{color:#080808}
         .active-pipeline-node{animation:activeNode 2.8s ease-in-out infinite}
         .metric-tile{transition:transform .24s ease,background .24s ease}
         .metric-tile:hover{transform:translateY(-4px);background:#e8e4dc08}
