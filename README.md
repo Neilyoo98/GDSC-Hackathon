@@ -1,10 +1,12 @@
 <div align="center">
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:080808,50:39ff14,100:00f0ff&height=190&section=header&text=AUBI&fontSize=88&fontColor=e8e4dc&fontAlignY=38&desc=Autonomous%20Understanding%20and%20Behavior%20Inference&descAlignY=58&descSize=20&descColor=e8e4dc" width="100%" alt="AUBI"/>
+<img src="./Logo.png" width="110" alt="AUBI logo" />
 
-### AI coworkers with team memory, ownership routing, and human-approved PRs.
+# AUBI
 
-**AUBI** turns a GitHub issue into a context-aware fix proposal by asking the right developer-shaped AI coworker first.
+### Autonomous Understanding and Behaviour Inference
+
+**Persistent AI coworkers that understand who owns what, share team memory, and turn GitHub issues into human-approved pull requests.**
 
 GDSC Hackathon 2026 - University of Maryland
 
@@ -12,191 +14,354 @@ GDSC Hackathon 2026 - University of Maryland
 
 ---
 
-## Why AUBI Exists
+## The Idea
 
-Most AI developer tools are optimized for one question:
+Most coding agents start by asking, "What code should I edit?"
 
-> "Can an agent write a patch?"
+AUBI starts one level earlier:
 
-In real teams, the slower question is usually:
+> "Which teammate's context matters here, what has the team already learned, and which AI coworker should handle the fix?"
 
-> "Who understands why this broke, what tradeoffs already exist, and what context should not be forgotten?"
+AUBI gives each developer a persistent AI coworker backed by a **Context Constitution**: structured memory about ownership, expertise, collaboration style, current focus, known issues, and resolved incidents. When a GitHub issue arrives, AUBI routes it to the right coworker, lets related coworkers exchange context, reads live repository files, generates a patch, runs verification, pauses for human approval, opens a PR, and writes the outcome back into memory.
 
-AUBI is built around that missing layer. It creates persistent **Context Constitutions** for developers from GitHub activity, stores them in Qdrant, routes issues to the most relevant coworker AUBIs, lets nearby coworker agents share context, generates a patch from the live repository, runs verification, and stops at a human approval gate before opening a GitHub PR.
-
-The goal is developer productivity through **better context selection**, not blind automation.
+The result is not just an autonomous patch. It is an explainable, team-aware issue-to-PR workflow.
 
 ---
 
-## What It Does
+## What Judges Should Notice
 
-| Capability | How AUBI handles it |
+| Signal | Why it is impressive |
 |---|---|
-| Developer memory | Stores structured facts about ownership, expertise, collaboration style, current focus, known issues, and resolved episodes. |
-| Issue triage | Reads a GitHub issue, extracts affected files, service, error type, and urgency. |
-| Ownership routing | Uses Qdrant semantic search plus filepath ownership signals to select the right coworker AUBI. |
-| Coworker mesh | Owner agents can ask related coworker AUBIs for adjacent context from personal and shared team memory. |
-| Patch generation | Reads live source files from GitHub and generates a complete replacement file plus unified diff. |
-| Verification | For Go fixes, clones the repo, applies the generated file, and runs `go test ./...`. |
-| Human approval | LangGraph pauses at an approval interrupt; the frontend can approve or reject before PR creation. |
-| PR creation | On approval and passing tests, pushes a branch and opens a GitHub PR with issue linkage. |
-| Learning loop | Writes personal and team-scoped incident episodes back into Qdrant after PR creation. |
+| **Developer-shaped coworkers** | The system represents Vitthal-AUBI, Avhaan-AUBI, Neilyoo98-AUBI, and Mitanshcodes-AUBI as persistent coworkers instead of generic bots. |
+| **Context before code** | AUBI explains who owns the issue, why they were selected, and what related coworkers contributed before generating a fix. |
+| **Live coworker mesh** | The UI shows AUBIs exchanging context, retrieving shared memory, and flagging considerations that affect the generated patch. |
+| **Real repository integration** | Issues, file reads, verification, branches, and PR creation are wired to GitHub instead of being a static mock. |
+| **Human approval gate** | AUBI stops before pushing a PR and waits for explicit approval. |
+| **Learning loop** | Approved work becomes future user and team memory in Qdrant. |
 
 ---
 
-## Demo Flow
+## Demo Script
 
-1. Open the **Team** view to show coworker AUBIs and their Context Constitutions.
-2. Open the **Incident** view and load the latest configured GitHub issue or paste `owner/repo#123`.
-3. AUBI streams the graph in real time: issue reader, ownership router, agent consults, coworker mesh, code reader, fix generator, test runner, approval gate.
-4. Judges see why a developer was selected, what coworker context was exchanged, what patch was generated, and whether tests passed.
-5. A human clicks **Approve PR Push**.
-6. AUBI opens the GitHub PR and writes the resolved episode back into personal and team memory.
+1. Open **Team** to show each coworker's Context Constitution.
+2. Open **Coworkers** to show the mesh of developer AUBIs and their ownership relationships.
+3. Open **Flow**, choose a live issue from `Neilyoo98/AUBI-demo`, and run AUBI.
+4. Watch the issue move through routing, coworker exchange, code read, fix generation, tests, and approval.
+5. Click **Approve PR Push**.
+6. Open **War Room** to explain why the routing happened, which memory was used, which considerations were handled, and what got written back.
 
-The strongest demo moment is not the patch. It is the visible chain from **issue -> owner evidence -> coworker context -> verified diff -> approval -> memory update**.
+The strongest moment is the chain:
+
+```text
+GitHub issue -> owner evidence -> coworker context -> generated diff -> verification -> approval -> PR -> memory update
+```
+
+---
+
+## Product Surface
+
+| Page | Purpose |
+|---|---|
+| **Team** | Card-based view of each AUBI coworker's constitution: expertise, ownership, style, memory age, and fact count. |
+| **Coworkers** | Relationship graph showing how AUBI coworkers connect through ownership, expertise, collaboration, current focus, and known issues. |
+| **Flow** | Operator view for running an issue-to-PR workflow with progress, diff, approval state, PR preview, and live agent messages. |
+| **War Room** | Explanation layer: live context exchange, shared memory hits, considerations, coworker map, and reasoning trace for the same run. |
 
 ---
 
 ## Architecture
 
 ```mermaid
-flowchart TD
-    issue[GitHub Issue] --> reader[issue_reader]
-    reader --> router[ownership_router]
-    router --> owners[query_single_agent fan-out]
-    owners --> mesh[coworker_mesh_exchange]
-    mesh --> code[code_reader]
-    code --> fix[fix_generator]
-    fix --> tests[test_runner]
-    tests --> approval{approval_gate}
-    approval -- approved --> pr[pr_pusher]
-    approval -- rejected --> stop[stop]
-    pr --> memory[personal + team memory writes]
+flowchart LR
+    subgraph UI["Next.js Frontend"]
+        team["Team"]
+        coworkers["Coworkers"]
+        flow["Flow"]
+        warroom["War Room"]
+        proxy["API proxy routes"]
+    end
 
-    qdrant[(Qdrant)]
-    github[(GitHub API)]
-    frontend[Next.js frontend]
+    subgraph API["FastAPI Backend"]
+        agents["Agent registry"]
+        graph["LangGraph incident graph"]
+        ingest["GitHub ingestion"]
+        sse["SSE event stream"]
+    end
 
-    router <--> qdrant
-    owners <--> qdrant
-    mesh <--> qdrant
-    memory --> qdrant
-    reader <--> github
-    code <--> github
-    pr <--> github
-    approval <--> frontend
+    subgraph Memory["Qdrant Memory"]
+        facts["semantic_facts"]
+        episodes["episodes"]
+        teamMemory["team-scoped memory"]
+    end
+
+    subgraph GitHub["GitHub"]
+        issues["Issues"]
+        files["Repository files"]
+        branch["Fix branch"]
+        pr["Pull request"]
+    end
+
+    team --> proxy
+    coworkers --> proxy
+    flow --> proxy
+    warroom --> proxy
+    proxy --> agents
+    proxy --> graph
+    graph --> sse
+    sse --> flow
+    sse --> warroom
+    agents --> ingest
+    ingest --> GitHub
+    ingest --> Memory
+    graph <--> Memory
+    graph <--> issues
+    graph <--> files
+    graph --> branch
+    graph --> pr
 ```
-
-### Backend Graph
-
-The backend is a FastAPI app with a LangGraph state machine:
-
-| Node | Responsibility |
-|---|---|
-| `issue_reader` | Reads a GitHub issue or incident input and extracts affected files and incident metadata. |
-| `ownership_router` | Searches Qdrant for code ownership facts and selects owner agent IDs. |
-| `query_single_agent` | Fans out to each owner AUBI and asks what their constitution knows. |
-| `coworker_mesh_exchange` | Finds related coworkers using semantic memory, known issues, current focus, expertise, and shared team history. |
-| `code_reader` | Fetches relevant files from GitHub. |
-| `fix_generator` | Produces complete fixed file content, diff, and explanation. |
-| `test_runner` | Applies the generated Go file in a temp checkout and runs `go test ./...`. |
-| `approval_gate` | Uses a LangGraph interrupt to pause for human approval. |
-| `pr_pusher` | Creates the branch, commits the fix, opens the PR, and writes memory episodes. |
-
-The graph streams events over Server-Sent Events so the frontend can render node progress, agent messages, routing evidence, coworker exchanges, patch output, test results, and memory writes.
 
 ---
 
-## Memory Model
+## Issue-to-PR Graph
 
-AUBI's memory design is inspired by:
+The backend uses LangGraph to model a real workflow with state, fan-out, streaming events, and an approval interrupt.
 
-| Influence | What AUBI borrows conceptually |
+```mermaid
+flowchart TD
+    A["issue_reader"] --> B["ownership_router"]
+    B --> C["query_single_agent fan-out"]
+    C --> D["coworker_mesh_exchange"]
+    D --> E["code_reader"]
+    E --> F["fix_generator"]
+    F --> G["test_runner"]
+    G --> H{"approval_gate"}
+    H -- approved --> I["pr_pusher"]
+    H -- rejected --> J["end"]
+    I --> K["memory writeback"]
+    K --> J
+
+    M[(Qdrant)] <--> B
+    M <--> C
+    M <--> D
+    K --> M
+    GH[(GitHub)] <--> A
+    GH <--> E
+    I --> GH
+```
+
+| Node | What it does |
 |---|---|
-| Letta / MemGPT | Long-lived agent memory that survives a single chat or task. |
-| OpenAgents-style coworker systems | Multiple task-specific AI coworkers coordinating instead of one monolithic assistant. |
-| Qdrant vector memory | Semantic retrieval over structured facts and resolved episodes. |
+| `issue_reader` | Reads the issue or pasted incident and extracts title, body, service, error type, and likely affected files. |
+| `ownership_router` | Searches Qdrant and file-path evidence to select likely owner coworkers. |
+| `query_single_agent` | Fans out to owner AUBIs and asks what their constitution knows. |
+| `coworker_mesh_exchange` | Selects adjacent coworkers using ownership, expertise, current focus, known issues, collaboration, and shared-memory overlap. |
+| `code_reader` | Resolves missing paths and reads live source files from GitHub. |
+| `fix_generator` | Uses the issue, owner context, coworker context, memory, and source files to produce a patch. |
+| `test_runner` | Applies generated files in a temporary checkout and runs verification, including `go test ./...` for Go repos. |
+| `approval_gate` | Pauses the graph with a LangGraph interrupt until the UI approves or rejects. |
+| `pr_pusher` | Pushes a branch, opens a PR, links the issue, and writes resolved episodes back to memory. |
 
-This repo does not import Letta, MemGPT, or OpenAgents as runtime dependencies. The implementation is an AUBI-native memory layer backed by Qdrant.
+---
 
-### Context Constitution
+## Context Constitution
 
-Each coworker AUBI has a Context Constitution: structured facts inferred from GitHub activity and stored as semantic triples.
+Every AUBI coworker is backed by structured memory derived from GitHub activity and incident outcomes.
 
 ```mermaid
 flowchart LR
-    github[GitHub activity] --> builder[constitution builder]
-    builder --> facts[structured facts]
-    facts --> qdrant[(Qdrant semantic_facts)]
-    qdrant --> routing[ownership routing]
-    qdrant --> agents[coworker AUBI prompts]
-    qdrant --> mesh[coworker mesh retrieval]
+    activity["GitHub commits, PRs, issues"] --> builder["constitution builder"]
+    builder --> facts["structured facts"]
+    facts --> qdrant[(Qdrant)]
+    qdrant --> routing["ownership routing"]
+    qdrant --> prompts["coworker prompts"]
+    qdrant --> exchange["coworker exchange"]
+    qdrant --> warroom["war room evidence"]
+    approved["approved PR outcome"] --> episodes["episode memory"]
+    episodes --> qdrant
 ```
 
-| Category | Example meaning |
+| Memory block | Example use |
 |---|---|
-| `code_ownership` | Directories, files, and services the developer appears to own. |
-| `expertise` | Languages, frameworks, and domains inferred from work patterns. |
-| `collaboration` | Review and communication preferences used when drafting context and PR text. |
-| `current_focus` | Recent areas of activity. |
-| `known_issues` | Risks or recurring problems tied to the developer's area. |
-| `episodes` | Resolved incidents written after approved PRs. |
+| `code_ownership` | "Vitthal-AUBI owns auth/token.go and auth-related backend work." |
+| `expertise` | "Avhaan-AUBI is strong in frontend, TypeScript, and UI implementation." |
+| `collaboration` | "This coworker tends to validate changes through tests before PRs." |
+| `current_focus` | "Recent commits show active work in frontend routes and dashboard components." |
+| `known_issues` | "Prior auth token cache bugs involved concurrent map access." |
+| `episodes` | "Issue #1 was fixed by guarding TokenCache and verifying Go tests." |
 
-The store supports both **user-scoped memory** and **team-scoped memory**. Personal memory helps route to the right coworker; team memory helps related AUBIs share prior incidents and resolutions.
+Memory is stored in two Qdrant collections:
+
+| Collection | Scope | Purpose |
+|---|---|---|
+| `semantic_facts` | User and team | Ownership, expertise, collaboration, current focus, known issues. |
+| `episodes` | User and team | Resolved incidents and PR outcomes that should influence future runs. |
 
 ---
 
-## Issue-to-PR Flow
+## The Context Layer We Built
+
+AUBI's main technical layer is the bridge between individual developer memory and a shared coworker network.
+
+It is made of four parts:
+
+```mermaid
+flowchart TD
+    A["1. Constitution Builder"] --> B["2. Semantic Memory Store"]
+    B --> C["3. Ownership Router"]
+    C --> D["4. Coworker Context Exchange"]
+    D --> E["Patch + Test + Approval"]
+    E --> F["Memory Writeback"]
+    F --> B
+
+    A1["GitHub activity"] --> A
+    A2["Commits, files, languages, PR patterns"] --> A
+    B1["user-scoped facts"] --> B
+    B2["team-scoped episodes"] --> B
+    D1["peer AUBI messages"] --> D
+    D2["shared memory hits"] --> D
+```
+
+| Layer | What it owns |
+|---|---|
+| **Constitution Builder** | Converts GitHub activity into stable facts about a developer's ownership, expertise, current focus, collaboration style, and known issues. |
+| **Semantic Memory Store** | Stores those facts and incident episodes in Qdrant with tenant, team, user, scope, category, and predicate metadata. |
+| **Ownership Router** | Combines affected files, issue text, semantic search, and profile facts to pick the coworker AUBI that should lead. |
+| **Coworker Context Exchange** | Selects adjacent AUBIs and asks them for relevant context before code generation. |
+| **Memory Writeback** | Turns approved PR outcomes into future user and team episodes. |
+
+### Constitution Fact Shape
+
+Each memory item is stored as a structured semantic fact:
+
+```json
+{
+  "subject": "Vitthal-Agarwal",
+  "predicate": "owns",
+  "object": "auth/ directory and auth/token.go in Neilyoo98/AUBI-demo",
+  "category": "code_ownership",
+  "confidence": 0.92
+}
+```
+
+The backend adds operational metadata before writing to Qdrant:
+
+| Field | Why it matters |
+|---|---|
+| `tenant_id` | Keeps hackathon/demo memory isolated. |
+| `scope` | Separates `user` memory from `team` memory. |
+| `scope_id` | Enables filtered retrieval for a specific coworker or shared team. |
+| `category` | Lets the router favor ownership, expertise, current focus, known issues, and collaboration facts differently. |
+| `predicate` | Makes facts queryable as human-readable relationships instead of opaque chunks. |
+
+### Coworker Communication Protocol
+
+When an issue starts, AUBI does not simply retrieve top-k chunks and write code. It runs a small communication protocol:
 
 ```mermaid
 sequenceDiagram
-    participant Judge as Judge / Developer
-    participant UI as Next.js UI
-    participant API as FastAPI
-    participant Graph as LangGraph
-    participant Memory as Qdrant
-    participant GH as GitHub
+    participant O as AUBI Orchestrator
+    participant Owner as Owner AUBI
+    participant Peer as Related AUBI
+    participant Team as Team Memory
+    participant Repo as GitHub Repo
 
-    Judge->>UI: Paste issue URL or load latest issue
-    UI->>API: GET /incidents/stream
-    API->>Graph: Start run
-    Graph->>GH: Read issue and source files
-    Graph->>Memory: Search ownership and coworker context
-    Graph-->>UI: Stream node events and agent messages
-    Graph->>GH: Clone repo for Go verification
-    Graph-->>UI: Return diff, tests, approval payload
-    Judge->>UI: Approve PR push
-    UI->>API: POST /incidents/approve
-    API->>Graph: Resume interrupted thread
-    Graph->>GH: Push branch and open PR
-    Graph->>Memory: Write personal and team episodes
-    API-->>UI: PR URL and memory writes
+    O->>Team: Search prior episodes and ownership facts
+    Team-->>O: Candidate owners + related memories
+    O->>Owner: "Is this your domain?"
+    Owner-->>O: Ownership answer + first checks
+    O->>Peer: "Do you have adjacent context?"
+    Peer->>Team: Retrieve matching shared memory
+    Team-->>Peer: Similar prior fixes and risks
+    Peer-->>O: Context, why it matters, and should-check items
+    O->>Repo: Read files only after context is assembled
+    O-->>O: Generate patch with checks as constraints
 ```
+
+Each coworker exchange carries:
+
+| Payload | Used by |
+|---|---|
+| `requester` and `responder` | War Room and Flow visualizations. |
+| `reason` | Explains why that coworker was consulted. |
+| `selection_signals` | Shows whether the match came from ownership, expertise, current focus, known issues, collaboration, or shared-memory overlap. |
+| `context_shared` | Feeds the fix generator and War Room explanation. |
+| `should_check` | Becomes the visible considerations checklist against the generated patch. |
+| `shared_memory_hits` | Proves the answer came from persistent team memory, not just the current prompt. |
+
+This is the layer that makes AUBI feel like a team of persistent coworkers instead of one stateless coding assistant.
+
+### Retrieval Path
+
+```mermaid
+flowchart LR
+    issue["Issue title/body/files"] --> signals["Issue signals"]
+    signals --> ownerSearch["Owner search"]
+    signals --> teamSearch["Team memory search"]
+    ownerSearch --> owner["Lead coworker AUBI"]
+    teamSearch --> related["Related coworker AUBIs"]
+    owner --> exchange["Context exchange"]
+    related --> exchange
+    exchange --> constraints["Fix constraints + checks"]
+    constraints --> patch["Generated patch"]
+```
+
+The frontend exposes this path in two ways:
+
+| View | What it proves |
+|---|---|
+| **Flow** | The operational state: progress, patch, tests, approval, and PR readiness. |
+| **War Room** | The reasoning state: human signal, owner routing, coworker exchange, memory impact, considerations, and live trace. |
+
+---
+
+## Coworker Mesh
+
+AUBI does not use a single central bot to hallucinate context. It routes through coworker AUBIs.
+
+```mermaid
+sequenceDiagram
+    participant O as AUBI Orchestrator
+    participant V as Vitthal-AUBI
+    participant N as Neilyoo98-AUBI
+    participant A as Avhaan-AUBI
+    participant M as Qdrant Memory
+    participant G as GitHub
+
+    O->>M: Search ownership and prior episodes
+    M-->>O: Owner and related coworker evidence
+    O->>V: Is this issue in your domain?
+    V-->>O: Owner context and fix direction
+    V->>N: Ask for adjacent memory
+    N->>M: Retrieve related team memory
+    M-->>N: Similar prior incident
+    N-->>V: Risk, checks, and test considerations
+    O->>G: Read affected files
+    O-->>O: Generate patch and considerations
+    O-->>G: Push PR only after approval
+```
+
+The War Room makes this visible. It shows:
+
+- Which AUBI asked which coworker for context.
+- Why that coworker was selected.
+- Which shared memory was used.
+- Which considerations were addressed by the generated fix.
+- What got written back after the run.
 
 ---
 
 ## Tech Stack
 
-| Layer | Tech |
+| Layer | Technology |
 |---|---|
 | Frontend | Next.js 14, React 18, TypeScript, Tailwind CSS, Framer Motion |
-| Backend | FastAPI, Python 3.11, LangGraph, LangChain OpenAI |
-| Memory | Qdrant, `sentence-transformers` with `all-MiniLM-L6-v2` embeddings |
-| GitHub | PyGithub for issue reads, file reads, branch commits, and PR creation |
-| Streaming | Server-Sent Events from FastAPI, proxied through Next.js route handlers |
-| Deployment | Railway backend via `backend/Dockerfile`, Vercel frontend via `vercel.json` |
-
-### Model Configuration
-
-The current code uses OpenAI-compatible chat models configured by environment variables:
-
-| Variable | Used for |
-|---|---|
-| `OPENAI_MODEL` | Graph reasoning, issue parsing, agent responses, fix generation, and PR body generation. |
-| `OPENAI_CONSTITUTION_MODEL` | Optional override for constitution extraction. Falls back to `OPENAI_MODEL`. |
-| `OPENAI_BASE_URL` | Optional OpenAI-compatible base URL. |
-
-The hackathon design in `plans/PLAN_3.0.md` calls out Gemini structured output for constitution building. In the checked-in implementation, constitution extraction is currently wired through the OpenAI-compatible JSON response path in `backend/constitution/builder.py`.
+| Backend | FastAPI, Python, LangGraph, LangChain OpenAI |
+| Memory | Qdrant Cloud or local Qdrant |
+| Embeddings | Sentence Transformers `all-MiniLM-L6-v2` for local 384-d vectors |
+| LLM | OpenAI-compatible chat model configured with `OPENAI_MODEL` |
+| GitHub | PyGithub plus Git CLI for issue reads, source reads, branch creation, and PRs |
+| Streaming | Server-Sent Events from FastAPI to Next.js |
+| Deployment | Railway backend, Vercel frontend |
 
 ---
 
@@ -204,44 +369,65 @@ The hackathon design in `plans/PLAN_3.0.md` calls out Gemini structured output f
 
 ```text
 backend/
-  main.py                         FastAPI app, REST endpoints, SSE stream, approval resume
+  main.py                         FastAPI app, API routes, SSE stream, approval resume
   graphs/
-    incident_graph.py             LangGraph issue-to-PR pipeline
-    state.py                      Shared graph state schema
+    incident_graph.py             LangGraph issue-to-PR workflow
+    state.py                      Graph state schema
+    sse_events.py                 Event mapping for the frontend
+    prompt_builder.py             Context-aware prompt assembly
   constitution/
-    builder.py                    GitHub profile data -> constitution facts
-    store.py                      Qdrant facts, episodes, ownership, team memory
+    builder.py                    GitHub profile data -> Context Constitution facts
+    store.py                      Qdrant semantic facts, episodes, team memory
   ingestion/
     github_ingest.py              Developer profile ingestion from GitHub
-    github_issue.py               Issue read, repo file read, PR creation
+    github_issue.py               Issue reads, file reads, PR creation
 
 frontend/
-  src/app/page.tsx                Landing/product overview
-  src/app/team/page.tsx           Coworker mesh and constitution viewer
-  src/app/incident/page.tsx       Judge-facing issue-to-PR workflow
-  src/app/demo/page.tsx           Stream-focused AUBI flow view
-  src/app/api/*                   Next.js proxy routes to the backend
-  src/hooks/useIncidentStream.ts  SSE stream + approval integration
+  src/app/team/page.tsx           Team constitution cards
+  src/app/agents/page.tsx         Coworker mesh visualization
+  src/app/demo/page.tsx           Flow page
+  src/app/incident/page.tsx       War Room explanation page
+  src/components/aubi/*           AUBI-specific panels and visualizations
+  src/hooks/useIncidentStream.ts  SSE run state and approval integration
+  src/lib/api.ts                  Frontend API client
+  src/lib/warRoomState.ts         Shared run snapshot between Flow and War Room
 ```
 
 ---
 
-## Setup
+## API Surface
 
-### Prerequisites
+| Endpoint | Purpose |
+|---|---|
+| `POST /agents` | Create an AUBI coworker from a GitHub username and persist its constitution. |
+| `GET /agents` | List coworker AUBIs from memory and Qdrant. |
+| `GET /agents/{agent_id}` | Fetch one coworker and its constitution. |
+| `DELETE /agents/{agent_id}` | Delete a coworker and associated constitution records. |
+| `POST /agents/{agent_id}/query` | Ask a coworker's constitution about an incident. |
+| `GET /constitution/{agent_id}` | Fetch grouped constitution facts. |
+| `PATCH /constitution/{agent_id}` | Add or update a constitution fact. |
+| `GET /constitution/team` | Query shared team memory. |
+| `POST /constitution/team` | Write shared team facts or episodes. |
+| `GET /ownership?filepath=...` | Resolve likely owner for a path. |
+| `GET /github/poll` | Fetch latest open issue from `TARGET_REPO`. |
+| `GET /github/issues` | List open issues for the target repo. |
+| `POST /incidents/run` | Run the graph as a blocking request. |
+| `GET /incidents/stream` | Run the graph and stream SSE events. |
+| `POST /incidents/approve` | Resume a paused graph and approve or reject PR creation. |
+| `GET /health` | Basic health check. |
+| `GET /ready` | Configuration and dependency readiness check. |
 
-- Python 3.11
-- Node.js 18+
-- Git
-- Go, if you want the `go test ./...` verification gate to pass
-- A GitHub token with access to the target repository
-- A Qdrant instance, local or cloud
-- An OpenAI-compatible API key/model
+---
 
-### 1. Backend Environment
+## Local Setup
+
+### 1. Backend
 
 ```bash
 cd backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 cp .env.example .env
 ```
 
@@ -249,47 +435,38 @@ Fill in:
 
 ```bash
 OPENAI_API_KEY=...
-OPENAI_MODEL=...
-OPENAI_CONSTITUTION_MODEL=...
-OPENAI_BASE_URL=...
+OPENAI_BASE_URL=https://us.api.openai.com/v1
+OPENAI_MODEL=gpt-5.5
+OPENAI_CONSTITUTION_MODEL=gpt-5.4-mini
 
 GITHUB_TOKEN=...
-TARGET_REPO=owner/repo
-TARGET_REPOS=owner/repo
+TARGET_REPO=Neilyoo98/AUBI-demo
+TARGET_REPOS=Neilyoo98/AUBI-demo,Neilyoo98/GDSC-Hackathon
 
 AUBI_TENANT_ID=hackathon
 AUBI_TEAM_ID=default
 
-QDRANT_URL=http://localhost:6333
-QDRANT_API_KEY=
+QDRANT_URL=https://your-qdrant-cloud-url
+QDRANT_API_KEY=...
 ```
 
-For local Qdrant:
+Run:
 
 ```bash
-docker run -p 6333:6333 qdrant/qdrant
-```
-
-### 2. Run Backend
-
-```bash
-cd backend
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
 ```
 
-Check readiness:
+Check:
 
 ```bash
 curl http://localhost:8000/ready
 ```
 
-### 3. Frontend Environment
+### 2. Frontend
 
 ```bash
 cd frontend
+npm install
 cp .env.example .env.local
 ```
 
@@ -300,58 +477,52 @@ NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
 BACKEND_URL=http://localhost:8000
 ```
 
-### 4. Run Frontend
+Run:
 
 ```bash
-cd frontend
-npm install
 npm run dev
 ```
 
 Open:
 
-- `http://localhost:3000/team` for coworker constitutions
-- `http://localhost:3000/incident` for the full issue-to-PR flow
-- `http://localhost:3000/demo` for the stream-focused flow view
-
----
-
-## API Quick Reference
-
-| Endpoint | Purpose |
-|---|---|
-| `POST /agents` | Create a coworker AUBI from a GitHub username and persist its constitution. |
-| `GET /agents` | List coworker AUBIs from in-memory registry and Qdrant. |
-| `GET /agents/{agent_id}` | Fetch one coworker and its constitution. |
-| `GET /constitution/{agent_id}` | Fetch grouped constitution facts. |
-| `GET /constitution/team` | Query or list shared team memory. |
-| `POST /constitution/team` | Write a shared team fact or episode. |
-| `GET /ownership?filepath=...` | Resolve likely owner for a file path. |
-| `GET /github/poll` | Fetch latest open issue from `TARGET_REPO`. |
-| `POST /incidents/run` | Run the graph as a blocking request; pauses at approval unless auto-approved. |
-| `GET /incidents/stream` | Run the graph and stream SSE events. |
-| `POST /incidents/approve` | Resume a paused LangGraph thread and approve or reject PR creation. |
-| `GET /ready` | Verify required demo dependencies and service configuration. |
+- `http://localhost:3000/team`
+- `http://localhost:3000/agents`
+- `http://localhost:3000/demo`
+- `http://localhost:3000/incident`
 
 ---
 
 ## Deployment
 
-### Backend on Railway
+### Railway Backend
 
-The repo includes `railway.toml` and `backend/Dockerfile`.
+The backend is deployed from the root using `railway.toml` and `backend/Dockerfile`.
 
-Railway runs:
+```toml
+[build]
+dockerfilePath = "backend/Dockerfile"
 
-```bash
-uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1
+[deploy]
+startCommand = "sh -c 'uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1'"
+healthcheckPath = "/health"
 ```
 
-Set the same backend environment variables in Railway. Use one worker for the hackathon demo because the in-memory LangGraph checkpointer must preserve interrupted approval threads inside the running process.
+Use one worker for the demo deployment so the in-memory LangGraph checkpointer can preserve interrupted approval threads inside the process.
 
-### Frontend on Vercel
+### Vercel Frontend
 
-`vercel.json` points Vercel at the `frontend` directory.
+`vercel.json` points Vercel at the `frontend` directory:
+
+```json
+{
+  "framework": "nextjs",
+  "rootDirectory": "frontend",
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "installCommand": "npm install",
+  "devCommand": "npm run dev"
+}
+```
 
 Set:
 
@@ -362,29 +533,45 @@ BACKEND_URL=https://your-railway-backend
 
 ---
 
-## Judging Highlights
+## Why This Is Different From Plain RAG
 
-| Highlight | Why it matters |
+| Plain RAG assistant | AUBI |
 |---|---|
-| Context before code | AUBI demonstrates that the best patch starts with the right team memory, not just repository search. |
-| Explainable routing | The UI can show why a coworker was chosen through ownership facts, confidence, and evidence. |
-| Coworker AUBIs | The system models multiple developer representatives that exchange context before code generation. |
-| Persistent memory | Resolved incidents become future retrieval context through Qdrant user and team episodes. |
-| Human control | The graph cannot open a PR until the approval gate is resumed. |
-| Real integration path | GitHub issues, GitHub file reads, GitHub PR creation, SSE streaming, Railway backend, and Vercel frontend are all represented in the repo. |
+| Retrieves chunks from a codebase. | Retrieves developer ownership, team memory, known issues, and resolved episodes. |
+| Usually acts as one assistant. | Models multiple developer AUBIs that exchange context. |
+| Often hides why a patch was chosen. | Shows owner routing, coworker messages, memory hits, and considerations. |
+| Ends at generated code. | Continues through tests, approval, PR creation, and memory writeback. |
+| Forgets after the chat. | Writes incident outcomes back into persistent Qdrant memory. |
 
 ---
 
-## Honest Scope
+## Hackathon Scope
 
-AUBI is a hackathon prototype, not a production incident platform. The current implementation is strongest for the GitHub issue-to-PR demo path, especially Go repositories where `go test ./...` can verify the generated file. The memory model, approval interrupt, Qdrant retrieval, GitHub PR creation, and frontend streaming path are implemented; broader language test runners, deeper sandboxing, reviewer assignment automation, and production-grade multi-worker persistence are natural next steps.
+Implemented:
+
+- GitHub issue picker and issue polling.
+- Qdrant-backed user and team memory.
+- Context Constitution ingestion from GitHub activity.
+- Coworker routing and coworker mesh exchange.
+- SSE streaming into Flow and War Room.
+- Patch generation from live repository files.
+- Go verification path with `go test ./...`.
+- Human approval before PR push.
+- GitHub PR creation and memory writeback.
+- Railway backend and Vercel frontend configuration.
+
+Next:
+
+- More language-specific test runners.
+- Persistent external LangGraph checkpointing for multi-worker production deployments.
+- Reviewer assignment and PR comment automation.
+- Richer memory evaluation and decay rules.
+- Slack/Discord ingestion for collaboration memory.
 
 ---
 
 <div align="center">
 
-Built for the GDSC Hackathon 2026 at the University of Maryland.
-
-AI that knows the team, not just the codebase.
+**AUBI is AI that knows the team, not just the codebase.**
 
 </div>
