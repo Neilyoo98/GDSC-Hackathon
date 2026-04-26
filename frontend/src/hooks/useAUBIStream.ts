@@ -54,37 +54,6 @@ export function useAUBIStream(issueUrl: string | null) {
     if (!issueUrl) return;
 
     setIsStreaming(true);
-    const devMode = process.env.NEXT_PUBLIC_DEV_MODE !== "false";
-
-    if (devMode) {
-      const mockEvents: AUBIEvent[] = [
-        { event: "node_start", node: "issue_reader", data: null },
-        { event: "node_done", node: "issue_reader", data: { issue_title: "auth 401 blocking student submissions", affected_files: ["auth/token.go"] } },
-        { event: "node_start", node: "ownership_router", data: null },
-        { event: "node_done", node: "ownership_router", data: { owner_ids: ["alice", "bob"] } },
-        ...mockMessages.map((message) => ({ event: "agent_message" as const, data: message })),
-        { event: "complete", data: null }
-      ];
-
-      mockEvents.forEach((event, index) => {
-        const timer = setTimeout(() => {
-          setEvents((current) => [...current, event]);
-          if (event.event === "node_start") {
-            setNodeStatuses((current) => ({ ...current, [event.node]: "running" }));
-          }
-          if (event.event === "node_done") {
-            setNodeStatuses((current) => ({ ...current, [event.node]: "done" }));
-          }
-          if (event.event === "agent_message") {
-            setAgentMessages((current) => [...current, event.data]);
-          }
-          if (event.event === "complete") setIsStreaming(false);
-        }, 500 + index * 700);
-        mockTimersRef.current.push(timer);
-      });
-      return reset;
-    }
-
     const source = new EventSource(`/api/incidents/stream?issue_url=${encodeURIComponent(issueUrl)}`);
     eventSourceRef.current = source;
 
