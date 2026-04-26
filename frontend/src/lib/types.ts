@@ -68,13 +68,6 @@ export interface SSEEvent {
   receivedAt?: number;
 }
 
-export interface AgentMessage {
-  sender: string;
-  recipient: string;
-  message: string;
-  timestamp: number;
-}
-
 export interface IncidentResult {
   thread_id?: string;
   awaiting_approval?: boolean;
