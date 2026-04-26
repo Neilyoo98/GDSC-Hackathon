@@ -5,6 +5,18 @@
 
 ---
 
+## Model Assignments
+
+| Role | Model | Why |
+|---|---|---|
+| **Orchestrator** (incident analysis, routing, drafting) | **GPT-5.5** (`gpt-5.5` via OpenAI Responses API) | Best reasoning + planning for the complex multi-step flow |
+| **Agent queries** (fast per-agent constitution look-up) | **Claude 3 Haiku** | Cheap, fast, good at following structured constitution |
+| **Constitution building** (GitHub → facts) | **GPT-5.5** | Long context, structured JSON output quality |
+
+> Both APIs needed: `OPENAI_API_KEY` (GPT-5.5) + `ANTHROPIC_API_KEY` (Haiku)
+
+---
+
 ## TL;DR — Reuse Assessment
 
 We have two existing repos on this machine. **Cognoxent/aubi is ~70% of what we need.** Do NOT build from scratch.
@@ -27,6 +39,45 @@ We have two existing repos on this machine. **Cognoxent/aubi is ~70% of what we 
 | **Agent cards / constitution UI** | Nothing | ❌ BUILD NEW components |
 
 **Conclusion:** 3 people extend existing code, 1 person builds the only truly new pieces (GitHub ingestion + incident graph). We ship in 8 hours.
+
+---
+
+## Exported Files — Already Scaffolded
+
+These files are already written and in `backend/`. Each person starts here, not from scratch.
+
+```
+backend/
+├── main.py                          ✅ WRITTEN — FastAPI app with all endpoints
+├── requirements.txt                 ✅ WRITTEN — all deps
+├── .env.example                     ✅ WRITTEN — env template
+├── graphs/
+│   ├── state.py                     ✅ WRITTEN — AUBIIncidentState TypedDict
+│   ├── incident_graph.py            ✅ WRITTEN — full LangGraph (5 nodes, GPT-5.5 + Haiku)
+│   ├── sse_events.py                ✅ COPIED from orchestrator-langgraph
+│   ├── deep_agent_event_mapper.py   ✅ COPIED — SSE event mapping patterns
+│   ├── prompt_builder.py            ✅ COPIED from cognoxent harness
+│   ├── memory_scopes.py             ✅ COPIED — memory namespace helpers
+│   ├── aubi_agent_reference.py      📖 REFERENCE — how cognoxent's Aubi agent works
+│   ├── subagents_reference.py       📖 REFERENCE — subagent patterns
+│   ├── orchestrator_v3_reference.py 📖 REFERENCE — supervisor pattern (LangGraph v3)
+│   ├── state_reference.py           📖 REFERENCE — state patterns from orchestrator
+│   └── ws_events_reference.py       📖 REFERENCE — WS event patterns
+├── ingestion/
+│   └── github_ingest.py             ✅ WRITTEN — GitHub API → structured data
+├── constitution/
+│   ├── builder.py                   ✅ WRITTEN — GitHub data → GPT-5.5 → Qdrant facts
+│   ├── context_builder_reference.py 📖 REFERENCE — how cognoxent builds memory context
+│   ├── post_session_reference.py    📖 REFERENCE — self-learning loop pattern
+│   ├── embeddings_reference.py      📖 REFERENCE — embedding service
+│   └── qdrant_client_reference.py   📖 REFERENCE — Qdrant client patterns
+└── api/                             ← Person 1 + 3 add routes here if needed
+```
+
+**Person 1:** `incident_graph.py` is done. Wire it to FastAPI in `main.py` (already wired). Tune the node prompts.
+**Person 2:** `builder.py` is done. Add Qdrant storage using `qdrant_client_reference.py` + `embeddings_reference.py`.
+**Person 3:** `github_ingest.py` is done. Add `POST /agents` wiring + agent registry.
+**Person 4:** Start from `cognoxent/apps/aubi-web`. Add 2 new pages.
 
 ---
 
