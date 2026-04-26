@@ -227,6 +227,9 @@ function MeshGraph({
         const labelX = mx + (-(b.y - a.y) / lineLength) * labelOffset;
         const labelY = my + ((b.x - a.x) / lineLength) * labelOffset;
         const color = CAT_COLORS[conn.category] ?? "#e8e4dc";
+        const labelKey = `${conn.category}:${conn.label.toLowerCase()}`;
+        const firstLabelIndex = connections.findIndex((candidate) => `${candidate.category}:${candidate.label.toLowerCase()}` === labelKey);
+        const showLabel = isActive || firstLabelIndex === ci;
 
         return (
           <motion.g
@@ -252,22 +255,24 @@ function MeshGraph({
             {/* Wide hit area */}
             <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="transparent" strokeWidth={18} />
             {/* Midpoint label */}
-            <g opacity={isActive ? 1 : 0.34}>
-              <rect
-                x={labelX - 50}
-                y={labelY - 16}
-                width={100}
-                height={20}
-                fill="#080808"
-                stroke={color}
-                strokeOpacity={isActive ? 0.75 : 0.16}
-              />
-              <text x={labelX} y={labelY - 2} textAnchor="middle" fill={isActive ? color : "#e8e4dc"}
-                fontSize={8} fontFamily="'Space Mono', monospace" letterSpacing="0.1em"
-                opacity={isActive ? 0.95 : 0.62} style={{ textTransform: "uppercase", userSelect: "none" }}>
-                {conn.label.slice(0, 14)}
-              </text>
-            </g>
+            {showLabel && (
+              <g opacity={isActive ? 1 : 0.34}>
+                <rect
+                  x={labelX - 50}
+                  y={labelY - 16}
+                  width={100}
+                  height={20}
+                  fill="#080808"
+                  stroke={color}
+                  strokeOpacity={isActive ? 0.75 : 0.16}
+                />
+                <text x={labelX} y={labelY - 2} textAnchor="middle" fill={isActive ? color : "#e8e4dc"}
+                  fontSize={8} fontFamily="'Space Mono', monospace" letterSpacing="0.1em"
+                  opacity={isActive ? 0.95 : 0.62} style={{ textTransform: "uppercase", userSelect: "none" }}>
+                  {conn.label.slice(0, 14)}
+                </text>
+              </g>
+            )}
             {/* Visible particles */}
             <ConnectionParticles ax={a.x} ay={a.y} bx={b.x} by={b.y} connIdx={ci} color={color} />
           </motion.g>
