@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRef } from "react";
 import type { CSSProperties } from "react";
 import { StepCards } from "@/components/StepCard";
-import { PerspectiveGrid } from "@/components/PerspectiveGrid";
+import { StockWaveBackground } from "@/components/StockWaveBackground";
 
 const coworkerCards = [
   {
@@ -176,13 +176,11 @@ function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) 
 
 function HeroMeshBackdrop() {
   return (
-    <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-0 h-[720px] overflow-hidden">
-      <PerspectiveGrid color="57,255,20" />
+    <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+      <StockWaveBackground />
       <div className="mesh-scan absolute inset-x-0 top-0 h-px bg-[#39ff14]" />
+      {/* Hex nodes floating over the waves */}
       <svg className="absolute left-1/2 top-6 h-[620px] w-[min(1120px,120vw)] -translate-x-1/2" viewBox="0 0 1120 620" fill="none">
-        <path className="mesh-path mesh-path-a" d="M130 388 C260 230 354 472 500 292 C642 118 774 390 986 196" />
-        <path className="mesh-path mesh-path-b" d="M162 190 C320 320 416 150 578 322 C704 456 828 270 1006 420" />
-        <path className="mesh-path mesh-path-c" d="M244 482 C430 400 438 206 612 214 C760 220 806 112 976 120" />
         {[
           [130, 388],[244, 482],[360, 268],[500, 292],[578, 322],
           [612, 214],[758, 392],[882, 166],[986, 196],[1006, 420],
@@ -193,8 +191,9 @@ function HeroMeshBackdrop() {
           </g>
         ))}
       </svg>
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,transparent_38%,#080808_82%)]" />
-      <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-b from-transparent to-[#080808]" />
+      {/* Vignette */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_50%_0%,transparent_0%,transparent_40%,#080808_85%)]" />
+      <div className="absolute inset-x-0 bottom-0 h-64 bg-gradient-to-b from-transparent to-[#080808]" />
     </div>
   );
 }
