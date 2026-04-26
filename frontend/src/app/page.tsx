@@ -455,12 +455,12 @@ export default function Home() {
       </section>
 
       {/* ── FOOTER ── */}
-      <footer className="relative z-10 grid grid-cols-1 items-center gap-4 border-t border-[#1f1f1f] px-6 py-7 md:grid-cols-3 md:px-10">
-        <div className="font-syne text-[22px] font-normal tracking-[4px] text-[#e8e4dcb8]">AUBI</div>
-        <div className="font-mono text-center text-[10px] uppercase tracking-[2px] text-[#e8e4dcb8]">GDSC Hackathon 2026 · University of Maryland</div>
+      <footer className="relative z-10 grid grid-cols-1 items-center gap-4 border-t border-[#1f1f1f] px-6 py-8 md:grid-cols-3 md:px-10">
+        <div className="font-syne text-[30px] font-normal tracking-[5px] text-[#39ff14]">AUBI</div>
+        <div className="font-mono text-center text-[12px] uppercase tracking-[2px] text-[#e8e4dc]">GDSC Hackathon 2026 · University of Maryland</div>
         <div className="flex justify-start gap-2 md:justify-end">
           {["Dev Tool", "Most Creative"].map((badge) => (
-            <span key={badge} className="font-mono border border-[#1f1f1f] px-2 py-1 text-[9px] uppercase tracking-[2px] text-[#e8e4dcb8]">
+            <span key={badge} className="font-mono border border-[#1f1f1f] px-3 py-1.5 text-[10px] uppercase tracking-[2px] text-[#e8e4dc]">
               {badge}
             </span>
           ))}
