@@ -177,7 +177,7 @@ function HeroMeshBackdrop() {
   return (
     <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-0 h-[720px] overflow-hidden">
       <div className="hero-grid-base absolute inset-0" />
-      <div className="hero-grid-spotlight absolute inset-0" />
+      <div className="hero-grid-lens absolute inset-0" />
       <div className="mesh-scan absolute inset-x-0 top-0 h-px bg-[#39ff14]" />
       <svg className="absolute left-1/2 top-6 h-[620px] w-[min(1120px,120vw)] -translate-x-1/2" viewBox="0 0 1120 620" fill="none">
         <path className="mesh-path mesh-path-a" d="M130 388 C260 230 354 472 500 292 C642 118 774 390 986 196" />
@@ -208,8 +208,12 @@ export default function Home() {
       className="relative overflow-hidden"
       onPointerMove={(event) => {
         const rect = event.currentTarget.getBoundingClientRect();
-        pageRef.current?.style.setProperty("--spotlight-x", `${event.clientX - rect.left}px`);
-        pageRef.current?.style.setProperty("--spotlight-y", `${event.clientY - rect.top}px`);
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+        pageRef.current?.style.setProperty("--spotlight-x", `${x}px`);
+        pageRef.current?.style.setProperty("--spotlight-y", `${y}px`);
+        pageRef.current?.style.setProperty("--grid-shift-x", `${x * -0.035}px`);
+        pageRef.current?.style.setProperty("--grid-shift-y", `${y * -0.035}px`);
         pageRef.current?.style.setProperty("--spotlight-opacity", "1");
       }}
       onPointerLeave={() => pageRef.current?.style.setProperty("--spotlight-opacity", "0")}
@@ -221,6 +225,8 @@ export default function Home() {
           "--divider": "#1f1f1f",
           "--spotlight-x": "50%",
           "--spotlight-y": "22%",
+          "--grid-shift-x": "0px",
+          "--grid-shift-y": "0px",
           "--spotlight-opacity": 0,
           background: "var(--bg)",
           color: "var(--text)",
@@ -273,9 +279,9 @@ export default function Home() {
         .mesh-node path{fill:#080808;stroke:#e8e4dc;stroke-opacity:.22;stroke-width:1}
         .mesh-node circle{fill:#39ff14}
         .signal-rise{animation:signalRise 2.6s ease-in-out infinite}
-        .cursor-spotlight{opacity:var(--spotlight-opacity);background:radial-gradient(420px circle at var(--spotlight-x) var(--spotlight-y),#39ff1429 0%,#39ff1414 36%,transparent 70%);transition:opacity .24s ease;mix-blend-mode:screen}
+        .cursor-spotlight{opacity:var(--spotlight-opacity);background:radial-gradient(380px circle at var(--spotlight-x) var(--spotlight-y),#39ff1422 0%,#39ff140d 34%,transparent 68%);transition:opacity .24s ease;mix-blend-mode:screen}
         .hero-grid-base{opacity:.12;background-image:linear-gradient(#39ff14 1px,transparent 1px),linear-gradient(90deg,#39ff14 1px,transparent 1px);background-size:64px 64px}
-        .hero-grid-spotlight{opacity:var(--spotlight-opacity);background-image:linear-gradient(#39ff14 1px,transparent 1px),linear-gradient(90deg,#39ff14 1px,transparent 1px);background-size:64px 64px;mask-image:radial-gradient(340px circle at var(--spotlight-x) var(--spotlight-y),black 0%,black 28%,transparent 72%);-webkit-mask-image:radial-gradient(340px circle at var(--spotlight-x) var(--spotlight-y),black 0%,black 28%,transparent 72%);filter:drop-shadow(0 0 8px #39ff1455);transition:opacity .18s ease}
+        .hero-grid-lens{opacity:var(--spotlight-opacity);background-image:linear-gradient(#39ff1444 1px,transparent 1px),linear-gradient(90deg,#39ff1444 1px,transparent 1px);background-size:54px 54px;background-position:var(--grid-shift-x) var(--grid-shift-y);transform:translate3d(0,0,0) scale(1.018);transform-origin:var(--spotlight-x) var(--spotlight-y);mask-image:radial-gradient(285px circle at var(--spotlight-x) var(--spotlight-y),black 0%,black 18%,transparent 64%);-webkit-mask-image:radial-gradient(285px circle at var(--spotlight-x) var(--spotlight-y),black 0%,black 18%,transparent 64%);filter:none;transition:opacity .18s ease,background-position .12s linear}
         .landing-connector::after{content:"";position:absolute;top:0;bottom:0;width:55%;background:linear-gradient(90deg,transparent,#39ff14,transparent);animation:slide 2.4s linear infinite}
         .coworker-card{transition:transform .24s ease,border-color .24s ease}
         .coworker-card:hover{transform:translateY(-4px);border-color:#39ff1444}
