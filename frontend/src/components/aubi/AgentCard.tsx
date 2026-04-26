@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { motion } from "framer-motion";
 import type { Agent } from "@/lib/types";
-import { collaborationBlurb, factObjects, shortRole } from "@/lib/agents";
+import { collaborationBlurb, coworkerName, factObjects, humanSourceLabel, shortRole } from "@/lib/agents";
 
 export function AgentCard({
   agent,
@@ -44,17 +44,17 @@ export function AgentCard({
       <div className="flex items-start gap-4">
         <Image
           src={`https://github.com/${agent.github_username}.png?size=96`}
-          alt={agent.name}
+          alt={coworkerName(agent)}
           width={56}
           height={56}
           className="border border-[#e8e4dc33] bg-[#080808]"
         />
         <div className="min-w-0 pr-20">
-          <h2 className="font-syne text-3xl font-normal leading-none text-[#e8e4dc]">{agent.name}</h2>
+          <h2 className="font-syne text-3xl font-normal leading-none text-[#e8e4dc]">{coworkerName(agent)}</h2>
           <div className="mt-2 inline-flex border border-[#e8e4dc33] px-2 py-1 font-mono text-[10px] uppercase tracking-[2px] text-[#e8e4dc99]">
             {shortRole(agent.role)}
           </div>
-          <p className="mt-2 font-mono text-[10px] uppercase tracking-[2px] text-[#e8e4dc66]">@{agent.github_username}</p>
+          <p className="mt-2 font-mono text-[10px] uppercase tracking-[2px] text-[#e8e4dc66]">{humanSourceLabel(agent)}</p>
         </div>
       </div>
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { coworkerName } from "@/lib/agents";
 import type { Agent, ConstitutionCategory } from "@/lib/types";
 
 const RING_R = 58;
@@ -73,7 +74,7 @@ export function HexNode({
   const avatarSize = compact ? 18 : 38;
 
   const categories = Object.keys(CATEGORY_META).slice(0, 5) as ConstitutionCategory[];
-  const displayName = compactLabel(agent.name.split(" ")[0], 18);
+  const displayName = compactLabel(coworkerName(agent), 18);
   const displayRole = roleSummary(agent);
 
   return (

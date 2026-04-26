@@ -3,6 +3,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import { useState } from "react";
+import { coworkerName, humanSourceLabel } from "@/lib/agents";
 import type { Agent, ConstitutionCategory } from "@/lib/types";
 
 const CATEGORIES: { key: ConstitutionCategory; label: string; color: string }[] = [
@@ -38,19 +39,19 @@ export function DossierPanel({ agent, onClose }: Props) {
           <div className="flex items-start justify-between p-5 border-b border-[#1e2d45]">
             <div>
               <p className="font-mono text-[9px] text-[#4a6080] tracking-[0.15em] mb-2">
-                {"// AGENT DOSSIER"}
+                {"// AUBI COWORKER DOSSIER"}
               </p>
               <div className="flex items-center gap-3">
                 <Image
                   src={`https://github.com/${agent.github_username}.png?size=64`}
-                  alt={agent.name}
+                  alt={coworkerName(agent)}
                   width={32}
                   height={32}
                   className="w-8 h-8 rounded-full border border-[#1e2d45]"
                 />
                 <div>
-                  <p className="font-syne text-lg text-white leading-none">{agent.name}</p>
-                  <p className="font-mono text-[10px] text-[#4a6080] mt-0.5">@{agent.github_username}</p>
+                  <p className="font-syne text-lg text-white leading-none">{coworkerName(agent)}</p>
+                  <p className="font-mono text-[10px] text-[#4a6080] mt-0.5">{humanSourceLabel(agent)}</p>
                 </div>
               </div>
               <p className="font-mono text-[11px] text-[#4a6080] mt-2">{agent.role}</p>

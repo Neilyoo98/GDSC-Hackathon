@@ -23,7 +23,7 @@ export function Nav() {
         {[
           { href: "/team", label: "TEAM" },
           { href: "/demo", label: "FLOW" },
-          { href: "/agents", label: "AGENTS" },
+          { href: "/agents", label: "COWORKERS" },
           { href: "/incident", label: "INCIDENT" }
         ].map(({ href, label }) => {
           const active = path.startsWith(href);

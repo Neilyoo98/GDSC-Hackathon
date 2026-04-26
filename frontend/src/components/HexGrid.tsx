@@ -253,14 +253,14 @@ export function HexGrid({ agents, selectedId, onSelect, compact = false, pulsing
         )}
       </AnimatePresence>
 
-      {/* Add agent button */}
+      {/* Add coworker button */}
       {!compact && onAddAgent && (
         <button
           onClick={onAddAgent}
           className="absolute bottom-6 left-6 font-mono text-xs text-[#00f0ff] border border-[#1e2d45] bg-[#0d1224] px-4 py-2 rounded transition-all hover:border-[#00f0ff44] hover:bg-[#0d1230]"
           style={{ boxShadow: "0 0 8px #00f0ff10" }}
         >
-          + REGISTER AGENT
+          + REGISTER COWORKER
         </button>
       )}
     </div>

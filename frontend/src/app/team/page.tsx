@@ -17,9 +17,9 @@ export default function TeamPage() {
       <div className="mb-8 flex items-end justify-between">
         <div>
           <p className="font-mono text-[10px] uppercase tracking-[3px] text-[#e8e4dc99]">{"// TEAM CONSTITUTIONS"}</p>
-          <h1 className="mt-2 font-syne text-6xl font-normal leading-none text-[#e8e4dc]">Developer Agent Mesh</h1>
+          <h1 className="mt-2 font-syne text-6xl font-normal leading-none text-[#e8e4dc]">AUBI Coworker Mesh</h1>
           <p className="mt-4 max-w-2xl text-sm leading-relaxed text-[#e8e4dc99]">
-            Persistent AUBI agents, each backed by a Context Constitution of ownership, expertise, collaboration style, and known issues.
+            Persistent AUBI coworkers, each backed by a Context Constitution of ownership, expertise, collaboration style, and known issues.
           </p>
         </div>
         <div className="border border-[#e8e4dc33] px-4 py-2 font-mono text-[10px] uppercase tracking-[2px] text-[#39ff14]">
@@ -36,7 +36,7 @@ export default function TeamPage() {
 
       {isLoading ? (
         <div className="flex h-[424px] items-center justify-center font-mono text-sm uppercase tracking-[3px] text-[#e8e4dc66]">
-          Loading Agent Mesh...
+          Loading Coworker Mesh...
         </div>
       ) : (
         <div className="grid gap-6 lg:grid-cols-4">
@@ -55,7 +55,7 @@ export default function TeamPage() {
       <div className="mt-8 border border-[#e8e4dc33] bg-[#080808] p-4">
         <div className="mb-4 font-mono text-[10px] uppercase tracking-[3px] text-[#e8e4dc99]">{"// READINESS CHECKPOINT"}</div>
         <div className="grid gap-4 font-mono text-[11px] uppercase tracking-[2px] text-[#e8e4dc99] md:grid-cols-4">
-          <div className="border border-[#1f1f1f] p-4">1. Agent cards show name, role, expertise, ownership, and style.</div>
+          <div className="border border-[#1f1f1f] p-4">1. Coworker cards show persona, role, expertise, ownership, and style.</div>
           <div className="border border-[#1f1f1f] p-4">2. Click any card to inspect full constitution facts.</div>
           <div className="border border-[#1f1f1f] p-4">3. Memory v3 badges confirm persistent profile state.</div>
         </div>

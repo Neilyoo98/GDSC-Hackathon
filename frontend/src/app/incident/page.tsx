@@ -9,6 +9,7 @@ import { NeuralTrace } from "@/components/NeuralTrace";
 import { HexGrid } from "@/components/HexGrid";
 import { CoworkerMeshPanel } from "@/components/CoworkerMeshPanel";
 import { api } from "@/lib/api";
+import { coworkerName } from "@/lib/agents";
 import type { GitHubIssue } from "@/lib/types";
 
 export default function IncidentPage() {
@@ -274,6 +275,7 @@ export default function IncidentPage() {
                   {memoryWrites.map((write, i) => {
                     const agentId = write.agent_id ?? write.subject ?? write.team_id ?? "team";
                     const agent = agents.find((a) => a.id === agentId || a.name === write.agent_name);
+                    const ownerLabel = agent ? coworkerName(agent) : write.coworker_aubi ?? write.agent_name ?? (write.scope === "team" ? "Team memory" : agentId);
                     return (
                       <motion.span
                         key={`${write.scope ?? "memory"}-${agentId}-${i}`}
@@ -282,7 +284,7 @@ export default function IncidentPage() {
                         transition={{ delay: i * 0.12 }}
                         className="flex-shrink-0 font-mono text-[10px] text-[#10b981] border border-emerald-500/30 bg-[#0d1224] px-3 py-1 rounded whitespace-nowrap"
                       >
-                        {agent?.name ?? write.agent_name ?? (write.scope === "team" ? "Team memory" : agentId)} · memory written
+                        {ownerLabel} · memory written
                       </motion.span>
                     );
                   })}
