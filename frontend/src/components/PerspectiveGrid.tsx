@@ -7,7 +7,7 @@ const ZOOM    = 2.2;  // magnification factor at centre
 const SAMPLES = 40;   // polyline segments per grid line (smooths the curve)
 const LERP    = 0.09; // cursor follow speed
 
-export function PerspectiveGrid() {
+export function PerspectiveGrid({ color = "0,240,255" }: { color?: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -49,9 +49,9 @@ export function PerspectiveGrid() {
       // ── Subtle lens glow ──────────────────────────────────────────────────
       if (current.x > 0) {
         const g = ctx.createRadialGradient(current.x, current.y, 0, current.x, current.y, LENS_R);
-        g.addColorStop(0,   "rgba(0,240,255,0.04)");
-        g.addColorStop(0.6, "rgba(0,240,255,0.015)");
-        g.addColorStop(1,   "rgba(0,240,255,0)");
+        g.addColorStop(0,   `rgba(${color},0.04)`);
+        g.addColorStop(0.6, `rgba(${color},0.015)`);
+        g.addColorStop(1,   `rgba(${color},0)`);
         ctx.fillStyle = g;
         ctx.beginPath();
         ctx.arc(current.x, current.y, LENS_R, 0, Math.PI * 2);
@@ -68,7 +68,7 @@ export function PerspectiveGrid() {
           const gy = (s / SAMPLES) * H;
           const p  = distort(gx, gy);
           const alpha = 0.08 + p.t * 0.18;
-          ctx.strokeStyle = `rgba(0,240,255,${alpha.toFixed(3)})`;
+          ctx.strokeStyle = `rgba(${color},${alpha.toFixed(3)})`;
           if (first) { ctx.moveTo(p.x, p.y); first = false; }
           else        { ctx.lineTo(p.x, p.y); }
         }
@@ -83,7 +83,7 @@ export function PerspectiveGrid() {
           const gx = (s / SAMPLES) * W;
           const p  = distort(gx, gy);
           const alpha = 0.08 + p.t * 0.18;
-          ctx.strokeStyle = `rgba(0,240,255,${alpha.toFixed(3)})`;
+          ctx.strokeStyle = `rgba(${color},${alpha.toFixed(3)})`;
           if (first) { ctx.moveTo(p.x, p.y); first = false; }
           else        { ctx.lineTo(p.x, p.y); }
         }
@@ -105,14 +105,13 @@ export function PerspectiveGrid() {
     resize();
     tick();
 
-    const parent = el.parentElement;
-    parent?.addEventListener("mousemove", onMove);
-    parent?.addEventListener("mouseleave", onLeave);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseleave", onLeave);
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
-      parent?.removeEventListener("mousemove", onMove);
-      parent?.removeEventListener("mouseleave", onLeave);
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseleave", onLeave);
     };
   }, []);
 

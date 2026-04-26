@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRef } from "react";
 import type { CSSProperties } from "react";
 import { StepCards } from "@/components/StepCard";
+import { PerspectiveGrid } from "@/components/PerspectiveGrid";
 
 const coworkerCards = [
   {
@@ -176,8 +177,7 @@ function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) 
 function HeroMeshBackdrop() {
   return (
     <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-0 h-[720px] overflow-hidden">
-      <div className="hero-grid-base absolute inset-0" />
-      <div className="hero-grid-lens absolute inset-0" />
+      <PerspectiveGrid color="57,255,20" />
       <div className="mesh-scan absolute inset-x-0 top-0 h-px bg-[#39ff14]" />
       <svg className="absolute left-1/2 top-6 h-[620px] w-[min(1120px,120vw)] -translate-x-1/2" viewBox="0 0 1120 620" fill="none">
         <path className="mesh-path mesh-path-a" d="M130 388 C260 230 354 472 500 292 C642 118 774 390 986 196" />
