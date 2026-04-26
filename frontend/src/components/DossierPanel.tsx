@@ -26,7 +26,9 @@ export function DossierPanel({ agent, onClose, onDelete }: Props) {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const facts = agent?.constitution_facts.filter((f) => f.category === tab) ?? [];
+  const facts = agent?.constitution_facts?.filter((f) => f.category === tab) ?? [];
+  const summary = agent?.github_data_summary;
+  const languages = summary?.languages ?? [];
 
   useEffect(() => {
     setConfirmDelete(false);
@@ -85,9 +87,9 @@ export function DossierPanel({ agent, onClose, onDelete }: Props) {
               <p className="font-mono text-[11px] text-[#4a6080] mt-2">{agent.role}</p>
               <div className="flex gap-2 mt-2 flex-wrap">
                 {[
-                  `${agent.github_data_summary.commit_count} commits`,
-                  `${agent.github_data_summary.pr_count} PRs`,
-                  agent.github_data_summary.languages.slice(0, 2).join(" / "),
+                  `${summary?.commit_count ?? 0} commits`,
+                  `${summary?.pr_count ?? 0} PRs`,
+                  languages.slice(0, 2).join(" / "),
                 ].map((pill) => (
                   <span key={pill} className="font-mono text-[9px] text-[#4a6080] border border-[#1e2d45] bg-[#111827] px-2 py-0.5 rounded">
                     {pill}
@@ -164,7 +166,7 @@ export function DossierPanel({ agent, onClose, onDelete }: Props) {
           <div className="p-3 border-t border-[#1e2d45]">
             <div className="flex items-center justify-between gap-3">
               <p className="font-mono text-[9px] text-[#2a3f5f]">
-                CONSTITUTION · {agent.constitution_facts.length} FACTS INDEXED
+                CONSTITUTION · {agent.constitution_facts?.length ?? 0} FACTS INDEXED
               </p>
               {onDelete && (
                 <button

@@ -52,12 +52,46 @@ export function humanSourceLabel(agent: Agent): string {
   return `for @${agent.github_username}`;
 }
 
+function stringValue(value: unknown, fallback = ""): string {
+  return typeof value === "string" && value.trim() ? value : fallback;
+}
+
 function stringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => (typeof item === "string" ? item : ""))
+    .filter(Boolean);
 }
 
 function numberValue(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeFact(fact: unknown): ConstitutionFact | null {
+  if (!isRecord(fact)) return null;
+  const category = stringValue(fact.category) as ConstitutionCategory;
+  if (!category) return null;
+  return {
+    subject: stringValue(fact.subject),
+    predicate: stringValue(fact.predicate),
+    object: stringValue(fact.object),
+    confidence: numberValue(fact.confidence),
+    category,
+  };
+}
+
+function normalizeFacts(value: unknown): ConstitutionFact[] {
+  if (!Array.isArray(value)) return [];
+  return value.map(normalizeFact).filter((fact): fact is ConstitutionFact => Boolean(fact));
+}
+
+function factsFromConstitution(value: unknown): ConstitutionFact[] {
+  if (!isRecord(value)) return [];
+  return Object.values(value).flatMap(normalizeFacts);
 }
 
 function identityKey(agent: Agent): string {
@@ -121,12 +155,22 @@ function mergeAgents(left: Agent, right: Agent): Agent {
   };
 }
 
-export function normalizeAgent(agent: Agent): Agent {
-  const summary = agent.github_data_summary ?? {};
+export function normalizeAgent(agent: unknown): Agent {
+  const record = isRecord(agent) ? agent : {};
+  const summary = isRecord(record.github_data_summary) ? record.github_data_summary : {};
+  const constitutionFacts = normalizeFacts(record.constitution_facts);
+  const fallbackFacts = factsFromConstitution(record.constitution);
+  const githubUsername = stringValue(record.github_username, stringValue(record.name, "unknown"));
+  const name = stringValue(record.name, githubUsername);
+  const role = stringValue(record.role, "Software Engineer");
 
   return {
-    ...agent,
-    constitution_facts: Array.isArray(agent.constitution_facts) ? agent.constitution_facts : [],
+    id: stringValue(record.id, githubUsername),
+    github_username: githubUsername,
+    name,
+    role,
+    constitution_facts: constitutionFacts.length > 0 ? constitutionFacts : fallbackFacts,
+    constitution: isRecord(record.constitution) ? record.constitution as Agent["constitution"] : undefined,
     github_data_summary: {
       commit_count: numberValue(summary.commit_count),
       pr_count: numberValue(summary.pr_count),
@@ -136,8 +180,12 @@ export function normalizeAgent(agent: Agent): Agent {
   };
 }
 
-export function normalizeAgents(agents: Agent[]): Agent[] {
-  if (!Array.isArray(agents)) return [];
+export function normalizeAgents(value: unknown): Agent[] {
+  const agents = Array.isArray(value)
+    ? value
+    : isRecord(value) && Array.isArray(value.agents)
+      ? value.agents
+      : [];
   const byIdentity = new Map<string, Agent>();
   agents.map(normalizeAgent).forEach((agent) => {
     const key = identityKey(agent) || agent.id;

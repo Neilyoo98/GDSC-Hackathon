@@ -131,6 +131,7 @@ export default function RadialOrbitalTimeline({
   centerSublabel,
   onSelect,
 }: RadialOrbitalTimelineProps) {
+  const items = Array.isArray(timelineData) ? timelineData : [];
   const [expandedItems, setExpandedItems] = useState<Record<number, boolean>>({});
   const [rotationAngle, setRotationAngle] = useState<number>(0);
   const [autoRotate, setAutoRotate] = useState<boolean>(true);
@@ -160,11 +161,11 @@ export default function RadialOrbitalTimeline({
         setActiveNodeId(id);
         setAutoRotate(false);
         const pulse: Record<number, boolean> = {};
-        const item = timelineData.find((d) => d.id === id);
+        const item = items.find((d) => d.id === id);
         (item?.relatedIds ?? []).forEach((r) => { pulse[r] = true; });
         setPulseEffect(pulse);
-        const idx = timelineData.findIndex((d) => d.id === id);
-        setRotationAngle(270 - (idx / timelineData.length) * 360);
+        const idx = items.findIndex((d) => d.id === id);
+        setRotationAngle(270 - (idx / Math.max(items.length, 1)) * 360);
         onSelect?.(item?.agentId ?? null);
       } else {
         setActiveNodeId(null);
@@ -277,8 +278,8 @@ export default function RadialOrbitalTimeline({
             width={0}
             height={0}
           >
-            {timelineData.map((item, index) => {
-              const pos        = calcPos(index, timelineData.length);
+            {items.map((item, index) => {
+              const pos        = calcPos(index, Math.max(items.length, 1));
               const isExpanded = !!expandedItems[item.id];
               const lineLen    = Math.sqrt(pos.x * pos.x + pos.y * pos.y);
               return (
@@ -299,10 +300,10 @@ export default function RadialOrbitalTimeline({
           </svg>
 
           {/* Nodes */}
-          {timelineData.map((item, index) => {
-            const pos        = calcPos(index, timelineData.length);
+          {items.map((item, index) => {
+            const pos        = calcPos(index, Math.max(items.length, 1));
             const isExpanded = !!expandedItems[item.id];
-            const isRelated  = !!(activeNodeId && (timelineData.find(d => d.id === activeNodeId)?.relatedIds ?? []).includes(item.id));
+            const isRelated  = !!(activeNodeId && (items.find(d => d.id === activeNodeId)?.relatedIds ?? []).includes(item.id));
             const isPulsing  = !!pulseEffect[item.id];
             const hasAvatar  = !!item.avatarUrl;
 
@@ -388,15 +389,15 @@ export default function RadialOrbitalTimeline({
                           </div>
                         </div>
 
-                        {item.relatedIds.length > 0 && (
+                        {(item.relatedIds ?? []).length > 0 && (
                           <div className="mt-3 pt-3 border-t border-[#1e2d45]">
                             <div className="flex items-center mb-2 gap-1">
                               <Link size={9} className="text-[#4a6080]" />
                               <span className="text-[9px] uppercase tracking-wider font-mono text-[#4a6080]">Collaborates with</span>
                             </div>
                             <div className="flex flex-wrap gap-1">
-                              {item.relatedIds.map((rid) => {
-                                const rel = timelineData.find((d) => d.id === rid);
+                              {(item.relatedIds ?? []).map((rid) => {
+                                const rel = items.find((d) => d.id === rid);
                                 return (
                                   <Button
                                     key={rid}

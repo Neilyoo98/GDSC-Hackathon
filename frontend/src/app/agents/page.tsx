@@ -81,12 +81,13 @@ export default function AgentsPage() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  const selectedAgent = agents.find((a) => a.id === selectedId) ?? null;
+  const agentList = useMemo(() => (Array.isArray(agents) ? agents : []), [agents]);
+  const selectedAgent = agentList.find((a) => a.id === selectedId) ?? null;
 
   // Map agents → orbital timeline items
-  const timelineData = useMemo(() => (Array.isArray(agents) ? agents : []).map((agent, i) => {
+  const timelineData = useMemo(() => agentList.map((agent, i) => {
     const relIds: number[] = [];
-    agents.forEach((other, j) => {
+    agentList.forEach((other, j) => {
       if (j !== i && shareFiles(agent, other)) relIds.push(j + 1);
     });
 
@@ -111,31 +112,33 @@ export default function AgentsPage() {
       return acc;
     }, {});
 
+    const githubUsername = agent.github_username || agent.name || "unknown";
+
     return {
       id: i + 1,
       agentId: agent.id,
       title: coworkerName(agent),
       date: humanSourceLabel(agent),
       content,
-      category: agent.role,
+      category: agent.role || "Software Engineer",
       icon: agentIcon(agent),
       relatedIds: relIds,
       status,
       energy,
-      avatarUrl: `https://github.com/${agent.github_username}.png?size=80`,
+      avatarUrl: `https://github.com/${githubUsername}.png?size=80`,
       constitutionCounts,
     };
-  }), [agents]);
+  }), [agentList]);
 
   // Center label: connection count
   const connectionCount = useMemo(() => {
-    const list = Array.isArray(agents) ? agents : [];
+    const list = agentList;
     let count = 0;
     for (let i = 0; i < list.length; i++)
       for (let j = i + 1; j < list.length; j++)
         if (shareFiles(list[i], list[j])) count++;
     return count;
-  }, [agents]);
+  }, [agentList]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
