@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRef } from "react";
 import type { CSSProperties } from "react";
 import { StepCards } from "@/components/StepCard";
-import { StockWaveBackground } from "@/components/StockWaveBackground";
+import { PerspectiveGrid } from "@/components/PerspectiveGrid";
 
 const coworkerCards = [
   {
@@ -177,23 +177,77 @@ function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) 
 function HeroMeshBackdrop() {
   return (
     <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
-      <StockWaveBackground />
+      {/* Square grid + magnifying lens */}
+      <PerspectiveGrid color="57,255,20" />
       <div className="mesh-scan absolute inset-x-0 top-0 h-px bg-[#39ff14]" />
-      {/* Hex nodes floating over the waves */}
-      <svg className="absolute left-1/2 top-6 h-[620px] w-[min(1120px,120vw)] -translate-x-1/2" viewBox="0 0 1120 620" fill="none">
+
+      {/* Full-width stock-chart style wave lines */}
+      <svg
+        className="absolute inset-0 w-full h-full"
+        viewBox="0 0 1440 800"
+        fill="none"
+        preserveAspectRatio="xMidYMid slice"
+      >
+        <defs>
+          <linearGradient id="waveGradA" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stopColor="#39ff14" stopOpacity="0.18" />
+            <stop offset="100%" stopColor="#39ff14" stopOpacity="0"    />
+          </linearGradient>
+          <linearGradient id="waveGradB" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stopColor="#e8e4dc" stopOpacity="0.10" />
+            <stop offset="100%" stopColor="#e8e4dc" stopOpacity="0"    />
+          </linearGradient>
+          <linearGradient id="waveGradC" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stopColor="#39ff14" stopOpacity="0.10" />
+            <stop offset="100%" stopColor="#39ff14" stopOpacity="0"    />
+          </linearGradient>
+        </defs>
+
+        {/* Line A — bright green, dominant */}
+        <path
+          fill="url(#waveGradA)"
+          d="M0,460 C90,415 165,310 255,272 C345,234 395,358 490,318 C585,278 625,185 718,210 C811,235 852,342 948,302 C1044,262 1085,165 1185,192 C1285,219 1368,312 1440,278 L1440,800 L0,800 Z"
+        />
+        <path
+          className="mesh-path mesh-path-a"
+          d="M0,460 C90,415 165,310 255,272 C345,234 395,358 490,318 C585,278 625,185 718,210 C811,235 852,342 948,302 C1044,262 1085,165 1185,192 C1285,219 1368,312 1440,278"
+        />
+
+        {/* Line B — off-white, secondary depth */}
+        <path
+          fill="url(#waveGradB)"
+          d="M0,555 C100,528 172,438 265,400 C358,362 415,472 508,432 C601,392 642,298 735,328 C828,358 870,465 966,428 C1062,391 1104,296 1205,322 C1306,348 1388,424 1440,400 L1440,800 L0,800 Z"
+        />
+        <path
+          className="mesh-path mesh-path-b"
+          d="M0,555 C100,528 172,438 265,400 C358,362 415,472 508,432 C601,392 642,298 735,328 C828,358 870,465 966,428 C1062,391 1104,296 1205,322 C1306,348 1388,424 1440,400"
+        />
+
+        {/* Line C — green, upper accent */}
+        <path
+          fill="url(#waveGradC)"
+          d="M0,370 C110,342 182,252 275,218 C368,184 420,298 515,262 C610,226 650,138 744,164 C838,190 880,292 978,255 C1076,218 1118,128 1220,155 C1322,182 1402,268 1440,242 L1440,800 L0,800 Z"
+        />
+        <path
+          className="mesh-path mesh-path-c"
+          d="M0,370 C110,342 182,252 275,218 C368,184 420,298 515,262 C610,226 650,138 744,164 C838,190 880,292 978,255 C1076,218 1118,128 1220,155 C1322,182 1402,268 1440,242"
+        />
+
+        {/* Hex nodes */}
         {[
-          [130, 388],[244, 482],[360, 268],[500, 292],[578, 322],
-          [612, 214],[758, 392],[882, 166],[986, 196],[1006, 420],
+          [180,370],[320,480],[490,280],[640,310],[730,230],
+          [850,220],[980,390],[1110,175],[1250,195],[1380,290],
         ].map(([cx, cy], index) => (
           <g key={`${cx}-${cy}`} className="mesh-node" style={{ animationDelay: `${index * 0.18}s` }}>
-            <path d={`M${cx} ${cy - 18} L${cx + 16} ${cy - 9} L${cx + 16} ${cy + 9} L${cx} ${cy + 18} L${cx - 16} ${cy + 9} L${cx - 16} ${cy - 9} Z`} />
+            <path d={`M${cx} ${cy-18} L${cx+16} ${cy-9} L${cx+16} ${cy+9} L${cx} ${cy+18} L${cx-16} ${cy+9} L${cx-16} ${cy-9} Z`} />
             <circle cx={cx} cy={cy} r="3" />
           </g>
         ))}
       </svg>
+
       {/* Vignette */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_50%_0%,transparent_0%,transparent_40%,#080808_85%)]" />
-      <div className="absolute inset-x-0 bottom-0 h-64 bg-gradient-to-b from-transparent to-[#080808]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,transparent_35%,#080808_80%)]" />
+      <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-b from-transparent to-[#080808]" />
     </div>
   );
 }
@@ -270,10 +324,10 @@ export default function Home() {
         .metric-tile:hover{transform:translateY(-4px);background:#e8e4dc08}
         .hero-chip{animation:softFloat 4s ease-in-out infinite}
         .mesh-scan{animation:meshScan 6s ease-in-out infinite;box-shadow:0 0 18px #39ff1455}
-        .mesh-path{stroke:#e8e4dc;stroke-opacity:.32;stroke-width:1.8;stroke-dasharray:14 18;animation:pathFlow 10s linear infinite}
-        .mesh-path-a{stroke:#39ff14;stroke-opacity:.45;stroke-width:2;animation-duration:8s}
-        .mesh-path-b{stroke-opacity:.28;stroke-width:1.8;animation-duration:12s}
-        .mesh-path-c{stroke:#39ff14;stroke-opacity:.28;stroke-width:1.6;animation-duration:14s}
+        .mesh-path{stroke:#e8e4dc;stroke-opacity:.30;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+        .mesh-path-a{stroke:#39ff14;stroke-opacity:.55;stroke-width:2;filter:drop-shadow(0 0 6px #39ff1466)}
+        .mesh-path-b{stroke-opacity:.22;stroke-width:1.4}
+        .mesh-path-c{stroke:#39ff14;stroke-opacity:.32;stroke-width:1.4;filter:drop-shadow(0 0 4px #39ff1433)}
         .mesh-node{transform-box:fill-box;transform-origin:center;animation:nodePulse 3.8s ease-in-out infinite}
         .mesh-node path{fill:#080808;stroke:#e8e4dc;stroke-opacity:.22;stroke-width:1}
         .mesh-node circle{fill:#39ff14}
