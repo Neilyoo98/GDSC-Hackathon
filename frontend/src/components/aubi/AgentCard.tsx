@@ -85,7 +85,7 @@ export function AgentCard({
       </p>
 
       <div className="mt-6 flex items-center justify-between border-t border-[#1f1f1f] pt-4">
-        <span className="font-mono text-[10px] uppercase tracking-[2px] text-[#e8e4dc66]">Memory v3 · 2 min ago</span>
+        <span className="font-mono text-[10px] uppercase tracking-[2px] text-[#e8e4dc66]">Memory indexed</span>
         <span className="font-mono text-[10px] uppercase tracking-[2px] text-[#e8e4dc99]">{agent.constitution_facts.length} facts</span>
       </div>
     </motion.button>
