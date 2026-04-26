@@ -14,8 +14,8 @@ export function Nav() {
         className="flex flex-col leading-none transition-opacity hover:opacity-80 focus:outline-none focus-visible:ring-1 focus-visible:ring-[#39ff14]"
       >
         <span className="font-syne text-2xl font-normal tracking-[4px] text-[#e8e4dc]">AUBI</span>
-        <span className="mt-1 font-mono text-[8px] uppercase tracking-[3px] text-[#e8e4dc99]">
-          Autonomous · Agent · Mesh
+        <span className="mt-1 font-mono text-[8px] uppercase tracking-[2px] text-[#e8e4dc99]">
+          Autonomous Understanding and Behaviour Inference
         </span>
       </Link>
 
