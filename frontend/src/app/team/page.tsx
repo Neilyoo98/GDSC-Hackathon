@@ -5,6 +5,7 @@ import type { Agent } from "@/lib/types";
 import { useAgents } from "@/hooks/useAgents";
 import { AgentCard } from "@/components/aubi/AgentCard";
 import { ConstitutionPanel } from "@/components/aubi/ConstitutionPanel";
+import { InteractiveBackground } from "@/components/InteractiveBackground";
 
 export default function TeamPage() {
   const { agents, isLoading, error } = useAgents();
@@ -14,6 +15,7 @@ export default function TeamPage() {
 
   return (
     <div className="relative min-h-[calc(100vh-52px)] overflow-hidden px-6 py-6">
+      <InteractiveBackground />
       <div className="mb-8 flex items-end justify-between">
         <div>
           <p className="font-mono text-[10px] uppercase tracking-[3px] text-[#e8e4dc99]">{"// TEAM CONSTITUTIONS"}</p>
