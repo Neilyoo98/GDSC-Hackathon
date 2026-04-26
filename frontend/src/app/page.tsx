@@ -230,6 +230,10 @@ export default function Home() {
           Your codebase already knows <span className="text-[#39ff14]">who to call.</span>
         </h1>
 
+        <p className="font-mono landing-fade mx-auto mt-5 text-[10px] uppercase tracking-[4px] text-[#39ff14]" style={{ animationDelay: ".15s" }}>
+          Autonomous Understanding &amp; Behaviour Inference
+        </p>
+
         <p className="landing-fade mx-auto mt-6 max-w-[560px] text-[16px] leading-[1.85] text-[#e8e4dc99]" style={{ animationDelay: ".2s" }}>
           A GitHub issue drops. AUBI&apos;s agent mesh finds the right developer by memory, generates the fix, and pushes the PR. No Slack. No guessing. No human routing.
         </p>
