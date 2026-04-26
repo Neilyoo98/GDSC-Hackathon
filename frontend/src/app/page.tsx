@@ -250,6 +250,7 @@ export default function Home() {
         @keyframes wordLift { 0%{opacity:0;transform:translateY(28px) rotateX(32deg);filter:blur(10px)} 58%{opacity:1;filter:blur(0)} 100%{opacity:1;transform:translateY(0) rotateX(0);filter:blur(0)} }
         @keyframes glyphGlow { 0%,100%{text-shadow:none;transform:translateY(0)}50%{text-shadow:0 0 18px #39ff1455,0 0 36px #39ff1426;transform:translateY(-2px)} }
         @keyframes monoBlink { 0%,100%{opacity:.62}50%{opacity:1} }
+        @keyframes footerAubiFlow { from{background-position:180% 50%}to{background-position:-80% 50%} }
         .landing-fade{opacity:0;animation:fadeup .7s ease forwards;will-change:opacity,transform}
         .typography-rise{opacity:0;animation:textReveal .82s cubic-bezier(.16,1,.3,1) forwards;will-change:opacity,transform,filter}
         .typography-scan{position:relative;display:block;overflow:hidden}
@@ -286,6 +287,7 @@ export default function Home() {
         .landing-connector::after{content:"";position:absolute;top:0;bottom:0;width:55%;background:linear-gradient(90deg,transparent,#39ff14,transparent);animation:slide 2.4s linear infinite}
         .coworker-card{transition:transform .24s ease,border-color .24s ease}
         .coworker-card:hover{transform:translateY(-4px);border-color:#39ff1444}
+        .footer-aubi-flow{display:inline-block;color:transparent;background:linear-gradient(90deg,#159a10 0%,#39ff14 34%,#e5ffdf 50%,#39ff14 66%,#159a10 100%);background-size:260% 100%;-webkit-background-clip:text;background-clip:text;text-shadow:0 0 18px #39ff1440;animation:footerAubiFlow 6.4s linear infinite}
       ` }} />
 
       <div aria-hidden="true" className="cursor-spotlight pointer-events-none absolute inset-0 z-[1]" />
@@ -457,7 +459,7 @@ export default function Home() {
 
       {/* ── FOOTER ── */}
       <footer className="relative z-10 grid grid-cols-1 items-center gap-4 border-t border-[#1f1f1f] px-6 py-8 md:grid-cols-3 md:px-10">
-        <div className="font-syne text-[30px] font-normal tracking-[5px] text-[#39ff14]">AUBI</div>
+        <div className="footer-aubi-flow font-syne text-[30px] font-normal tracking-[5px]">AUBI</div>
         <div className="font-mono text-center text-[12px] uppercase tracking-[2px] text-[#e8e4dc]">GDSC Hackathon 2026 · University of Maryland</div>
         <div className="flex justify-start gap-2 md:justify-end">
           {["Dev Tool", "Most Creative"].map((badge) => (

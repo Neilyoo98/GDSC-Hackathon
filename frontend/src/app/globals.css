@@ -60,6 +60,20 @@ button:disabled {
   font-family: var(--font-mono), "IBM Plex Mono", monospace;
 }
 
+@keyframes system-online-fade {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.system-online-fade {
+  animation: system-online-fade 3.6s ease-in-out infinite;
+}
+
 .terminal-container::after {
   content: "";
   pointer-events: none;
