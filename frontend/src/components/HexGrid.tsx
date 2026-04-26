@@ -3,6 +3,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { HexNode } from "./HexNode";
+import { InteractiveBackground } from "./InteractiveBackground";
 import type { Agent } from "@/lib/types";
 
 const POSITION_MAPS: Record<number, [number, number][]> = {
@@ -107,10 +108,10 @@ export function HexGrid({ agents, selectedId, onSelect, compact = false, pulsing
     const dx = svgX - draggingRef.current.startSvgX;
     const dy = svgY - draggingRef.current.startSvgY;
     if (Math.abs(dx) > 4 || Math.abs(dy) > 4) draggingRef.current.hasMoved = true;
-    const i = draggingRef.current.index;
+    const { index: i, startNodeX, startNodeY } = draggingRef.current;
     setPositions(prev => {
       const next = prev.map(p => [...p]) as [number, number][];
-      next[i] = [draggingRef.current!.startNodeX + dx, draggingRef.current!.startNodeY + dy];
+      next[i] = [startNodeX + dx, startNodeY + dy];
       return next;
     });
   }, []);
@@ -134,32 +135,15 @@ export function HexGrid({ agents, selectedId, onSelect, compact = false, pulsing
       onPointerMove={handlePointerMove}
       onPointerUp={handleContainerPointerUp}
     >
+      {!compact && <InteractiveBackground />}
+
       <svg
         ref={svgRef}
         width="100%" height="100%"
         viewBox={viewBox}
         preserveAspectRatio="xMidYMid meet"
-        style={{ overflow: "visible" }}
+        style={{ overflow: "visible", position: "relative", zIndex: 1 }}
       >
-        {/* Background dot grid (full view only) */}
-        {!compact && (
-          <g>
-            <defs>
-              <pattern id="aubi-dots" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
-                <circle cx="20" cy="20" r="0.9" fill="#4a6080" opacity="0.3" />
-              </pattern>
-              <radialGradient id="aubi-dot-fade" cx="50%" cy="50%" r="50%">
-                <stop offset="20%" stopColor="white" stopOpacity="0.12" />
-                <stop offset="100%" stopColor="white" stopOpacity="0" />
-              </radialGradient>
-              <mask id="aubi-dot-mask">
-                <rect x="-500" y="-360" width="1000" height="720" fill="url(#aubi-dot-fade)" />
-              </mask>
-            </defs>
-            <rect x="-500" y="-360" width="1000" height="720" fill="url(#aubi-dots)" mask="url(#aubi-dot-mask)" />
-          </g>
-        )}
-
         {/* Connection lines */}
         {connections.map(({ a, b }, idx) => {
           const [ax, ay] = positions[a] ?? [0, 0];
