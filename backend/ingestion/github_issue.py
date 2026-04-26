@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import re
+import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -136,16 +137,27 @@ def create_fix_pr(
         base_branch = repo.default_branch
         base = repo.get_branch(base_branch)
 
-    # 2. Create fix branch
+    # 2. Create fix branch in the target repo. If the token cannot write to
+    # the target repo, fall back to a fork-based PR, which is the normal path
+    # for public repos owned by teammates.
+    write_repo = repo
+    pr_head = branch
     try:
         repo.create_git_ref(f"refs/heads/{branch}", base.commit.sha)
     except GithubException as e:
-        raise RuntimeError(f"Failed to create branch {branch}: {e}") from e
+        if getattr(e, "status", None) not in {403, 404}:
+            raise RuntimeError(f"Failed to create branch {branch}: {e}") from e
+        write_repo, fork_owner = _get_or_create_fork(g, repo)
+        pr_head = f"{fork_owner}:{branch}"
+        try:
+            write_repo.create_git_ref(f"refs/heads/{branch}", base.commit.sha)
+        except GithubException as fork_error:
+            raise RuntimeError(f"Failed to create fork branch {pr_head}: {fork_error}") from fork_error
 
     # 3. Commit the fixed file
     try:
-        existing = repo.get_contents(file_path, ref=base_branch)
-        repo.update_file(
+        existing = write_repo.get_contents(file_path, ref=branch)
+        write_repo.update_file(
             path=existing.path,
             message=commit_msg,
             content=new_file_content,
@@ -161,12 +173,33 @@ def create_fix_pr(
         pr = repo.create_pull(
             title=pr_title,
             body=pr_body,
-            head=branch,
+            head=pr_head,
             base=base_branch,
         )
         return pr.html_url
     except GithubException as e:
         raise RuntimeError(f"Failed to create PR: {e}") from e
+
+
+def _get_or_create_fork(g: Github, repo) -> tuple[Any, str]:
+    user = g.get_user()
+    fork_owner = user.login
+    fork_full_name = f"{fork_owner}/{repo.name}"
+
+    try:
+        return g.get_repo(fork_full_name), fork_owner
+    except GithubException as e:
+        if getattr(e, "status", None) != 404:
+            raise
+
+    repo.create_fork()
+    for _ in range(15):
+        try:
+            return g.get_repo(fork_full_name), fork_owner
+        except GithubException:
+            time.sleep(2)
+
+    raise RuntimeError(f"Fork {fork_full_name} was not ready after creation")
 
 
 def get_latest_open_issue(repo_name: str) -> dict[str, Any] | None:

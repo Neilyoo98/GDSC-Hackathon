@@ -582,16 +582,16 @@ async def test_runner(state: AUBIIssueState) -> dict[str, Any]:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(fixed_content, encoding="utf-8")
 
+        env = os.environ.copy()
+        test_log = "🧪 go test ./..."
         if not (root / "go.mod").exists():
-            return {
-                "tests_passed": False,
-                "test_output": "Repository has no go.mod at its root; AUBI cannot run the intended Go verification.",
-                "stream_log": ["🧪 Verification failed — go.mod missing"],
-            }
+            env["GO111MODULE"] = "off"
+            test_log = "🧪 GO111MODULE=off go test ./..."
 
         proc = subprocess.run(
             ["go", "test", "./..."],
             cwd=root,
+            env=env,
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -604,7 +604,7 @@ async def test_runner(state: AUBIIssueState) -> dict[str, Any]:
     return {
         "tests_passed": passed,
         "test_output": output,
-        "stream_log": [f"🧪 go test ./... {'PASS' if passed else 'FAIL'}"],
+        "stream_log": [f"{test_log} {'PASS' if passed else 'FAIL'}"],
     }
 
 
