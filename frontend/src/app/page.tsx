@@ -1,35 +1,34 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
 
-// Real team members — AI coworkers built from their actual GitHub activity
-const coworkers = [
+const coworkerCards = [
   {
-    github: "Vitthal-Agarwal",
-    name: "Vitthal",
-    role: "Backend · Go, Python, Docker",
-    owns: ["auth/ directory", "auth/token.go", "backend/"],
-    known: "Race condition in auth/token.go GetOrRefresh — no mutex on cache map",
+    initial: "O",
+    name: "Owner Coworker",
+    role: "Ownership Memory",
+    owns: ["matched code paths", "recent commits"],
+    known: "Routes incidents to the right developer profile using live constitution facts.",
   },
   {
-    github: "avhaan",
-    name: "Avhaang",
-    role: "Frontend · JavaScript, TypeScript, CSS",
-    owns: ["frontend/ directory", "UI components"],
-    known: "Layout issues in hero tagline and insight sparklines",
+    initial: "E",
+    name: "Expert Coworker",
+    role: "Adjacent Context",
+    owns: ["related domains", "shared memory"],
+    known: "Shares nearby context before code is read so fixes are not isolated guesses.",
   },
   {
-    github: "Mitanshcodes",
-    name: "Mitansh",
-    role: "Full-stack · JavaScript, Python, C++",
-    owns: ["Day_2/ directory", "collaborative features"],
-    known: "Active across frontend and backend integrations",
+    initial: "F",
+    name: "Fix Coworker",
+    role: "Patch Generation",
+    owns: ["affected files", "test commands"],
+    known: "Reads the configured repository, drafts a patch, and feeds verification results back into memory.",
   },
   {
-    github: "Neilyoo98",
-    name: "Neil",
-    role: "Integrations · Go, Python, JavaScript",
-    owns: ["GitHub integrations", "issue reader", "PR pusher"],
-    known: "Working on BigThinkWorld and hackathon tooling",
+    initial: "P",
+    name: "PR Coworker",
+    role: "Approval Flow",
+    owns: ["PR body", "issue linkage"],
+    known: "Keeps the human approval gate explicit before pushing changes back to GitHub.",
   },
 ];
 
@@ -49,7 +48,7 @@ const useCaseSteps = [
   {
     number: "03",
     title: "Coworkers consult each other",
-    description: "The mesh exchanges context. Vitthal's coworker already knows about the race condition. Bob's coworker flags the adjacent PR.",
+    description: "The mesh exchanges context from ownership, expertise, known issues, and shared team memory before a fix is generated.",
     tag: "coworker_mesh",
     hot: true,
   },
@@ -286,24 +285,19 @@ export default function Home() {
           Each developer&apos;s GitHub history is turned into a Context Constitution — a structured memory of what they own, what they know, and how they work. These constitutions power the mesh.
         </p>
         <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {coworkers.map((cw, index) => (
+          {coworkerCards.map((cw, index) => (
             <div
-              key={cw.github}
+              key={cw.name}
               className="coworker-card landing-fade border border-[#1f1f1f] bg-[#080808] p-5"
               style={{ animationDelay: `${0.05 + index * 0.08}s` }}
             >
               <div className="flex items-center gap-3 mb-4">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={`https://github.com/${cw.github}.png?size=64`}
-                  alt={cw.name}
-                  width={36}
-                  height={36}
-                  className="border border-[#e8e4dc22]"
-                />
+                <div className="flex h-9 w-9 items-center justify-center border border-[#e8e4dc22] font-syne text-[18px] tracking-[2px] text-[#39ff14]">
+                  {cw.initial}
+                </div>
                 <div>
                   <p className="text-[14px] font-medium text-[#e8e4dc]">{cw.name}</p>
-                  <p className="font-mono text-[9px] uppercase tracking-[2px] text-[#e8e4dc55]">{cw.role.split("·")[0].trim()}</p>
+                  <p className="font-mono text-[9px] uppercase tracking-[2px] text-[#e8e4dc55]">{cw.role}</p>
                 </div>
               </div>
               <div className="space-y-2">
@@ -340,7 +334,7 @@ export default function Home() {
             <span className="h-2 w-2 rounded-full bg-[#39ff14]" style={{ animation: "breathe 2s ease-in-out infinite" }} />
             <div>
               <p className="text-[14px] font-medium text-[#e8e4dc]">Issue #1 — auth 401s blocking users after latest deploy</p>
-              <p className="font-mono mt-1 text-[9px] uppercase tracking-[2px] text-[#e8e4dc66]">repo: Neilyoo98/AUBI-demo · AUBI routing to Vitthal</p>
+              <p className="font-mono mt-1 text-[9px] uppercase tracking-[2px] text-[#e8e4dc66]">repo: configured target · AUBI routing through live memory</p>
             </div>
           </div>
           <Link href="/incident" className="aubi-button font-mono border-[#39ff14] px-3 py-2 text-[9px] uppercase tracking-[2px] text-[#39ff14]">
@@ -371,7 +365,7 @@ export default function Home() {
       {/* ── STATS ── */}
       <section className="relative z-10 grid grid-cols-2 px-6 py-16 md:grid-cols-4 md:px-10">
         {[
-          ["4", "real developers with AI coworkers"],
+          ["live", "coworkers loaded from backend memory"],
           ["0", "Slack messages needed to route an issue"],
           ["∞", "memory facts per developer in Qdrant"],
           ["90s", "from GitHub issue open to merged PR"],
