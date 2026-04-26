@@ -196,6 +196,12 @@ export default function RadialOrbitalTimeline({
     };
   };
 
+  const relationshipPairs = timelineData.flatMap((item) =>
+    item.relatedIds
+      .filter((relatedId) => item.id < relatedId)
+      .map((relatedId) => ({ sourceId: item.id, targetId: relatedId }))
+  );
+
   const getStatusStyles = (s: TimelineItem["status"]) =>
     s === "completed"  ? "text-white bg-black border-white" :
     s === "in-progress" ? "text-black bg-white border-black" :
@@ -230,6 +236,39 @@ export default function RadialOrbitalTimeline({
           {/* Orbit rings */}
           <div className="absolute w-[520px] h-[520px] rounded-full border border-[#00f0ff]/10 pointer-events-none" />
           <div className="absolute w-[500px] h-[500px] rounded-full border border-white/5 pointer-events-none" />
+
+          {/* Persistent coworker mesh links */}
+          <svg
+            className="absolute pointer-events-none"
+            style={{ left: "50%", top: "50%", transform: "translate(-50%, -50%)", overflow: "visible" }}
+            width={0}
+            height={0}
+          >
+            {relationshipPairs.map(({ sourceId, targetId }) => {
+              const sourceIndex = timelineData.findIndex((item) => item.id === sourceId);
+              const targetIndex = timelineData.findIndex((item) => item.id === targetId);
+              if (sourceIndex < 0 || targetIndex < 0) return null;
+              const source = calcPos(sourceIndex, timelineData.length);
+              const target = calcPos(targetIndex, timelineData.length);
+              const active = activeNodeId === sourceId || activeNodeId === targetId;
+              return (
+                <motion.line
+                  key={`${sourceId}-${targetId}`}
+                  x1={source.x}
+                  y1={source.y}
+                  x2={target.x}
+                  y2={target.y}
+                  stroke={active ? "#00f0ff" : "#8b5cf6"}
+                  strokeWidth={active ? 1.2 : 0.8}
+                  strokeOpacity={active ? 0.7 : 0.28}
+                  strokeDasharray="4 10"
+                  animate={{ strokeDashoffset: [0, -28] }}
+                  transition={{ duration: active ? 1 : 2.4, repeat: Infinity, ease: "linear" }}
+                  style={{ filter: active ? "drop-shadow(0 0 5px #00f0ff)" : "drop-shadow(0 0 3px #8b5cf677)" }}
+                />
+              );
+            })}
+          </svg>
 
           {/* Animated spoke lines from center to each agent */}
           <svg

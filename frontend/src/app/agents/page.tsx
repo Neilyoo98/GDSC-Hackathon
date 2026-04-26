@@ -8,6 +8,7 @@ import { DossierPanel } from "@/components/DossierPanel";
 import { InteractiveBackground } from "@/components/InteractiveBackground";
 import RadialOrbitalTimeline, { RING_CATEGORIES } from "@/components/ui/radial-orbital-timeline";
 import { api } from "@/lib/api";
+import { coworkerName, humanSourceLabel } from "@/lib/agents";
 import type { Agent } from "@/lib/types";
 
 // Pick an icon based on an agent's top language/role
@@ -21,11 +22,55 @@ function agentIcon(agent: Agent) {
   return Users;
 }
 
-// Agents that share files are "related"
+const DOMAIN_TOKENS = new Set([
+  "api",
+  "auth",
+  "backend",
+  "deploy",
+  "frontend",
+  "gdsc-hackathon",
+  "middleware",
+  "pulse",
+  "src",
+  "tests",
+  "token",
+  "web",
+]);
+
+function addPathSignals(signals: Set<string>, value: string) {
+  const normalized = value.toLowerCase();
+  Array.from(normalized.matchAll(/[a-z0-9_.-]+(?:\/[a-z0-9_.-]+)*\/?/g)).forEach((match) => {
+    const token = match[0].replace(/^\/+|[,.;:)]+$/g, "");
+    if (!token || token.length < 3) return;
+    if (token.includes("/")) {
+      const first = token.split("/", 1)[0];
+      signals.add(`${first}/`);
+      signals.add(token);
+    } else if (DOMAIN_TOKENS.has(token)) {
+      signals.add(token);
+      signals.add(`${token}/`);
+    }
+  });
+}
+
+function relationshipSignals(agent: Agent): Set<string> {
+  const signals = new Set<string>();
+  for (const file of agent.github_data_summary?.top_files ?? []) {
+    addPathSignals(signals, file);
+  }
+  for (const fact of agent.constitution_facts ?? []) {
+    if (["code_ownership", "current_focus", "known_issues"].includes(fact.category)) {
+      addPathSignals(signals, fact.object);
+    }
+  }
+  return signals;
+}
+
+// Coworkers are related when their ownership, focus, or known-issue memory overlaps.
 function shareFiles(a: Agent, b: Agent) {
-  const prefix = (f: string) => f.split("/")[0] + "/";
-  const aSet = new Set((a.github_data_summary?.top_files ?? []).map(prefix));
-  return (b.github_data_summary?.top_files ?? []).some((f) => aSet.has(prefix(f)));
+  const aSet = relationshipSignals(a);
+  if (aSet.size === 0) return false;
+  return Array.from(relationshipSignals(b)).some((signal) => aSet.has(signal));
 }
 
 export default function AgentsPage() {
@@ -69,8 +114,8 @@ export default function AgentsPage() {
     return {
       id: i + 1,
       agentId: agent.id,
-      title: agent.name.split(" ")[0],
-      date: `@${agent.github_username}`,
+      title: coworkerName(agent),
+      date: humanSourceLabel(agent),
       content,
       category: agent.role,
       icon: agentIcon(agent),
@@ -127,26 +172,26 @@ export default function AgentsPage() {
                 animate={{ rotate: 360 }}
                 transition={{ duration: 1.2, repeat: Infinity, ease: "linear" }}
               />
-              <p className="font-mono text-[10px] text-[#4a6080] tracking-widest">LOADING AGENT MESH...</p>
+              <p className="font-mono text-[10px] text-[#4a6080] tracking-widest">LOADING COWORKER MESH...</p>
             </div>
           </div>
         ) : agents.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-4 relative z-10">
-            <p className="font-mono text-[13px] text-[#2a3f5f]">NO AGENTS REGISTERED</p>
+            <p className="font-mono text-[13px] text-[#2a3f5f]">NO COWORKERS REGISTERED</p>
             <button
               onClick={() => setShowModal(true)}
               className="font-mono text-xs text-[#00f0ff] border border-[#1e2d45] bg-[#0d1224] px-5 py-2.5 rounded hover:border-[#00f0ff44]"
             >
-              + REGISTER FIRST AGENT
+              + REGISTER FIRST COWORKER
             </button>
           </div>
         ) : (
           <>
             {/* Page title */}
             <div className="absolute top-5 left-6 z-10 pointer-events-none">
-              <p className="font-syne text-xl text-white">Agents</p>
+              <p className="font-syne text-xl text-white">AUBI Coworkers</p>
               <p className="font-mono text-[10px] text-[#4a6080] mt-0.5">
-                {agents.length} agent{agents.length !== 1 ? "s" : ""} · {connectionCount} connection{connectionCount !== 1 ? "s" : ""}
+                {agents.length} coworker{agents.length !== 1 ? "s" : ""} · {connectionCount} connection{connectionCount !== 1 ? "s" : ""}
               </p>
             </div>
 
@@ -165,7 +210,7 @@ export default function AgentsPage() {
               onClick={() => setShowModal(true)}
               className="absolute bottom-6 left-6 z-20 font-mono text-xs text-[#00f0ff] border border-[#1e2d45] bg-[#0d1224]/80 px-4 py-2 rounded transition-all hover:border-[#00f0ff44] hover:bg-[#0d1230]"
             >
-              + REGISTER AGENT
+              + REGISTER COWORKER
             </button>
 
             {/* Ring legend */}
@@ -198,7 +243,7 @@ export default function AgentsPage() {
         <DossierPanel agent={selectedAgent} onClose={() => setSelectedId(null)} />
       </div>
 
-      {/* Register agent modal */}
+      {/* Register coworker modal */}
       <AnimatePresence>
         {showModal && (
           <motion.div
@@ -211,14 +256,14 @@ export default function AgentsPage() {
               className="bg-[#0d1224] border border-[#1e2d45] rounded-lg w-full max-w-sm mx-4 overflow-hidden"
             >
               <div className="flex items-center justify-between px-5 py-4 border-b border-[#1e2d45]">
-                <span className="font-mono text-[10px] text-[#4a6080] tracking-widest">{"// REGISTER AGENT"}</span>
+                <span className="font-mono text-[10px] text-[#4a6080] tracking-widest">{"// REGISTER AUBI COWORKER"}</span>
                 <button onClick={() => setShowModal(false)} className="text-[#4a6080] hover:text-white">×</button>
               </div>
               <form onSubmit={handleCreate} className="p-5 space-y-4">
                 {[
                   { key: "github_username", label: "GITHUB USERNAME *", placeholder: "e.g. tidwall" },
-                  { key: "name", label: "DISPLAY NAME", placeholder: "optional" },
-                  { key: "role", label: "ROLE", placeholder: "e.g. Core Infrastructure" },
+                  { key: "name", label: "HUMAN SOURCE NAME", placeholder: "optional" },
+                  { key: "role", label: "COWORKER ROLE", placeholder: "e.g. Core Infrastructure" },
                 ].map(({ key, label, placeholder }) => (
                   <div key={key}>
                     <label className="block font-mono text-[9px] text-[#4a6080] tracking-wider mb-1.5">{label}</label>
