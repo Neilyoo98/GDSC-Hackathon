@@ -139,6 +139,11 @@ export interface GitHubPollResult {
   issue: GitHubIssue | null;
 }
 
+export interface GitHubIssuesResult {
+  repo_name: string;
+  issues: GitHubIssue[];
+}
+
 export type AUBIEvent =
   | { event: "thread"; data: Record<string, unknown> | null }
   | { event: "node_start"; node: string; data: null }

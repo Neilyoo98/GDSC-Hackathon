@@ -1,5 +1,6 @@
-import type { Agent, ApprovalResult, GitHubPollResult, IncidentResult, StreamLike } from "./types";
+import type { Agent, ApprovalResult, GitHubIssuesResult, GitHubPollResult, IncidentResult, StreamLike } from "./types";
 import { normalizeAgent, normalizeAgents } from "./agents";
+import { AUBI_ISSUES_REPO } from "./githubIssues";
 
 const BASE = "/api";
 
@@ -36,6 +37,10 @@ export const api = {
 
   async pollGitHub(): Promise<GitHubPollResult> {
     return fetchJson<GitHubPollResult>(`${BASE}/github/poll`);
+  },
+
+  async listGitHubIssues(repoName = AUBI_ISSUES_REPO): Promise<GitHubIssuesResult> {
+    return fetchJson<GitHubIssuesResult>(`${BASE}/github/issues?repo=${encodeURIComponent(repoName)}`);
   },
 
   async runIncident(issueUrl: string): Promise<IncidentResult> {

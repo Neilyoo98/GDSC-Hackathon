@@ -855,6 +855,19 @@ async def poll_github():
         raise HTTPException(status_code=502, detail=f"GitHub issue poll failed: {e}") from e
 
 
+@app.get("/github/issues")
+async def list_github_issues(repo_name: str | None = None, limit: int = 20):
+    """Return recent open issues for the configured or requested target repo."""
+    target = repo_name or _target_repo()
+    if not target:
+        raise HTTPException(status_code=400, detail="Set TARGET_REPO or GITHUB_REPO to list GitHub issues")
+    try:
+        from ingestion.github_issue import list_open_issues
+        return {"repo_name": target, "issues": list_open_issues(target, limit)}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"GitHub issue list failed: {e}") from e
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}

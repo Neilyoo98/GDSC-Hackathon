@@ -195,3 +195,30 @@ def get_latest_open_issue(repo_name: str) -> dict[str, Any] | None:
         "author": issue.user.login if issue.user else "unknown",
         "url": issue.html_url,
     }
+
+
+def list_open_issues(repo_name: str, limit: int = 20) -> list[dict[str, Any]]:
+    """Return recent open non-PR issues for a repo."""
+    g = _get_github()
+    repo = g.get_repo(repo_name)
+    issues: list[dict[str, Any]] = []
+
+    for issue in repo.get_issues(state="open", sort="created", direction="desc"):
+        if getattr(issue, "pull_request", None) is not None:
+            continue
+        issues.append({
+            "repo_name": repo_name,
+            "issue_number": issue.number,
+            "title": issue.title,
+            "body": issue.body or "",
+            "author": issue.user.login if issue.user else "unknown",
+            "url": issue.html_url,
+            "html_url": issue.html_url,
+            "created_at": issue.created_at.isoformat() if issue.created_at else None,
+            "updated_at": issue.updated_at.isoformat() if issue.updated_at else None,
+            "labels": [label.name for label in issue.labels],
+        })
+        if len(issues) >= max(1, min(limit, 50)):
+            break
+
+    return issues
