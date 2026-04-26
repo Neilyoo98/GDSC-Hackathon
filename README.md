@@ -6,7 +6,15 @@
 
 ### Autonomous Understanding and Behaviour Inference
 
-**Persistent AI coworkers that understand who owns what, share team memory, and turn GitHub issues into human-approved pull requests.**
+**A context layer for autonomous software engineering: persistent AI coworkers that understand ownership, share team memory, coordinate fixes, and turn GitHub issues into human-approved pull requests.**
+
+![Next.js](https://img.shields.io/badge/Next.js-14-black)
+![FastAPI](https://img.shields.io/badge/FastAPI-backend-009688)
+![LangGraph](https://img.shields.io/badge/LangGraph-agent_graph-5B5BD6)
+![Qdrant](https://img.shields.io/badge/Qdrant-vector_memory-DC244C)
+![GitHub](https://img.shields.io/badge/GitHub-issues_to_PRs-181717)
+![Railway](https://img.shields.io/badge/Railway-backend-0B0D0E)
+![Vercel](https://img.shields.io/badge/Vercel-frontend-000000)
 
 GDSC Hackathon 2026 - University of Maryland
 
@@ -14,11 +22,49 @@ GDSC Hackathon 2026 - University of Maryland
 
 ---
 
+## Technical Thesis
+
+AI coding is no longer bottlenecked only by "can the model write code?"
+
+The harder bottleneck is **context orchestration**.
+
+In real teams, the best fix depends on organizational memory: who owns a system, who recently touched nearby files, what broke before, which edge cases matter, and which teammate would know the risk. Most coding agents flatten all of that into one prompt. AUBI turns it into a first-class system layer.
+
+```mermaid
+flowchart TD
+    incomingIssue["GitHub issue"] --> contextLayer["AUBI context layer"]
+
+    subgraph contextLayerBox["Context layer"]
+        constitutions["Context Constitutions"]
+        semanticMemory["Qdrant semantic memory"]
+        ownerRouting["Ownership routing"]
+        coworkerExchange["Coworker context exchange"]
+        considerations["Should-check considerations"]
+    end
+
+    contextLayer --> constitutions
+    constitutions --> semanticMemory
+    semanticMemory --> ownerRouting
+    ownerRouting --> coworkerExchange
+    coworkerExchange --> considerations
+
+    considerations --> codePatch["Patch generation"]
+    codePatch --> verification["Verification"]
+    verification --> humanApproval["Human approval"]
+    humanApproval --> pullRequest["GitHub PR"]
+    pullRequest --> memoryWriteback["Memory writeback"]
+    memoryWriteback --> semanticMemory
+```
+
+**AUBI is the missing layer between a codebase and a coding agent.** It makes autonomous development team-aware, explainable, and memory-backed.
+
+---
+
 ## Why AUBI Exists
 
-Modern coding agents can generate code, but real developer productivity is blocked by something earlier than code generation: **missing team context**.
+Modern coding agents are impressive at generating patches, but production software work usually fails earlier: the agent does not know the team.
 
-On a real engineering team, an issue is rarely solved by only reading the file that failed. A good developer also knows:
+On a real engineering team, a developer does not fix an issue by only reading one file. They bring years of context:
 
 - who owns the affected area,
 - who recently changed nearby code,
@@ -26,9 +72,11 @@ On a real engineering team, an issue is rarely solved by only reading the file t
 - what tests or edge cases the team already learned to care about,
 - what should be checked before opening a PR.
 
-Most AI coding tools treat every task like a fresh prompt. AUBI treats software work like a team memory problem.
+That knowledge usually lives in people, commit history, PR discussions, and memory. It is not cleanly available to a single coding agent.
 
-AUBI gives every developer a persistent AI coworker with a **Context Constitution**: a living memory of that person's ownership, expertise, collaboration style, current focus, known issues, and resolved incidents. Instead of one generic bot guessing what matters, AUBI routes issues through the coworker mesh so the right developer-shaped agents share context before a patch is generated.
+AUBI makes that layer explicit. Every developer gets a persistent AI coworker backed by a **Context Constitution**: a living memory of that person's ownership, expertise, collaboration style, current focus, known issues, and resolved incidents.
+
+Instead of one generic bot guessing, AUBI asks the right coworker AUBI first, lets related coworker AUBIs share context, and only then generates a fix.
 
 The result is an issue-to-PR system that can explain:
 
@@ -45,19 +93,19 @@ what memory was learned for next time
 
 ## What AUBI Does
 
-AUBI turns a GitHub issue into a human-approved pull request through a live, explainable agent workflow.
+AUBI turns a GitHub issue into a human-approved pull request through a live, explainable coworker workflow.
 
 ```mermaid
 flowchart LR
-    issue["1. GitHub issue"] --> understand["2. Understand incident"]
-    understand --> route["3. Route to owner AUBI"]
-    route --> exchange["4. Coworkers exchange context"]
-    exchange --> read["5. Read live repo files"]
-    read --> patch["6. Generate patch"]
-    patch --> verify["7. Run verification"]
-    verify --> approve["8. Human approval"]
-    approve --> pr["9. Open PR"]
-    pr --> memory["10. Write memory back"]
+    issueNode["GitHub issue"] --> incidentNode["Incident understanding"]
+    incidentNode --> ownerNode["Owner AUBI selected"]
+    ownerNode --> meshNode["Coworkers exchange context"]
+    meshNode --> sourceNode["Live repo files read"]
+    sourceNode --> patchNode["Patch generated"]
+    patchNode --> testNode["Tests run"]
+    testNode --> approvalNode["Human approval gate"]
+    approvalNode --> prNode["PR opened"]
+    prNode --> learnNode["Memory updated"]
 ```
 
 | Step | What happens |
@@ -74,6 +122,18 @@ flowchart LR
 | **Learning loop** | The resolved incident is stored back into user and team memory for future retrieval. |
 
 In short: **AUBI is not a chat assistant. It is a context-aware coworker mesh for moving issues from signal to reviewed PR.**
+
+### The core loop
+
+| Phase | AUBI's job | Why it matters |
+|---|---|---|
+| **Understand** | Convert a GitHub issue into service, file, error, and risk signals. | Prevents patching before the problem is framed. |
+| **Route** | Select the most relevant coworker AUBI from ownership and semantic memory. | Gets the right developer context into the run. |
+| **Exchange** | Ask adjacent coworkers for prior incidents, constraints, and checks. | Recreates how real teams solve problems through context sharing. |
+| **Fix** | Generate code using issue context, source files, owner memory, and coworker memory. | Makes the patch grounded in both code and team knowledge. |
+| **Verify** | Apply the patch and run repository tests where supported. | Keeps the demo tied to executable behavior. |
+| **Approve** | Pause before PR creation. | Keeps humans in control of repository writes. |
+| **Learn** | Store the resolved episode back into Qdrant. | Makes the next incident smarter. |
 
 ---
 
@@ -122,51 +182,70 @@ GitHub issue -> owner evidence -> coworker context -> generated diff -> verifica
 
 ```mermaid
 flowchart LR
-    subgraph UI["Next.js Frontend"]
-        team["Team"]
-        coworkers["Coworkers"]
-        flow["Flow"]
-        warroom["War Room"]
-        proxy["API proxy routes"]
+    subgraph frontendBox["Next.js frontend"]
+        teamView["Team view"]
+        coworkerView["Coworkers graph"]
+        flowView["Flow operator view"]
+        warRoomView["War Room explanation"]
+        apiProxy["Next.js API proxy"]
     end
 
-    subgraph API["FastAPI Backend"]
-        agents["Agent registry"]
+    subgraph backendBox["FastAPI backend"]
+        agentRegistry["Agent registry"]
         incidentGraph["LangGraph incident graph"]
-        ingest["GitHub ingestion"]
-        sse["SSE event stream"]
+        githubIngest["GitHub ingestion"]
+        eventStream["SSE event stream"]
     end
 
-    subgraph Memory["Qdrant Memory"]
-        facts["semantic_facts"]
-        episodes["episodes"]
-        teamMemory["team-scoped memory"]
+    subgraph contextBox["AUBI context layer"]
+        constitutionBuilder["Constitution builder"]
+        ownershipRouter["Ownership router"]
+        coworkerProtocol["Coworker exchange protocol"]
+        memoryWriter["Memory writeback"]
     end
 
-    subgraph GitHub["GitHub"]
-        issues["Issues"]
-        files["Repository files"]
-        branch["Fix branch"]
-        pr["Pull request"]
+    subgraph memoryBox["Qdrant memory"]
+        semanticFacts["semantic_facts"]
+        episodeStore["episodes"]
+        teamStore["team-scoped memory"]
     end
 
-    team --> proxy
-    coworkers --> proxy
-    flow --> proxy
-    warroom --> proxy
-    proxy --> agents
-    proxy --> incidentGraph
-    incidentGraph --> sse
-    sse --> flow
-    sse --> warroom
-    agents --> ingest
-    ingest --> GitHub
-    ingest --> Memory
-    incidentGraph <--> Memory
-    incidentGraph <--> issues
-    incidentGraph <--> files
-    incidentGraph --> branch
-    incidentGraph --> pr
+    subgraph githubBox["GitHub"]
+        ghIssues["Issues"]
+        ghFiles["Repository files"]
+        ghBranch["Fix branch"]
+        ghPr["Pull request"]
+    end
+
+    teamView --> apiProxy
+    coworkerView --> apiProxy
+    flowView --> apiProxy
+    warRoomView --> apiProxy
+
+    apiProxy --> agentRegistry
+    apiProxy --> incidentGraph
+    incidentGraph --> eventStream
+    eventStream --> flowView
+    eventStream --> warRoomView
+
+    agentRegistry --> githubIngest
+    githubIngest --> constitutionBuilder
+    constitutionBuilder --> semanticFacts
+
+    incidentGraph --> ownershipRouter
+    ownershipRouter <--> semanticFacts
+    ownershipRouter <--> episodeStore
+    ownershipRouter --> coworkerProtocol
+    coworkerProtocol <--> teamStore
+    coworkerProtocol --> incidentGraph
+    incidentGraph --> memoryWriter
+    memoryWriter --> episodeStore
+    memoryWriter --> teamStore
+
+    incidentGraph <--> ghIssues
+    incidentGraph <--> ghFiles
+    incidentGraph --> ghBranch
+    incidentGraph --> ghPr
 ```
 
 ---
