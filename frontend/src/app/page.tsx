@@ -175,6 +175,39 @@ function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) 
   );
 }
 
+function HeroMeshBackdrop() {
+  return (
+    <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-0 h-[720px] overflow-hidden">
+      <div className="absolute inset-0 opacity-[0.18] [background-image:linear-gradient(#e8e4dc_1px,transparent_1px),linear-gradient(90deg,#e8e4dc_1px,transparent_1px)] [background-size:64px_64px]" />
+      <div className="mesh-scan absolute inset-x-0 top-0 h-px bg-[#39ff14]" />
+      <svg className="absolute left-1/2 top-6 h-[620px] w-[min(1120px,120vw)] -translate-x-1/2" viewBox="0 0 1120 620" fill="none">
+        <path className="mesh-path mesh-path-a" d="M130 388 C260 230 354 472 500 292 C642 118 774 390 986 196" />
+        <path className="mesh-path mesh-path-b" d="M162 190 C320 320 416 150 578 322 C704 456 828 270 1006 420" />
+        <path className="mesh-path mesh-path-c" d="M244 482 C430 400 438 206 612 214 C760 220 806 112 976 120" />
+        {[
+          [130, 388],
+          [244, 482],
+          [360, 268],
+          [500, 292],
+          [578, 322],
+          [612, 214],
+          [758, 392],
+          [882, 166],
+          [986, 196],
+          [1006, 420],
+        ].map(([cx, cy], index) => (
+          <g key={`${cx}-${cy}`} className="mesh-node" style={{ animationDelay: `${index * 0.18}s` }}>
+            <path d={`M${cx} ${cy - 18} L${cx + 16} ${cy - 9} L${cx + 16} ${cy + 9} L${cx} ${cy + 18} L${cx - 16} ${cy + 9} L${cx - 16} ${cy - 9} Z`} />
+            <circle cx={cx} cy={cy} r="3" />
+          </g>
+        ))}
+      </svg>
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,transparent_38%,#080808_82%)]" />
+      <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-b from-transparent to-[#080808]" />
+    </div>
+  );
+}
+
 export default function Home() {
   return (
     <div
@@ -204,10 +237,56 @@ export default function Home() {
           from { opacity: 0; transform: translateY(16px); }
           to { opacity: 1; transform: translateY(0); }
         }
+        @keyframes meshScan {
+          0% { transform: translateY(0); opacity: 0; }
+          15% { opacity: .75; }
+          100% { transform: translateY(640px); opacity: 0; }
+        }
+        @keyframes pathFlow {
+          to { stroke-dashoffset: -220; }
+        }
+        @keyframes nodePulse {
+          0%, 100% { opacity: .28; transform: scale(1); }
+          50% { opacity: .95; transform: scale(1.08); }
+        }
+        @keyframes signalRise {
+          0% { transform: translateY(10px); opacity: 0; }
+          18%, 72% { opacity: 1; }
+          100% { transform: translateY(-12px); opacity: 0; }
+        }
         .landing-fade {
           opacity: 0;
           animation: fadeup .7s ease forwards;
           will-change: opacity, transform;
+        }
+        .mesh-scan {
+          animation: meshScan 6s ease-in-out infinite;
+          box-shadow: 0 0 18px #39ff1455;
+        }
+        .mesh-path {
+          stroke: #e8e4dc;
+          stroke-opacity: .18;
+          stroke-width: 1;
+          stroke-dasharray: 12 22;
+          animation: pathFlow 10s linear infinite;
+        }
+        .mesh-path-a { stroke: #39ff14; stroke-opacity: .22; animation-duration: 8s; }
+        .mesh-path-b { animation-duration: 12s; }
+        .mesh-path-c { stroke: #39ff14; stroke-opacity: .14; animation-duration: 14s; }
+        .mesh-node {
+          transform-box: fill-box;
+          transform-origin: center;
+          animation: nodePulse 3.8s ease-in-out infinite;
+        }
+        .mesh-node path {
+          fill: #080808;
+          stroke: #e8e4dc;
+          stroke-opacity: .22;
+          stroke-width: 1;
+        }
+        .mesh-node circle { fill: #39ff14; }
+        .signal-rise {
+          animation: signalRise 2.6s ease-in-out infinite;
         }
         .landing-connector::after {
           content: "";
@@ -220,7 +299,9 @@ export default function Home() {
         }
       ` }} />
 
-      <section className="relative z-10 px-6 pb-28 pt-24 text-center md:px-10">
+      <HeroMeshBackdrop />
+
+      <section className="relative z-10 px-6 pb-24 pt-24 text-center md:px-10">
         <div className="landing-fade mx-auto inline-flex items-center gap-3 rounded-full border border-[#e8e4dc33] px-4 py-2" style={{ animationDelay: "0s" }}>
           <span className="h-[5px] w-[5px] rounded-full bg-[#39ff14]" style={{ animation: "breathe 2s ease-in-out infinite" }} />
           <span className="font-mono text-[10px] uppercase tracking-[3px] text-[#e8e4dccc]">Live at GDSC Hackathon / UMD / April 26</span>
@@ -255,13 +336,13 @@ export default function Home() {
             </span>
           ))}
         </div>
-
       </section>
 
       <section id="architecture" className="relative z-10 mx-6 mb-16 overflow-hidden border border-[#e8e4dc33] bg-[#080808cc] md:mx-10">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#39ff14] to-transparent opacity-70" />
         <div className="font-mono flex items-center justify-between border-b border-[#1f1f1f] px-6 py-4 text-[10px] uppercase tracking-[3px] text-[#e8e4dc66]">
           <span>LangGraph Pipeline / Live Execution</span>
-          <span className="text-[#39ff14]">Running</span>
+          <span className="signal-rise text-[#39ff14]">Running</span>
         </div>
         <div className="flex flex-col gap-4 border-b border-[#1f1f1f] px-6 py-4 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-4">
@@ -277,10 +358,10 @@ export default function Home() {
         </div>
         <div className="flex flex-col gap-6 px-6 py-10 md:flex-row md:items-center md:justify-between md:px-8">
           {pipelineNodes.map((node, index) => (
-            <div key={node.label} className="flex flex-1 items-center">
+            <div key={node.label} className="landing-fade flex flex-1 items-center" style={{ animationDelay: `${0.1 + index * 0.08}s` }}>
               <div className="relative flex min-w-[96px] flex-col items-center text-center">
                 <div
-                  className="relative flex h-12 w-12 items-center justify-center border"
+                  className="relative flex h-12 w-12 items-center justify-center border transition-transform duration-300 hover:-translate-y-1"
                   style={{
                     borderColor: node.state === "idle" ? "#1f1f1f" : "#39ff14",
                     background: node.state === "active" ? "#39ff1414" : "transparent",
@@ -305,10 +386,10 @@ export default function Home() {
           ["0", "Slack messages needed to route an issue"],
           ["6", "LangGraph nodes fully streamed over SSE"],
           ["INF", "Memory facts per developer in Qdrant"],
-          ["90s", "From GitHub issue open to merged PR"]
-        ].map(([number, description], index) => (
-          <div key={number} className={`${index > 0 ? "md:border-l md:border-[#1f1f1f]" : ""} px-6 py-4`}>
-            <div className="font-syne text-[52px] font-normal leading-none tracking-[4px] text-[#e8e4dc]">{number}</div>
+            ["90s", "From GitHub issue open to merged PR"]
+          ].map(([number, description], index) => (
+          <div key={number} className={`${index > 0 ? "md:border-l md:border-[#1f1f1f]" : ""} landing-fade px-6 py-4`} style={{ animationDelay: `${index * 0.08}s` }}>
+            <div className="font-syne text-[52px] font-normal leading-none tracking-[4px] text-[#e8e4dc] transition-colors duration-300 hover:text-[#39ff14]">{number}</div>
             <p className="mt-2 text-[13px] leading-[1.6] text-[#e8e4dc66]">{description}</p>
           </div>
         ))}
