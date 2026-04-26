@@ -46,7 +46,7 @@ export function NeuralTrace({ events, isStreaming }: Props) {
     <div className="h-full overflow-y-auto aubi-scrollbar pr-2">
       {/* Timeline header */}
       <div className="flex items-center gap-2 mb-4 pb-2 border-b border-[#1e2d45]">
-        <span className="font-mono text-[9px] text-[#4a6080] tracking-widest">// NEURAL TRACE</span>
+        <span className="font-mono text-[9px] text-[#4a6080] tracking-widest">{"// NEURAL TRACE"}</span>
         {isStreaming && (
           <motion.span
             animate={{ opacity: [1, 0] }}

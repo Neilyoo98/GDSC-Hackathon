@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 interface Props {
   message: string;
   agentName: string;
@@ -48,9 +50,11 @@ export function SlackMockup({ message, agentName, agentUsername }: Props) {
         {/* Message */}
         <div className="flex-1 px-4 py-4 overflow-y-auto">
           <div className="flex gap-3">
-            <img
+            <Image
               src={`https://github.com/${agentUsername}.png?size=72`}
               alt={agentName}
+              width={36}
+              height={36}
               className="w-9 h-9 rounded flex-shrink-0"
             />
             <div className="flex-1 min-w-0">

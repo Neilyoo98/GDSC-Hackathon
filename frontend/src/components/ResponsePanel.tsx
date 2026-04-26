@@ -29,7 +29,11 @@ export function ResponsePanel({
         >
           <div className="mb-3 font-mono text-[10px] uppercase tracking-[0.16em] text-aubi-muted">{"// RESPONSE PACKAGE"}</div>
           <div className="grid gap-4 xl:grid-cols-2">
-            <SlackMockup message={result.slack_message} owner={owner} />
+            <SlackMockup
+              message={result.slack_message}
+              agentName={owner?.name ?? "AUBI Agent"}
+              agentUsername={owner?.github_username ?? "github"}
+            />
             <PostmortemDoc markdown={result.postmortem} />
           </div>
           {updated.length > 0 && (

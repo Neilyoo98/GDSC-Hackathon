@@ -27,7 +27,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from graphs.incident_graph import incident_graph
+from graphs.incident_graph import aubi_graph
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -237,53 +237,85 @@ async def get_ownership(filepath: str):
 # Incident endpoints
 # ---------------------------------------------------------------------------
 
+class IssueRequest(BaseModel):
+    issue_url: str | None = None
+    incident_text: str | None = None
+
+
+GRAPH_NODES = {
+    "issue_reader", "ownership_router", "query_single_agent",
+    "code_reader", "fix_generator", "pr_pusher",
+}
+
+
 @app.post("/incidents/run")
-async def run_incident(req: IncidentRequest):
-    """Blocking incident run — returns full result."""
-    result = await incident_graph.ainvoke({"incident_text": req.incident_text})
+async def run_incident(req: IssueRequest):
+    """Blocking run — returns full result including PR URL."""
+    state_input: dict[str, Any] = {}
+    if req.issue_url:
+        state_input["issue_url"] = req.issue_url
+    else:
+        state_input["incident_text"] = req.incident_text
+
+    result = await aubi_graph.ainvoke(state_input)
     return {
-        "slack_message": result.get("slack_message"),
-        "postmortem": result.get("postmortem"),
-        "owners": result.get("owner_ids"),
-        "stream_log": result.get("stream_log", []),
+        "pr_url":          result.get("pr_url"),
+        "patch_diff":      result.get("patch_diff"),
+        "fix_explanation": result.get("fix_explanation"),
+        "slack_message":   result.get("slack_message"),
+        "postmortem":      result.get("postmortem"),
+        "owners":          result.get("owner_ids"),
+        "agent_messages":  result.get("agent_messages", []),
+        "stream_log":      result.get("stream_log", []),
     }
 
 
 @app.get("/incidents/stream")
-async def stream_incident(incident_text: str):
-    """SSE stream of incident graph execution."""
+async def stream_incident(issue_url: str | None = None, incident_text: str | None = None):
+    """SSE stream of the full AUBI graph execution."""
+
+    state_input: dict[str, Any] = {}
+    if issue_url:
+        state_input["issue_url"] = issue_url
+    else:
+        state_input["incident_text"] = incident_text
 
     async def event_generator():
         try:
-            async for event in incident_graph.astream_events(
-                {"incident_text": incident_text},
-                version="v2",
-            ):
-                kind = event.get("event")
+            async for event in aubi_graph.astream_events(state_input, version="v2"):
+                kind = event.get("event", "")
                 name = event.get("name", "")
                 data = event.get("data", {})
 
-                if kind == "on_chain_start" and name in (
-                    "incident_analyzer", "ownership_router",
-                    "agent_querier", "response_drafter", "memory_updater"
-                ):
-                    payload = json.dumps({"node": name, "status": "running", "output": None})
-                    yield f"data: {payload}\n\n"
+                if kind == "on_chain_start" and name in GRAPH_NODES:
+                    yield f"data: {json.dumps({'event': 'node_start', 'node': name, 'data': None})}\n\n"
 
-                elif kind == "on_chain_end" and name in (
-                    "incident_analyzer", "ownership_router",
-                    "agent_querier", "response_drafter", "memory_updater"
-                ):
+                elif kind == "on_chain_end" and name in GRAPH_NODES:
                     output = data.get("output", {})
-                    payload = json.dumps({"node": name, "status": "done", "output": output})
-                    yield f"data: {payload}\n\n"
+                    # Emit agent messages as separate events for the frontend comm feed
+                    for msg in (output.get("agent_messages") or []):
+                        yield f"data: {json.dumps({'event': 'agent_message', 'data': msg})}\n\n"
+                    yield f"data: {json.dumps({'event': 'node_done', 'node': name, 'data': output})}\n\n"
 
         except Exception as e:
-            yield f"data: {json.dumps({'node': 'error', 'status': 'error', 'output': str(e)})}\n\n"
+            yield f"data: {json.dumps({'event': 'error', 'node': 'graph', 'data': str(e)})}\n\n"
 
-        yield f"data: {json.dumps({'node': 'complete', 'status': 'done', 'output': None})}\n\n"
+        yield f"data: {json.dumps({'event': 'complete', 'data': None})}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@app.get("/github/poll")
+async def poll_github():
+    """Return the latest open issue on the demo repo (for live demo poller)."""
+    demo_repo = os.getenv("DEMO_REPO", "")
+    if not demo_repo:
+        return {"issue": None}
+    try:
+        from ingestion.github_issue import get_latest_open_issue
+        return {"issue": get_latest_open_issue(demo_repo)}
+    except Exception as e:
+        return {"issue": None, "error": str(e)}
 
 
 @app.get("/health")
