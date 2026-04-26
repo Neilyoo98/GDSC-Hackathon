@@ -37,11 +37,15 @@ export interface AgentMessage {
 }
 
 export type AUBIEvent =
+  | { event: "thread"; data: Record<string, unknown> | null }
   | { event: "node_start"; node: string; data: null }
   | { event: "node_done"; node: string; data: Record<string, unknown> | null }
   | { event: "agent_message"; data: AgentMessage }
-  | { event: "complete"; data: null }
-  | { event: "error"; data: { message: string } };
+  | { event: "routing_evidence"; data: Record<string, unknown> }
+  | { event: "aubi_learned"; data: Record<string, unknown> }
+  | { event: "awaiting_approval"; data: Record<string, unknown> }
+  | { event: "complete"; data: Record<string, unknown> | null }
+  | { event: "error"; data: string | { message: string } };
 
 export type SSENode =
   | "thread"
