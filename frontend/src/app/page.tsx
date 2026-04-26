@@ -108,7 +108,7 @@ const heroWords = [
   { text: "that" },
   { text: "actually", hot: true },
   { text: "knows", hot: true },
-  { text: "them.", hot: true },
+  { text: "them", hot: true },
 ];
 
 function IssueIcon() {
