@@ -54,6 +54,7 @@ export interface CoworkerContextExchange {
   reason?: string;
   why?: string;
   why_it_matters?: string;
+  request?: string;
   context?: string;
   context_shared?: string;
   shared_context?: string;
