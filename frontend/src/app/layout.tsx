@@ -16,7 +16,7 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <Nav />
-        <main className="min-h-[calc(100vh-52px)]">{children}</main>
+        <main className="min-h-[calc(100vh-64px)]">{children}</main>
       </body>
     </html>
   );

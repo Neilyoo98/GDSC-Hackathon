@@ -7,19 +7,19 @@ export function Nav() {
   const path = usePathname();
 
   return (
-    <nav className="sticky top-0 z-50 flex h-[52px] items-center justify-between border-b border-[#1f1f1f] bg-[#080808] px-6">
+    <nav className="sticky top-0 z-50 grid h-[64px] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center border-b border-[#1f1f1f] bg-[#080808] px-6">
       <Link
         href="/"
         aria-label="AUBI home"
-        className="flex flex-col leading-none transition-opacity hover:opacity-80 focus:outline-none focus-visible:ring-1 focus-visible:ring-[#39ff14]"
+        className="flex min-w-0 flex-col justify-self-start leading-none transition-opacity hover:opacity-80 focus:outline-none focus-visible:ring-1 focus-visible:ring-[#39ff14]"
       >
-        <span className="font-syne text-2xl font-normal tracking-[4px] text-[#e8e4dc]">AUBI</span>
+        <span className="font-syne text-[34px] font-normal tracking-[5px] text-[#39ff14]">AUBI</span>
         <span className="mt-1 font-mono text-[8px] uppercase tracking-[2px] text-[#e8e4dc99]">
           Autonomous Understanding and Behaviour Inference
         </span>
       </Link>
 
-      <div className="flex gap-8">
+      <div className="grid w-[min(560px,52vw)] grid-cols-4 items-center justify-items-center">
         {[
           { href: "/team", label: "TEAM" },
           { href: "/agents", label: "COWORKERS" },
@@ -44,7 +44,7 @@ export function Nav() {
         })}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 justify-self-end">
         <span className="h-2 w-2 animate-pulse rounded-full bg-[#39ff14]" />
         <span className="font-mono text-[9px] uppercase tracking-[3px] text-[#39ff14]">
           System Online
