@@ -7,16 +7,14 @@ import { useAgents } from "@/hooks/useAgents";
 import { IncidentTerminal } from "@/components/IncidentTerminal";
 import { NeuralTrace } from "@/components/NeuralTrace";
 import { HexGrid } from "@/components/HexGrid";
-import { SlackMockup } from "@/components/SlackMockup";
-import { PostmortemDoc } from "@/components/PostmortemDoc";
 
 export default function IncidentPage() {
-  const [incidentText, setIncidentText] = useState("");
-  const { events, isStreaming, result, start, reset } = useIncidentStream();
+  const [issueUrl, setIssueUrl] = useState("");
+  const { events, isStreaming, result, error, start, approve, reset } = useIncidentStream();
   const { agents } = useAgents();
 
   // Find which agent is being queried right now
-  const queryingEvent = events.find((e) => e.node === "agent_querier" && e.status === "running");
+  const queryingEvent = events.find((e) => e.node === "query_single_agent" && e.status === "running");
   const pulsingAgentId: string | null = null; // TODO: map agent name to id if needed
 
   const primaryOwner = result?.owners?.[0]
@@ -24,13 +22,13 @@ export default function IncidentPage() {
     : agents[0];
 
   function handleSubmit() {
-    if (!incidentText.trim() || isStreaming) return;
-    start(incidentText.trim());
+    if (!issueUrl.trim() || isStreaming) return;
+    start(issueUrl.trim());
   }
 
   function handleReset() {
     reset();
-    setIncidentText("");
+    setIssueUrl("");
   }
 
   const hasResult = !!result;
@@ -44,7 +42,7 @@ export default function IncidentPage() {
         <div className="flex items-center justify-between">
           <div>
             <p className="font-syne text-xl text-white">Incident</p>
-            <p className="font-mono text-[10px] text-[#4a6080] mt-0.5">War room · paste and trigger</p>
+            <p className="font-mono text-[10px] text-[#4a6080] mt-0.5">War room · GitHub issue to PR</p>
           </div>
           {hasEvents && (
             <button
@@ -58,11 +56,17 @@ export default function IncidentPage() {
 
         {/* Terminal input */}
         <IncidentTerminal
-          value={incidentText}
-          onChange={setIncidentText}
+          value={issueUrl}
+          onChange={setIssueUrl}
           onSubmit={handleSubmit}
           isStreaming={isStreaming}
         />
+
+        {error && (
+          <div className="border border-red-500/30 bg-red-500/10 px-3 py-2 font-mono text-[11px] text-red-300">
+            {error}
+          </div>
+        )}
 
         {/* Mini agent map */}
         {agents.length > 0 && (
@@ -103,26 +107,71 @@ export default function IncidentPage() {
             >
               {/* Response header */}
               <div className="flex items-center justify-between px-5 py-2.5 border-b border-[#1e2d45] flex-shrink-0">
-                <span className="font-mono text-[9px] text-[#4a6080] tracking-widest">{"// INCIDENT RESPONSE"}</span>
+                <span className="font-mono text-[9px] text-[#4a6080] tracking-widest">{"// FIX REVIEW"}</span>
                 <button
-                  onClick={() => navigator.clipboard.writeText(result.slack_message)}
+                  onClick={() => navigator.clipboard.writeText(result.patch_diff ?? "")}
                   className="font-mono text-[9px] text-[#4a6080] border border-[#1e2d45] px-2 py-1 rounded hover:text-[#00f0ff] hover:border-[#00f0ff33] transition-colors"
                 >
-                  COPY SLACK ↗
+                  COPY DIFF
                 </button>
               </div>
 
-              {/* Slack + postmortem */}
-              <div className="flex-1 flex gap-4 p-5 overflow-hidden min-h-0">
-                <div className="flex-1 min-w-0">
-                  <SlackMockup
-                    message={result.slack_message}
-                    agentName={primaryOwner?.name ?? "Unknown"}
-                    agentUsername={primaryOwner?.github_username ?? "ghost"}
-                  />
+              <div className="flex-1 grid grid-cols-2 gap-4 p-5 overflow-hidden min-h-0">
+                <div className="min-w-0 flex flex-col gap-3 overflow-hidden">
+                  <div className="border border-[#1e2d45] bg-[#0a0e1a] rounded p-4">
+                    <p className="font-mono text-[9px] text-[#4a6080] tracking-widest mb-2">{"// OWNER"}</p>
+                    <p className="font-syne text-lg text-white">{primaryOwner?.name ?? result.owners[0] ?? "Unassigned"}</p>
+                    <p className="font-mono text-[11px] text-[#4a6080]">{primaryOwner?.github_username ?? "Qdrant ownership match"}</p>
+                  </div>
+
+                  <div className="border border-[#1e2d45] bg-[#0a0e1a] rounded p-4">
+                    <p className="font-mono text-[9px] text-[#4a6080] tracking-widest mb-2">{"// FIX EXPLANATION"}</p>
+                    <p className="text-sm leading-relaxed text-[#c8d6e8]">
+                      {result.fix_explanation ?? "Waiting for fix generation..."}
+                    </p>
+                  </div>
+
+                  <div className="border border-[#1e2d45] bg-[#0a0e1a] rounded p-4">
+                    <p className="font-mono text-[9px] text-[#4a6080] tracking-widest mb-2">{"// VERIFICATION"}</p>
+                    <p className={["font-mono text-[11px]", result.tests_passed ? "text-emerald-300" : "text-amber-300"].join(" ")}>
+                      {result.tests_passed === undefined ? "Waiting for tests..." : result.tests_passed ? "go test ./... passed" : "go test ./... did not pass"}
+                    </p>
+                    {result.test_output && (
+                      <pre className="mt-2 max-h-28 overflow-auto whitespace-pre-wrap text-[10px] leading-relaxed text-[#8aa0c0]">
+                        {result.test_output}
+                      </pre>
+                    )}
+                  </div>
+
+                  {result.awaiting_approval && (
+                    <button
+                      onClick={() => void approve(true)}
+                      disabled={!result.tests_passed}
+                      className="h-11 rounded border border-emerald-500 bg-emerald-500 text-sm font-mono font-bold tracking-widest text-[#04130d] disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      APPROVE PR PUSH
+                    </button>
+                  )}
+
+                  {result.pr_url && (
+                    <a
+                      href={result.pr_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="h-11 rounded border border-[#00f0ff] bg-[#00f0ff] text-sm font-mono font-bold tracking-widest text-[#031018] flex items-center justify-center"
+                    >
+                      OPEN GITHUB PR
+                    </a>
+                  )}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <PostmortemDoc markdown={result.postmortem} />
+
+                <div className="min-w-0 flex flex-col overflow-hidden border border-[#1e2d45] bg-[#050912] rounded">
+                  <div className="px-4 py-2 border-b border-[#1e2d45]">
+                    <span className="font-mono text-[9px] text-[#4a6080] tracking-widest">{"// GENERATED PATCH"}</span>
+                  </div>
+                  <pre className="flex-1 overflow-auto whitespace-pre-wrap p-4 text-[11px] leading-relaxed text-[#c8d6e8]">
+                    {result.patch_diff ?? "Waiting for patch..."}
+                  </pre>
                 </div>
               </div>
 

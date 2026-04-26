@@ -19,7 +19,7 @@ class AUBIIssueState(TypedDict):
 
     # Input — one of these is set
     issue_url: Optional[str]       # GitHub issue URL or "owner/repo#N"
-    incident_text: Optional[str]   # raw Slack thread (fallback / incident mode)
+    incident_text: Optional[str]   # raw incident report text
 
     # Issue reader output
     repo_name: Optional[str]

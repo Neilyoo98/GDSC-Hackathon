@@ -3,12 +3,6 @@
 import { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 
-const SAMPLE_INCIDENTS = [
-  "prod down, payment service 500s, started 20min ago, no idea why",
-  "auth failures spiking after mobile token refresh deploy, users getting logged out",
-  "API timeout on checkout, Redis connection pool exhausted, 3 workers stuck",
-];
-
 interface Props {
   value: string;
   onChange: (v: string) => void;
@@ -59,8 +53,8 @@ export function IncidentTerminal({ value, onChange, onSubmit, isStreaming }: Pro
           value={value}
           onChange={(e) => onChange(e.target.value)}
           disabled={isStreaming}
-          placeholder="paste slack thread or error message..."
-          rows={8}
+          placeholder="paste GitHub issue URL or owner/repo#123..."
+          rows={4}
           className="relative z-[2] w-full resize-none bg-transparent p-4 font-mono text-[13px] text-[#c8d6e8] placeholder-[#2a3f5f] focus:outline-none disabled:opacity-50"
         />
 
@@ -70,20 +64,6 @@ export function IncidentTerminal({ value, onChange, onSubmit, isStreaming }: Pro
           <span className="font-mono text-[10px] text-[#2a3f5f]">⌘ ENTER to trigger</span>
         </div>
       </motion.div>
-
-      {/* Quick-fill buttons */}
-      <div className="flex flex-wrap gap-1.5">
-        {SAMPLE_INCIDENTS.map((s, i) => (
-          <button
-            key={i}
-            onClick={() => onChange(s)}
-            disabled={isStreaming}
-            className="font-mono text-[9px] text-[#4a6080] border border-[#1e2d45] bg-[#0d1224] px-2 py-1 rounded hover:text-[#8aa0c0] hover:border-[#2a3f5f] transition-colors disabled:opacity-40"
-          >
-            DEMO {i + 1}
-          </button>
-        ))}
-      </div>
 
       {/* Trigger button */}
       <motion.button

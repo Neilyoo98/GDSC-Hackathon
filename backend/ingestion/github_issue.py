@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import re
+from datetime import datetime, timezone
 from typing import Any
 
 from github import Github, GithubException
@@ -65,7 +66,7 @@ def read_repo_files(repo_name: str, filepaths: list[str], ref: str = "main") -> 
     """Fetch file contents for given paths from a repo.
 
     Returns {filepath: file_content_str}.
-    Files that cannot be fetched are silently skipped.
+    Raises if any requested file cannot be fetched.
     """
     g = _get_github()
     try:
@@ -77,11 +78,11 @@ def read_repo_files(repo_name: str, filepaths: list[str], ref: str = "main") -> 
     for path in filepaths:
         try:
             file_obj = repo.get_contents(path, ref=ref)
-            if hasattr(file_obj, "decoded_content"):
-                contents[path] = file_obj.decoded_content.decode("utf-8", errors="replace")
-        except GithubException:
-            # File not found at that path — skip
-            pass
+        except GithubException as e:
+            raise FileNotFoundError(f"Could not fetch {path!r} from {repo_name}@{ref}: {e}") from e
+        if isinstance(file_obj, list) or not hasattr(file_obj, "decoded_content"):
+            raise ValueError(f"{path!r} in {repo_name}@{ref} is not a file")
+        contents[path] = file_obj.decoded_content.decode("utf-8", errors="replace")
 
     return contents
 
@@ -103,7 +104,8 @@ def create_fix_pr(
     g = _get_github()
     repo = g.get_repo(repo_name)
 
-    branch = branch_name or f"aubi/fix-issue-{issue_number}"
+    suffix = datetime.now(tz=timezone.utc).strftime("%Y%m%d%H%M%S")
+    branch = branch_name or f"aubi/fix-issue-{issue_number}-{suffix}"
     commit_msg = f"fix: resolve {issue_title[:60]} (closes #{issue_number})"
     pr_title = f"fix: {issue_title[:70]} (closes #{issue_number})"
 
@@ -111,16 +113,14 @@ def create_fix_pr(
     try:
         base = repo.get_branch(base_branch)
     except GithubException:
-        base = repo.get_branch(repo.default_branch)
+        base_branch = repo.default_branch
+        base = repo.get_branch(base_branch)
 
     # 2. Create fix branch
     try:
         repo.create_git_ref(f"refs/heads/{branch}", base.commit.sha)
-    except GithubException:
-        # Branch already exists — delete and recreate
-        ref = repo.get_git_ref(f"heads/{branch}")
-        ref.delete()
-        repo.create_git_ref(f"refs/heads/{branch}", base.commit.sha)
+    except GithubException as e:
+        raise RuntimeError(f"Failed to create branch {branch}: {e}") from e
 
     # 3. Commit the fixed file
     try:
@@ -150,21 +150,18 @@ def create_fix_pr(
 
 
 def get_latest_open_issue(repo_name: str) -> dict[str, Any] | None:
-    """Poll for the most recent open issue on a repo. Used by the live demo poller."""
+    """Poll for the most recent open issue on a repo."""
     g = _get_github()
-    try:
-        repo = g.get_repo(repo_name)
-        issues = list(repo.get_issues(state="open", sort="created", direction="desc"))
-        if not issues:
-            return None
-        issue = issues[0]
-        return {
-            "repo_name": repo_name,
-            "issue_number": issue.number,
-            "title": issue.title,
-            "body": issue.body or "",
-            "author": issue.user.login if issue.user else "unknown",
-            "url": issue.html_url,
-        }
-    except GithubException:
+    repo = g.get_repo(repo_name)
+    issues = list(repo.get_issues(state="open", sort="created", direction="desc"))
+    if not issues:
         return None
+    issue = issues[0]
+    return {
+        "repo_name": repo_name,
+        "issue_number": issue.number,
+        "title": issue.title,
+        "body": issue.body or "",
+        "author": issue.user.login if issue.user else "unknown",
+        "url": issue.html_url,
+    }
