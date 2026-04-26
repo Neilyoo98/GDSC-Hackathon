@@ -5,9 +5,8 @@ import { AgentCommFeed } from "@/components/aubi/AgentCommFeed";
 import { AgentMeshLines } from "@/components/aubi/AgentMeshLines";
 import { useAUBIStream } from "@/hooks/useAUBIStream";
 
-const DEMO_ISSUE = "https://github.com/aubi-demo/AUBI-Demo/issues/1";
-
 export default function DemoPage() {
+  const [inputIssueUrl, setInputIssueUrl] = useState("");
   const [issueUrl, setIssueUrl] = useState<string | null>(null);
   const { agentMessages, nodeStatuses, isStreaming, reset } = useAUBIStream(issueUrl);
   const activeMessage = agentMessages.at(-1) ?? null;
@@ -22,21 +21,28 @@ export default function DemoPage() {
     <div className="flex h-[calc(100vh-52px)] flex-col overflow-hidden">
       <header className="flex h-16 shrink-0 items-center justify-between border-b border-[#1f1f1f] bg-[#080808] px-6">
         <div>
-          <h1 className="font-syne text-4xl font-normal leading-none text-[#e8e4dc]">AUBI Demo</h1>
+              <h1 className="font-syne text-4xl font-normal leading-none text-[#e8e4dc]">AUBI Flow</h1>
           <p className="font-mono text-[10px] uppercase tracking-[3px] text-[#e8e4dc99]">Issue → Agents Talk → Fix → PR</p>
         </div>
         <div className="flex items-center gap-4">
+          <input
+            value={inputIssueUrl}
+            onChange={(event) => setInputIssueUrl(event.target.value)}
+            placeholder="owner/repo#123 or issue URL"
+            className="w-[340px] border border-[#e8e4dc33] bg-[#050505] px-3 py-2 font-mono text-xs text-[#e8e4dc] outline-none placeholder:text-[#e8e4dc55]"
+          />
           <span className={`border px-3 py-1 font-mono text-[10px] uppercase tracking-[2px] ${isStreaming ? "border-[#39ff14] text-[#39ff14]" : "border-[#e8e4dc33] text-[#e8e4dc99]"}`}>
             {statusText}
           </span>
           <button
             onClick={() => {
               reset();
-              setIssueUrl(DEMO_ISSUE);
+              setIssueUrl(inputIssueUrl.trim());
             }}
+            disabled={!inputIssueUrl.trim() || isStreaming}
             className="border border-[#39ff14] px-4 py-2 font-mono text-xs font-semibold uppercase tracking-[2px] text-[#39ff14] transition-colors hover:bg-[#39ff14] hover:text-[#080808]"
           >
-            Trigger AUBI
+            Run AUBI
           </button>
         </div>
       </header>
@@ -57,7 +63,7 @@ export default function DemoPage() {
                 ["query_agents", "Agents Consulted"],
                 ["code_reader", "Code Read"],
                 ["fix_generator", "Fix Generated"],
-                ["pr_pusher", "PR Pushed"]
+                ["approval_gate", "Approval Ready"]
               ].map(([node, label]) => {
                 const status = nodeStatuses[node] ?? "idle";
                 return (
