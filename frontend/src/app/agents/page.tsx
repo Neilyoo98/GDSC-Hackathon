@@ -598,8 +598,8 @@ export default function AgentsPage() {
         </div>
 
         {/* Status */}
-        <div className="absolute top-6 right-6 z-10 flex items-center gap-2 pointer-events-none">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#39ff14] animate-pulse" />
+        <div className="system-online-fade absolute top-6 right-6 z-10 flex items-center gap-2 pointer-events-none">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#39ff14]" />
           <span className="font-mono text-[9px] uppercase tracking-[3px] text-[#39ff14]">Mesh Online</span>
         </div>
 
