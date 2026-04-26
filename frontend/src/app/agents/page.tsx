@@ -698,7 +698,7 @@ export default function AgentsPage() {
         {!isLoading && agentList.length > 0 && (
           <div className="absolute bottom-6 right-6 z-10 pointer-events-none">
             <div className="flex flex-col gap-1 text-right">
-              <span className="font-mono text-[8px] uppercase tracking-[3px] text-[#e8e4dc22]">// mesh</span>
+              <span className="font-mono text-[8px] uppercase tracking-[3px] text-[#e8e4dc22]">{"// mesh"}</span>
               <span className="font-mono text-[9px] text-[#e8e4dc33]">{connections.length} connections</span>
               <span className="font-mono text-[9px] text-[#e8e4dc33]">{totalFacts} facts</span>
             </div>
