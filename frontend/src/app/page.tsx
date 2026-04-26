@@ -443,9 +443,9 @@ export default function Home() {
             Open war room
           </Link>
         </div>
-        <div className="flex flex-col gap-6 px-6 py-10 md:flex-row md:items-center md:justify-between md:px-8">
+        <div className="mx-auto flex max-w-[900px] flex-col gap-6 px-6 py-10 md:flex-row md:items-center md:justify-center md:px-8">
           {pipelineNodes.map((node, index) => (
-            <div key={node.label} className="landing-fade flex flex-1 items-center" style={{ animationDelay: `${0.1 + index * 0.08}s` }}>
+            <div key={node.label} className="landing-fade flex items-center" style={{ animationDelay: `${0.1 + index * 0.08}s` }}>
               <div className="relative flex min-w-[96px] flex-col items-center text-center">
                 <div
                   className={["relative flex h-12 w-12 items-center justify-center border transition-transform duration-300 hover:-translate-y-1", node.state === "active" ? "active-pipeline-node" : ""].join(" ")}
@@ -457,7 +457,7 @@ export default function Home() {
                 <p className="font-mono mt-3 text-[10px] uppercase tracking-[2px] text-[#e8e4dcd6]">{node.label}</p>
               </div>
               {index < pipelineNodes.length - 1 && (
-                <div className="landing-connector relative mx-4 hidden h-px flex-1 overflow-hidden bg-[#1f1f1f] md:block" />
+                <div className="landing-connector relative mx-5 hidden h-px w-14 overflow-hidden bg-[#1f1f1f] md:block lg:w-16" />
               )}
             </div>
           ))}
