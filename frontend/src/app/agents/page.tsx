@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useCallback, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAgents } from "@/hooks/useAgents";
 import { DossierPanel } from "@/components/DossierPanel";
@@ -8,7 +9,9 @@ import { api } from "@/lib/api";
 import { coworkerName } from "@/lib/agents";
 import type { Agent } from "@/lib/types";
 
-// ── Constitution category colours (matching team page ring key) ────────────
+// react-force-graph-2d uses canvas — must be client-only
+const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), { ssr: false });
+
 const CAT_COLORS: Record<string, string> = {
   code_ownership: "#39ff14",
   expertise:      "#e8e4dc",
@@ -16,12 +19,13 @@ const CAT_COLORS: Record<string, string> = {
   current_focus:  "#f59e0b",
   known_issues:   "#ff3366",
 };
+const CATS = Object.keys(CAT_COLORS);
 
-// ── Mesh connection logic ──────────────────────────────────────────────────
+// ── Connection logic ───────────────────────────────────────────────────────
 function agentTokens(agent: Agent): Set<string> {
   const out = new Set<string>();
   for (const fact of agent.constitution_facts ?? []) {
-    if (["code_ownership","current_focus","known_issues"].includes(fact.category)) {
+    if (["code_ownership", "current_focus", "known_issues"].includes(fact.category)) {
       fact.object.toLowerCase().split(/[\s/,;]+/).forEach((t) => { if (t.length > 2) out.add(t); });
     }
   }
@@ -36,243 +40,17 @@ function connected(a: Agent, b: Agent) {
   return Array.from(agentTokens(b)).some((t) => ta.has(t));
 }
 
-// ── SVG arc helper ─────────────────────────────────────────────────────────
-function arcPath(cx: number, cy: number, r: number, startDeg: number, endDeg: number) {
-  const s = (startDeg * Math.PI) / 180;
-  const e = (endDeg   * Math.PI) / 180;
-  const x1 = cx + r * Math.cos(s); const y1 = cy + r * Math.sin(s);
-  const x2 = cx + r * Math.cos(e); const y2 = cy + r * Math.sin(e);
-  const large = endDeg - startDeg > 180 ? 1 : 0;
-  return `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`;
+// ── Avatar image cache for canvas rendering ────────────────────────────────
+const imgCache: Record<string, HTMLImageElement> = {};
+function loadAvatar(username: string): HTMLImageElement {
+  if (imgCache[username]) return imgCache[username];
+  const img = new window.Image();
+  img.crossOrigin = "anonymous";
+  img.src = `https://github.com/${username}.png?size=128`;
+  imgCache[username] = img;
+  return img;
 }
 
-// ── Mesh graph ─────────────────────────────────────────────────────────────
-function MeshGraph({
-  agents, selectedId, onSelect,
-}: {
-  agents: Agent[];
-  selectedId: string | null;
-  onSelect: (id: string | null) => void;
-}) {
-  const svgRef  = useRef<SVGSVGElement>(null);
-  const [dash, setDash] = useState(0);
-
-  // Animate dashes
-  useEffect(() => {
-    const id = setInterval(() => setDash((d) => (d + 1) % 40), 40);
-    return () => clearInterval(id);
-  }, []);
-
-  if (!agents.length) return null;
-
-  const W = 900; const H = 600; const CX = W / 2; const CY = H / 2;
-  const RADIUS   = Math.min(200, 70 * agents.length);
-  const NODE_R   = 36;
-  const ARC_R    = NODE_R + 14;
-
-  // Place agents evenly around a circle, starting from top (-90°)
-  const positions = agents.map((_, i) => {
-    const angle  = ((i / agents.length) * 360 - 90) * (Math.PI / 180);
-    return { x: CX + RADIUS * Math.cos(angle), y: CY + RADIUS * Math.sin(angle) };
-  });
-
-  // Build connection pairs
-  const pairs: [number, number][] = [];
-  for (let i = 0; i < agents.length; i++)
-    for (let j = i + 1; j < agents.length; j++)
-      if (connected(agents[i], agents[j])) pairs.push([i, j]);
-
-  // Constitution arc segments per agent
-  const CATS = Object.keys(CAT_COLORS);
-  const SEG  = 360 / CATS.length;
-
-  return (
-    <svg
-      ref={svgRef}
-      viewBox={`0 0 ${W} ${H}`}
-      className="w-full h-full"
-      style={{ overflow: "visible" }}
-    >
-      <defs>
-        {agents.map((a, i) => (
-          <clipPath key={a.id} id={`av-${a.id}`}>
-            <circle cx={positions[i].x} cy={positions[i].y} r={NODE_R - 2} />
-          </clipPath>
-        ))}
-        <radialGradient id="center-glow" cx="50%" cy="50%" r="50%">
-          <stop offset="0%"   stopColor="#39ff14" stopOpacity="0.12" />
-          <stop offset="100%" stopColor="#39ff14" stopOpacity="0" />
-        </radialGradient>
-        <filter id="glow-green">
-          <feGaussianBlur stdDeviation="3" result="blur" />
-          <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-        </filter>
-      </defs>
-
-      {/* Subtle radial glow at center */}
-      <circle cx={CX} cy={CY} r={RADIUS + 60} fill="url(#center-glow)" />
-
-      {/* Orbit ring */}
-      <circle
-        cx={CX} cy={CY} r={RADIUS}
-        fill="none"
-        stroke="#39ff14"
-        strokeWidth={0.5}
-        strokeOpacity={0.25}
-        strokeDasharray="4 12"
-      />
-
-      {/* Connection lines */}
-      {pairs.map(([i, j]) => {
-        const a = positions[i]; const b = positions[j];
-        const isActive = selectedId === agents[i].id || selectedId === agents[j].id;
-        return (
-          <g key={`${i}-${j}`}>
-            {/* Glow */}
-            <line
-              x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-              stroke="#39ff14"
-              strokeWidth={isActive ? 4 : 2}
-              strokeOpacity={isActive ? 0.25 : 0.08}
-            />
-            {/* Animated dashed line */}
-            <line
-              x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-              stroke="#39ff14"
-              strokeWidth={isActive ? 1.5 : 0.8}
-              strokeOpacity={isActive ? 0.9 : 0.4}
-              strokeDasharray="6 14"
-              strokeDashoffset={-dash}
-            />
-          </g>
-        );
-      })}
-
-      {/* Spoke lines: center → each agent */}
-      {positions.map((p, i) => {
-        const isActive = selectedId === agents[i].id;
-        return (
-          <line
-            key={agents[i].id}
-            x1={CX} y1={CY} x2={p.x} y2={p.y}
-            stroke="#39ff14"
-            strokeWidth={isActive ? 1 : 0.5}
-            strokeOpacity={isActive ? 0.5 : 0.15}
-            strokeDasharray="3 10"
-            strokeDashoffset={-dash * 0.5}
-          />
-        );
-      })}
-
-      {/* Agent nodes */}
-      {agents.map((agent, i) => {
-        const { x, y } = positions[i];
-        const isSelected = selectedId === agent.id;
-        const facts = agent.constitution_facts ?? [];
-
-        return (
-          <g
-            key={agent.id}
-            style={{ cursor: "pointer" }}
-            onClick={() => onSelect(isSelected ? null : agent.id)}
-          >
-            {/* Outer glow ring when selected */}
-            {isSelected && (
-              <circle cx={x} cy={y} r={ARC_R + 10}
-                fill="none" stroke="#39ff14" strokeWidth={1}
-                strokeOpacity={0.6}
-                style={{ filter: "drop-shadow(0 0 8px #39ff14)" }}
-              />
-            )}
-
-            {/* Constitution arcs */}
-            {CATS.map((cat, ci) => {
-              const count  = facts.filter(f => f.category === cat).length;
-              const filled = Math.min(count / 3, 1);
-              if (filled === 0) return null;
-              const start = ci * SEG - 88;
-              const end   = start + SEG * filled * 0.85;
-              return (
-                <path
-                  key={cat}
-                  d={arcPath(x, y, ARC_R, start, end)}
-                  fill="none"
-                  stroke={CAT_COLORS[cat]}
-                  strokeWidth={3}
-                  strokeLinecap="round"
-                  strokeOpacity={isSelected ? 1 : 0.7}
-                  style={{ filter: `drop-shadow(0 0 4px ${CAT_COLORS[cat]}88)` }}
-                />
-              );
-            })}
-
-            {/* Avatar background */}
-            <circle cx={x} cy={y} r={NODE_R}
-              fill="#0d0d0d"
-              stroke={isSelected ? "#39ff14" : "#2a2a2a"}
-              strokeWidth={isSelected ? 2 : 1}
-            />
-
-            {/* GitHub avatar */}
-            <image
-              href={`https://github.com/${agent.github_username || agent.name}.png?size=96`}
-              x={x - (NODE_R - 2)} y={y - (NODE_R - 2)}
-              width={(NODE_R - 2) * 2} height={(NODE_R - 2) * 2}
-              clipPath={`url(#av-${agent.id})`}
-              preserveAspectRatio="xMidYMid slice"
-            />
-
-            {/* Name label */}
-            <text
-              x={x} y={y + NODE_R + 18}
-              textAnchor="middle"
-              fill={isSelected ? "#39ff14" : "#e8e4dc"}
-              fontSize={11}
-              fontFamily="'Space Mono', monospace"
-              letterSpacing="0.15em"
-              style={{ textTransform: "uppercase", userSelect: "none" }}
-            >
-              {coworkerName(agent)}
-            </text>
-
-            {/* Role label */}
-            <text
-              x={x} y={y + NODE_R + 32}
-              textAnchor="middle"
-              fill="#e8e4dc44"
-              fontSize={9}
-              fontFamily="'Space Mono', monospace"
-              letterSpacing="0.1em"
-              style={{ textTransform: "uppercase", userSelect: "none" }}
-            >
-              {(agent.role ?? "").split(",")[0].split("·")[0].trim().slice(0, 20)}
-            </text>
-          </g>
-        );
-      })}
-
-      {/* Center MESH node */}
-      <g>
-        <circle cx={CX} cy={CY} r={22} fill="#080808" stroke="#39ff14" strokeWidth={1} strokeOpacity={0.5} />
-        <circle cx={CX} cy={CY} r={6}  fill="#39ff14" opacity={0.9} />
-        <text
-          x={CX} y={CY + 36}
-          textAnchor="middle"
-          fill="#39ff14"
-          fontSize={9}
-          fontFamily="'Space Mono', monospace"
-          letterSpacing="0.25em"
-          opacity={0.7}
-          style={{ textTransform: "uppercase", userSelect: "none" }}
-        >
-          COWORKER MESH
-        </text>
-      </g>
-    </svg>
-  );
-}
-
-// ── Page ───────────────────────────────────────────────────────────────────
 export default function AgentsPage() {
   const { agents, isLoading, setAgents } = useAgents();
   const [selectedId, setSelectedId]     = useState<string | null>(null);
@@ -280,18 +58,166 @@ export default function AgentsPage() {
   const [form,       setForm]           = useState({ github_username: "", name: "", role: "" });
   const [creating,   setCreating]       = useState(false);
   const [createError,setCreateError]    = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [dims, setDims]                 = useState({ w: 900, h: 600 });
+  const graphRef = useRef<any>(null);
 
-  const agentList   = useMemo(() => (Array.isArray(agents) ? agents : []), [agents]);
+  // Track selected in a ref so canvas callbacks always see latest value
+  const selectedIdRef = useRef<string | null>(null);
+  selectedIdRef.current = selectedId;
+
+  // Measure container
+  useEffect(() => {
+    function measure() {
+      if (containerRef.current) {
+        setDims({ w: containerRef.current.offsetWidth, h: containerRef.current.offsetHeight });
+      }
+    }
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (containerRef.current) ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  const agentList = useMemo(() => (Array.isArray(agents) ? agents : []), [agents]);
   const selectedAgent = agentList.find((a) => a.id === selectedId) ?? null;
 
-  const connectionCount = useMemo(() => {
-    let n = 0;
-    for (let i = 0; i < agentList.length; i++)
-      for (let j = i + 1; j < agentList.length; j++)
-        if (connected(agentList[i], agentList[j])) n++;
-    return n;
+  // Build force-graph data
+  const graphData = useMemo(() => {
+    const nodes = agentList.map((a) => ({ id: a.id, agent: a }));
+    const links: { source: string; target: string }[] = [];
+    for (let i = 0; i < agentList.length; i++) {
+      for (let j = i + 1; j < agentList.length; j++) {
+        if (connected(agentList[i], agentList[j])) {
+          links.push({ source: agentList[i].id, target: agentList[j].id });
+        }
+      }
+    }
+    return { nodes, links };
   }, [agentList]);
 
+  const connectionCount = graphData.links.length;
+
+  // Pre-load avatars whenever agents change
+  useEffect(() => {
+    agentList.forEach((a) => loadAvatar(a.github_username || a.name));
+  }, [agentList]);
+
+  // ── Canvas node painter ──────────────────────────────────────────────────
+  const paintNode = useCallback((node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+    const agent: Agent = node.agent;
+    if (!agent) return;
+    const x: number = node.x ?? 0;
+    const y: number = node.y ?? 0;
+    const R = 30;
+    const isSelected = selectedIdRef.current === agent.id;
+    const facts = agent.constitution_facts ?? [];
+    const SEG = (Math.PI * 2) / CATS.length;
+
+    // Selected outer pulse ring
+    if (isSelected) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x, y, R + 16, 0, Math.PI * 2);
+      ctx.strokeStyle = "#39ff14";
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.5;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Constitution arcs (outer ring per category)
+    CATS.forEach((cat, ci) => {
+      const count  = facts.filter((f) => f.category === cat).length;
+      const filled = Math.min(count / 3, 1);
+      if (!filled) return;
+      const arcR       = R + 8;
+      const startAngle = ci * SEG - Math.PI / 2 - 0.05;
+      const endAngle   = startAngle + SEG * filled * 0.82;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x, y, arcR, startAngle, endAngle);
+      ctx.strokeStyle = CAT_COLORS[cat];
+      ctx.lineWidth   = 3.5;
+      ctx.lineCap     = "round";
+      ctx.globalAlpha = isSelected ? 1 : 0.8;
+      ctx.shadowColor  = CAT_COLORS[cat];
+      ctx.shadowBlur   = 6;
+      ctx.stroke();
+      ctx.restore();
+    });
+
+    // Clip avatar into circle
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, R, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.fillStyle = "#111";
+    ctx.fill();
+
+    const username = agent.github_username || agent.name;
+    const img      = loadAvatar(username);
+    if (img.complete && img.naturalWidth > 0) {
+      ctx.drawImage(img, x - R, y - R, R * 2, R * 2);
+    } else {
+      // Placeholder initials
+      ctx.fillStyle  = "#1f1f1f";
+      ctx.fill();
+      ctx.font       = `bold ${R * 0.6}px sans-serif`;
+      ctx.fillStyle  = "#39ff14";
+      ctx.textAlign  = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText((agent.name ?? "?")[0].toUpperCase(), x, y);
+    }
+    ctx.restore();
+
+    // Border ring
+    ctx.beginPath();
+    ctx.arc(x, y, R, 0, Math.PI * 2);
+    ctx.strokeStyle = isSelected ? "#39ff14" : "#2a2a2a";
+    ctx.lineWidth   = isSelected ? 2.5 : 1.5;
+    if (isSelected) {
+      ctx.shadowColor = "#39ff14";
+      ctx.shadowBlur  = 10;
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Name label
+    const label    = coworkerName(agent).toUpperCase();
+    const fontSize = Math.max(8, 11 / globalScale);
+    ctx.font       = `${fontSize}px 'Space Mono', monospace`;
+    ctx.fillStyle  = isSelected ? "#39ff14" : "#e8e4dc";
+    ctx.textAlign  = "center";
+    ctx.textBaseline = "top";
+    ctx.fillText(label, x, y + R + 7);
+
+    // Role label
+    const role = (agent.role ?? "").split(/[,·]/)[0].trim().slice(0, 20);
+    if (role && globalScale > 0.6) {
+      ctx.font      = `${Math.max(7, 9 / globalScale)}px 'Space Mono', monospace`;
+      ctx.fillStyle = "#e8e4dc55";
+      ctx.fillText(role, x, y + R + 7 + fontSize + 3);
+    }
+  }, []);
+
+  // Click area shape matches node size
+  const paintPointer = useCallback((node: any, color: string, ctx: CanvasRenderingContext2D) => {
+    ctx.beginPath();
+    ctx.arc(node.x ?? 0, node.y ?? 0, 36, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+  }, []);
+
+  const handleNodeClick = useCallback((node: any) => {
+    setSelectedId((prev) => (prev === node.id ? null : node.id as string));
+  }, []);
+
+  const handleEngineStop = useCallback(() => {
+    graphRef.current?.zoomToFit(600, 100);
+  }, []);
+
+  // ── Form handlers ────────────────────────────────────────────────────────
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!form.github_username.trim()) return;
@@ -321,13 +247,16 @@ export default function AgentsPage() {
   return (
     <div className="flex h-[calc(100vh-52px)] bg-[#080808]">
 
-      {/* ── Main canvas ── */}
-      <div className="flex-1 relative overflow-hidden">
+      {/* ── Main canvas ─────────────────────────────────────────────────── */}
+      <div className="flex-1 relative overflow-hidden" ref={containerRef}>
 
         {/* Subtle grid */}
         <div
           className="absolute inset-0 pointer-events-none opacity-[0.04]"
-          style={{ backgroundImage: "linear-gradient(#e8e4dc 1px,transparent 1px),linear-gradient(90deg,#e8e4dc 1px,transparent 1px)", backgroundSize: "64px 64px" }}
+          style={{
+            backgroundImage: "linear-gradient(#e8e4dc 1px,transparent 1px),linear-gradient(90deg,#e8e4dc 1px,transparent 1px)",
+            backgroundSize: "64px 64px",
+          }}
         />
 
         {/* Top bar */}
@@ -339,16 +268,18 @@ export default function AgentsPage() {
           </p>
         </div>
 
-        {/* Status */}
-        <div className="absolute top-6 right-6 z-10 flex items-center gap-2">
+        {/* Status indicator */}
+        <div className="absolute top-6 right-6 z-10 flex items-center gap-2 pointer-events-none">
           <span className="w-1.5 h-1.5 rounded-full bg-[#39ff14] animate-pulse" />
           <span className="font-mono text-[9px] uppercase tracking-[3px] text-[#39ff14]">Mesh Online</span>
         </div>
 
-        {/* Visualization */}
+        {/* Force graph or empty states */}
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
-            <p className="font-mono text-[10px] uppercase tracking-[4px] text-[#39ff1466]">Loading coworker mesh...</p>
+            <p className="font-mono text-[10px] uppercase tracking-[4px] text-[#39ff1466]">
+              Loading coworker mesh...
+            </p>
           </div>
         ) : agentList.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-4">
@@ -361,9 +292,34 @@ export default function AgentsPage() {
             </button>
           </div>
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center p-8">
-            <MeshGraph agents={agentList} selectedId={selectedId} onSelect={setSelectedId} />
-          </div>
+          <ForceGraph2D
+            ref={graphRef}
+            graphData={graphData}
+            width={dims.w}
+            height={dims.h}
+            backgroundColor="#080808"
+            // Node rendering
+            nodeCanvasObject={paintNode}
+            nodeCanvasObjectMode={() => "replace"}
+            nodePointerAreaPaint={paintPointer}
+            nodeLabel={() => ""}
+            onNodeClick={handleNodeClick}
+            // Edge styling
+            linkColor={() => "#39ff1430"}
+            linkWidth={1.5}
+            // Flowing particles along edges — the money shot
+            linkDirectionalParticles={4}
+            linkDirectionalParticleColor={() => "#39ff14"}
+            linkDirectionalParticleWidth={3}
+            linkDirectionalParticleSpeed={0.006}
+            // Physics
+            d3AlphaDecay={0.018}
+            d3VelocityDecay={0.3}
+            cooldownTicks={150}
+            onEngineStop={handleEngineStop}
+            // Warm up so it settles before user sees it
+            warmupTicks={60}
+          />
         )}
 
         {/* Register button */}
@@ -376,28 +332,40 @@ export default function AgentsPage() {
           </button>
         )}
 
-        {/* Constitution key */}
-        <div className="absolute bottom-6 right-6 z-10 border border-[#1f1f1f] bg-[#080808] px-3 py-2.5">
+        {/* Constitution legend */}
+        <div className="absolute bottom-6 right-6 z-10 border border-[#1f1f1f] bg-[#080808cc] px-3 py-2.5 backdrop-blur-sm">
           <p className="font-mono text-[8px] uppercase tracking-[3px] text-[#e8e4dc44] mb-2">{"// constitution"}</p>
           <div className="flex flex-col gap-1.5">
             {Object.entries(CAT_COLORS).map(([key, color]) => (
               <div key={key} className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color, boxShadow: `0 0 4px ${color}` }} />
                 <span className="font-mono text-[9px] uppercase tracking-[1px] text-[#e8e4dc66]">
-                  {key.replace("_", " ")}
+                  {key.replace(/_/g, " ")}
                 </span>
               </div>
             ))}
           </div>
         </div>
+
+        {/* Hint */}
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+          <p className="font-mono text-[9px] text-[#e8e4dc22] tracking-[2px]">
+            click a node · drag to explore · scroll to zoom
+          </p>
+        </div>
       </div>
 
-      {/* ── Dossier panel ── */}
-      <div className={["flex-shrink-0 transition-all duration-300 overflow-hidden border-l border-[#1f1f1f]", selectedAgent ? "w-[360px]" : "w-0"].join(" ")}>
+      {/* ── Dossier panel ───────────────────────────────────────────────── */}
+      <div
+        className={[
+          "flex-shrink-0 transition-all duration-300 overflow-hidden border-l border-[#1f1f1f]",
+          selectedAgent ? "w-[360px]" : "w-0",
+        ].join(" ")}
+      >
         <DossierPanel agent={selectedAgent} onClose={() => setSelectedId(null)} onDelete={handleDelete} />
       </div>
 
-      {/* ── Register modal ── */}
+      {/* ── Register modal ───────────────────────────────────────────────── */}
       <AnimatePresence>
         {showModal && (
           <motion.div
@@ -410,7 +378,9 @@ export default function AgentsPage() {
               className="bg-[#080808] border border-[#1f1f1f] w-full max-w-sm mx-4"
             >
               <div className="flex items-center justify-between px-5 py-4 border-b border-[#1f1f1f]">
-                <span className="font-mono text-[9px] uppercase tracking-[3px] text-[#e8e4dc66]">{"// register coworker"}</span>
+                <span className="font-mono text-[9px] uppercase tracking-[3px] text-[#e8e4dc66]">
+                  {"// register coworker"}
+                </span>
                 <button onClick={() => setShowModal(false)} className="text-[#e8e4dc44] hover:text-[#e8e4dc] text-xl leading-none">×</button>
               </div>
               <form onSubmit={handleCreate} className="p-5 space-y-4">
