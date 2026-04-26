@@ -2,30 +2,35 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import type { AgentMessage } from "@/lib/types";
+import type { Agent, AgentMessage } from "@/lib/types";
 
-const AGENT_META: Record<string, { label: string; align: "left" | "right" }> = {
-  orchestrator: { label: "Orchestrator", align: "left" },
-  alice_aubi: { label: "Alice's Aubi", align: "right" },
-  bob_aubi: { label: "Bob's Aubi", align: "right" },
-  carol_aubi: { label: "Carol's Aubi", align: "right" }
-};
+function displayName(agent: Agent) {
+  return agent.name.replace(/[-_]/g, " ").split(" ")[0] || agent.github_username;
+}
 
-function keyFor(value: string) {
+function metaFor(value: string, agents: Agent[]): { label: string; align: "left" | "right" } {
   const lower = value.toLowerCase();
-  if (lower.includes("alice")) return "alice_aubi";
-  if (lower.includes("bob")) return "bob_aubi";
-  if (lower.includes("carol")) return "carol_aubi";
-  if (lower.includes("orchestrator")) return "orchestrator";
-  return lower;
+  if (lower.includes("orchestrator")) return { label: "Orchestrator", align: "left" };
+
+  const match = agents.find((agent) => {
+    const keys = [agent.id, agent.github_username, agent.name].map((item) => item.toLowerCase());
+    return keys.some((key) => lower.includes(key));
+  });
+
+  return {
+    label: match ? `${displayName(match)}'s AUBI` : value,
+    align: "right"
+  };
 }
 
 export function AgentCommFeed({
   messages,
-  isStreaming = false
+  isStreaming = false,
+  agents = []
 }: {
   messages: AgentMessage[];
   isStreaming?: boolean;
+  agents?: Agent[];
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [revealedCount, setRevealedCount] = useState(0);
@@ -64,8 +69,9 @@ export function AgentCommFeed({
 
         <AnimatePresence initial={false}>
           {visibleMessages.map((message, index) => {
-            const meta = AGENT_META[keyFor(message.sender)] ?? { label: message.sender, align: "left" as const };
+            const meta = metaFor(message.sender, agents);
             const fromLeft = meta.align === "left";
+            const recipient = metaFor(message.recipient, agents);
             return (
               <motion.div
                 key={`${message.sender}-${message.recipient}-${index}`}
@@ -78,7 +84,7 @@ export function AgentCommFeed({
                   <div className={`mb-2 flex items-center gap-2 ${fromLeft ? "" : "justify-end"}`}>
                     <span className={`h-2 w-2 rounded-full ${isStreaming ? "bg-[#39ff14]" : "bg-[#e8e4dc]"}`} />
                     <span className="font-mono text-[10px] uppercase tracking-[2px] text-[#e8e4dc99]">{meta.label}</span>
-                    <span className="font-mono text-[10px] uppercase tracking-[2px] text-[#e8e4dc66]">→ {AGENT_META[keyFor(message.recipient)]?.label ?? message.recipient}</span>
+                    <span className="font-mono text-[10px] uppercase tracking-[2px] text-[#e8e4dc66]">→ {recipient.label}</span>
                   </div>
                   <div className={`border px-4 py-3 text-[13px] leading-relaxed text-[#e8e4dc] ${isStreaming ? "border-[#39ff14]" : "border-[#e8e4dc33]"}`}>
                     {message.message}
@@ -90,9 +96,9 @@ export function AgentCommFeed({
         </AnimatePresence>
 
         {pending && (
-          <div className={`flex ${AGENT_META[keyFor(pending.sender)]?.align === "right" ? "justify-end" : "justify-start"}`}>
+          <div className={`flex ${metaFor(pending.sender, agents).align === "right" ? "justify-end" : "justify-start"}`}>
             <div className="border border-[#e8e4dc33] bg-[#080808] px-4 py-3 font-mono text-[12px] uppercase tracking-[2px] text-[#e8e4dc99]">
-              <span className="mr-2">{AGENT_META[keyFor(pending.sender)]?.label ?? pending.sender}</span>
+              <span className="mr-2">{metaFor(pending.sender, agents).label}</span>
               <span>typing...</span>
             </div>
           </div>

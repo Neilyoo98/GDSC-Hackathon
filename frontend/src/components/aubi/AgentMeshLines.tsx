@@ -1,41 +1,73 @@
 "use client";
 
 import { motion } from "framer-motion";
-import type { AgentMessage } from "@/lib/types";
+import type { Agent, AgentMessage } from "@/lib/types";
 
-const NODE_POSITIONS: Record<string, { x: number; y: number; label: string }> = {
-  orchestrator: { x: 50, y: 50, label: "Orchestrator" },
-  alice_aubi: { x: 16, y: 22, label: "Alice" },
-  bob_aubi: { x: 84, y: 30, label: "Bob" },
-  carol_aubi: { x: 50, y: 84, label: "Carol" }
-};
+type MeshNode = { key: string; x: number; y: number; label: string; agent?: Agent };
 
-function normalizeEndpoint(value: string) {
+const AGENT_POSITIONS = [
+  { x: 16, y: 24 },
+  { x: 84, y: 28 },
+  { x: 22, y: 82 },
+  { x: 78, y: 78 }
+];
+
+function displayName(agent: Agent) {
+  return agent.name.replace(/[-_]/g, " ").split(" ")[0] || agent.github_username;
+}
+
+function nodeKeyFor(value: string, agents: Agent[]) {
   const lower = value.toLowerCase();
-  if (lower.includes("alice")) return "alice_aubi";
-  if (lower.includes("bob")) return "bob_aubi";
-  if (lower.includes("carol")) return "carol_aubi";
   if (lower.includes("orchestrator")) return "orchestrator";
+
+  const match = agents.find((agent) => {
+    const keys = [agent.id, agent.github_username, agent.name].map((item) => item.toLowerCase());
+    return keys.some((key) => lower.includes(key));
+  });
+  if (match) return `agent:${match.id}`;
   return lower;
 }
 
-export function AgentMeshLines({ activeMessage }: { activeMessage?: AgentMessage | null }) {
-  const sender = activeMessage ? NODE_POSITIONS[normalizeEndpoint(activeMessage.sender)] : null;
-  const recipient = activeMessage ? NODE_POSITIONS[normalizeEndpoint(activeMessage.recipient)] : null;
+function buildNodes(agents: Agent[]): MeshNode[] {
+  const visibleAgents = agents.slice(0, AGENT_POSITIONS.length);
+  const fallbackAgents = visibleAgents.length
+    ? visibleAgents
+    : [];
+  return [
+    { key: "orchestrator", x: 50, y: 50, label: "Orchestrator" },
+    ...fallbackAgents.map((agent, index) => ({
+      key: `agent:${agent.id}`,
+      label: displayName(agent),
+      agent,
+      ...AGENT_POSITIONS[index]
+    }))
+  ];
+}
+
+export function AgentMeshLines({
+  activeMessage,
+  agents = []
+}: {
+  activeMessage?: AgentMessage | null;
+  agents?: Agent[];
+}) {
+  const nodes = buildNodes(agents);
+  const byKey = Object.fromEntries(nodes.map((node) => [node.key, node]));
+  const sender = activeMessage ? byKey[nodeKeyFor(activeMessage.sender, agents)] : null;
+  const recipient = activeMessage ? byKey[nodeKeyFor(activeMessage.recipient, agents)] : null;
+  const agentNodes = nodes.filter((node) => node.key !== "orchestrator");
 
   const lines = [
-    ["orchestrator", "alice_aubi"],
-    ["orchestrator", "bob_aubi"],
-    ["orchestrator", "carol_aubi"],
-    ["alice_aubi", "bob_aubi"]
-  ] as const;
+    ...agentNodes.map((node) => ["orchestrator", node.key] as const),
+    ...(agentNodes.length >= 2 ? [[agentNodes[0].key, agentNodes[1].key] as const] : [])
+  ];
 
   return (
     <div className="relative h-[224px] overflow-hidden border border-[#e8e4dc33] bg-[#080808]">
       <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
         {lines.map(([from, to]) => {
-          const a = NODE_POSITIONS[from];
-          const b = NODE_POSITIONS[to];
+          const a = byKey[from];
+          const b = byKey[to];
           const active =
             (sender === a && recipient === b) ||
             (sender === b && recipient === a);
@@ -65,11 +97,11 @@ export function AgentMeshLines({ activeMessage }: { activeMessage?: AgentMessage
         })}
       </svg>
 
-      {Object.entries(NODE_POSITIONS).map(([key, node]) => {
+      {nodes.map((node) => {
         const active = sender === node || recipient === node;
         return (
           <motion.div
-            key={key}
+            key={node.key}
             animate={active ? { scale: [1, 1.08, 1] } : { scale: 1 }}
             transition={{ duration: 0.8 }}
             className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2"
@@ -80,6 +112,12 @@ export function AgentMeshLines({ activeMessage }: { activeMessage?: AgentMessage
           </motion.div>
         );
       })}
+
+      {agentNodes.length === 0 && (
+        <div className="absolute inset-0 flex items-center justify-center font-mono text-[10px] uppercase tracking-[3px] text-[#e8e4dc66]">
+          Loading real agent mesh
+        </div>
+      )}
     </div>
   );
 }

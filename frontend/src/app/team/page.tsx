@@ -10,7 +10,8 @@ export default function TeamPage() {
   const { agents, isLoading, error } = useAgents();
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
 
-  const visibleAgents = useMemo(() => agents.slice(0, 3), [agents]);
+  const visibleAgents = useMemo(() => agents, [agents]);
+  const agentCount = visibleAgents.length;
 
   return (
     <div className="relative min-h-[calc(100vh-52px)] overflow-hidden px-6 py-6">
@@ -19,7 +20,7 @@ export default function TeamPage() {
           <p className="font-mono text-[10px] uppercase tracking-[3px] text-[#e8e4dc99]">{"// TEAM CONSTITUTIONS"}</p>
           <h1 className="mt-2 font-syne text-6xl font-normal leading-none text-[#e8e4dc]">Developer Agent Mesh</h1>
           <p className="mt-4 max-w-2xl text-sm leading-relaxed text-[#e8e4dc99]">
-            Three persistent AUBI agents, each backed by a Context Constitution of ownership, expertise, collaboration style, and known issues.
+            {agentCount || "Real"} persistent AUBI agent{agentCount === 1 ? "" : "s"}, each backed by a Context Constitution of ownership, expertise, collaboration style, and known issues.
           </p>
         </div>
         <div className="border border-[#e8e4dc33] px-4 py-2 font-mono text-[10px] uppercase tracking-[2px] text-[#39ff14]">
@@ -39,17 +40,23 @@ export default function TeamPage() {
           Loading Agent Mesh...
         </div>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-3">
-          {visibleAgents.map((agent, index) => (
-            <AgentCard
-              key={agent.id}
-              agent={agent}
-              index={index}
-              selected={selectedAgent?.id === agent.id}
-              onSelect={setSelectedAgent}
-            />
-          ))}
-        </div>
+        visibleAgents.length > 0 ? (
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+            {visibleAgents.map((agent, index) => (
+              <AgentCard
+                key={agent.id}
+                agent={agent}
+                index={index}
+                selected={selectedAgent?.id === agent.id}
+                onSelect={setSelectedAgent}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="flex h-[424px] items-center justify-center border border-[#e8e4dc33] bg-[#080808] font-mono text-sm uppercase tracking-[3px] text-[#e8e4dc66]">
+            No persisted agents found in Qdrant.
+          </div>
+        )
       )}
 
       <div className="mt-8 border border-[#e8e4dc33] bg-[#080808] p-4">
