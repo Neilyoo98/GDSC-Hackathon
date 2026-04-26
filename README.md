@@ -2,7 +2,7 @@
 
 <img src="./Logo.png" width="110" alt="AUBI logo" />
 
-# AUBI
+
 
 ### Autonomous Understanding and Behaviour Inference
 
