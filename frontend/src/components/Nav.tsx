@@ -18,7 +18,7 @@ export function Nav() {
       <div className="flex gap-8">
         {[
           { href: "/team", label: "TEAM" },
-          { href: "/demo", label: "DEMO" },
+          { href: "/demo", label: "FLOW" },
           { href: "/agents", label: "AGENTS" },
           { href: "/incident", label: "INCIDENT" }
         ].map(({ href, label }) => {

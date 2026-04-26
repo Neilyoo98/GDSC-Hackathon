@@ -53,7 +53,7 @@ export default function TeamPage() {
       )}
 
       <div className="mt-8 border border-[#e8e4dc33] bg-[#080808] p-4">
-        <div className="mb-4 font-mono text-[10px] uppercase tracking-[3px] text-[#e8e4dc99]">{"// DEMO CHECKPOINT"}</div>
+        <div className="mb-4 font-mono text-[10px] uppercase tracking-[3px] text-[#e8e4dc99]">{"// READINESS CHECKPOINT"}</div>
         <div className="grid gap-4 font-mono text-[11px] uppercase tracking-[2px] text-[#e8e4dc99] md:grid-cols-3">
           <div className="border border-[#1f1f1f] p-4">1. Agent cards show name, role, expertise, ownership, and style.</div>
           <div className="border border-[#1f1f1f] p-4">2. Click any card to inspect full constitution facts.</div>
