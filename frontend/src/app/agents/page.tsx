@@ -171,9 +171,9 @@ function MeshGraph({
 
   if (!agents.length) return null;
 
-  const W = 980; const H = 660; const CX = W / 2; const CY = H / 2;
-  const RADIUS = Math.min(250, 78 * agents.length);
-  const NODE_R  = 42;
+  const W = 1160; const H = 760; const CX = W / 2; const CY = H / 2;
+  const RADIUS = Math.min(230, Math.max(175, 64 * agents.length));
+  const NODE_R  = 38;
   const ARC_R   = NODE_R + 16;
 
   const positions = agents.map((_, i) => {
@@ -423,9 +423,9 @@ function ConnectionCard({
     collaboration:  "Shared context",
   };
 
-  // Convert SVG coords (0-980, 0-660) to percentages.
-  const leftPct = (svgMx / 980) * 100;
-  const topPct  = (svgMy / 660) * 100;
+  // Convert SVG coords (0-1160, 0-760) to percentages.
+  const leftPct = (svgMx / 1160) * 100;
+  const topPct  = (svgMy / 760) * 100;
 
   return (
     <motion.div
