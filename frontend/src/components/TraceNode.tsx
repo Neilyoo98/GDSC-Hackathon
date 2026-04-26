@@ -5,9 +5,17 @@ import { useEffect, useState } from "react";
 import type { SSEEvent } from "@/lib/types";
 
 const NODE_META: Record<string, { label: string; bg: string; text: string; border: string }> = {
+  thread:             { label: "THREAD",      bg: "bg-slate-500/10",   text: "text-slate-300",  border: "border-slate-500/20" },
+  issue_reader:       { label: "ISSUE",       bg: "bg-red-500/10",     text: "text-red-400",    border: "border-red-500/20" },
   incident_analyzer: { label: "ANALYZER",    bg: "bg-red-500/10",     text: "text-red-400",    border: "border-red-500/20" },
   ownership_router:  { label: "ROUTER",      bg: "bg-amber-500/10",   text: "text-amber-400",  border: "border-amber-500/20" },
+  query_single_agent:{ label: "AGENT QUERY", bg: "bg-violet-500/10",  text: "text-violet-400", border: "border-violet-500/20" },
   agent_querier:     { label: "AGENT QUERY", bg: "bg-violet-500/10",  text: "text-violet-400", border: "border-violet-500/20" },
+  code_reader:        { label: "CODE READ",   bg: "bg-sky-500/10",     text: "text-sky-400",    border: "border-sky-500/20" },
+  fix_generator:      { label: "FIX GEN",     bg: "bg-cyan-500/10",    text: "text-cyan-400",   border: "border-cyan-500/20" },
+  test_runner:        { label: "TESTS",       bg: "bg-emerald-500/10", text: "text-emerald-400",border: "border-emerald-500/20" },
+  approval_gate:      { label: "APPROVAL",    bg: "bg-fuchsia-500/10", text: "text-fuchsia-400",border: "border-fuchsia-500/20" },
+  pr_pusher:          { label: "PR",          bg: "bg-emerald-500/10", text: "text-emerald-400",border: "border-emerald-500/20" },
   response_drafter:  { label: "DRAFTER",     bg: "bg-cyan-500/10",    text: "text-cyan-400",   border: "border-cyan-500/20" },
   memory_updater:    { label: "MEMORY",      bg: "bg-emerald-500/10", text: "text-emerald-400",border: "border-emerald-500/20" },
   complete:          { label: "COMPLETE",    bg: "bg-emerald-500/10", text: "text-emerald-400",border: "border-emerald-500/20" },
@@ -15,9 +23,17 @@ const NODE_META: Record<string, { label: string; bg: string; text: string; borde
 };
 
 const DOT_COLORS: Record<string, string> = {
+  thread: "#94a3b8",
+  issue_reader: "#ff3366",
   incident_analyzer: "#ff3366",
   ownership_router:  "#ffaa00",
+  query_single_agent:"#8b5cf6",
   agent_querier:     "#8b5cf6",
+  code_reader:       "#38bdf8",
+  fix_generator:     "#00f0ff",
+  test_runner:       "#10b981",
+  approval_gate:     "#e879f9",
+  pr_pusher:         "#10b981",
   response_drafter:  "#00f0ff",
   memory_updater:    "#10b981",
   complete:          "#10b981",
@@ -148,11 +164,27 @@ function outputSummary(event: SSEEvent): string {
   const o = event.output;
   switch (event.node) {
     case "incident_analyzer":
+    case "issue_reader":
       return `SERVICE: ${o.affected_service ?? "?"} · TYPE: ${o.error_type ?? "?"} · ${o.urgency ?? "P?"}`;
     case "ownership_router":
-      return `OWNERS: ${Array.isArray(o.owners) ? (o.owners as string[]).join(", ") : "none"}`;
+      return `OWNERS: ${Array.isArray(o.owner_ids) ? (o.owner_ids as string[]).join(", ") : o.agent_id ?? "matched"}`;
     case "agent_querier":
+    case "query_single_agent":
       return `CONTEXT: ${String(o.context ?? "").slice(0, 80)}...`;
+    case "code_reader":
+      return `FILES: ${
+        o.file_contents && typeof o.file_contents === "object"
+          ? Object.keys(o.file_contents).length
+          : "read"
+      }`;
+    case "fix_generator":
+      return `FIX: ${String(o.fix_explanation ?? "").slice(0, 90)}...`;
+    case "test_runner":
+      return `${o.tests_passed ? "PASS" : "FAIL"} · ${String(o.test_output ?? "").slice(0, 90)}...`;
+    case "approval_gate":
+      return `AWAITING APPROVAL · ${o.tests_passed ? "tests passed" : "tests not passing"}`;
+    case "pr_pusher":
+      return `PR: ${String(o.pr_url ?? "created")}`;
     case "response_drafter":
       return `RESPONSE DRAFTED · ${String(o.slack_message ?? o.slack_msg ?? "").length} chars`;
     case "memory_updater":
@@ -215,10 +247,14 @@ export function TraceNode({ event, index }: Props) {
         {isRunning && (
           <div className="mb-2">
             {event.node === "incident_analyzer" && <RadarAnimation />}
+            {event.node === "issue_reader" && <RadarAnimation />}
             {event.node === "ownership_router" && <RouterAnimation />}
             {event.node === "agent_querier" && <AgentQueryAnimation agentName={event.agent} />}
+            {event.node === "query_single_agent" && <AgentQueryAnimation agentName={event.agent} />}
             {event.node === "response_drafter" && <TypewriterAnimation text={slackText} />}
+            {event.node === "fix_generator" && <TypewriterAnimation text={slackText} />}
             {event.node === "memory_updater" && <ConstellationAnimation />}
+            {event.node === "test_runner" && <ConstellationAnimation />}
           </div>
         )}
 

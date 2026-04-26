@@ -2,8 +2,6 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import type { Agent, IncidentResult, SSEEvent } from "@/lib/types";
-import { SlackMockup } from "./SlackMockup";
-import { PostmortemDoc } from "./PostmortemDoc";
 
 export function ResponsePanel({
   result,
@@ -14,8 +12,7 @@ export function ResponsePanel({
   agents: Agent[];
   events: SSEEvent[];
 }) {
-  const memory = events.findLast?.((event) => event.node === "memory_updater" && event.status === "done");
-  const updated = Array.isArray(memory?.output?.updated) ? (memory?.output?.updated as string[]) : result?.owners ?? [];
+  const learned = events.filter((event) => event.node === "pr_pusher" && event.status === "done");
   const owner = agents.find((agent) => result?.owners?.includes(agent.id)) ?? agents[0];
 
   return (
@@ -27,31 +24,37 @@ export function ResponsePanel({
           exit={{ opacity: 0, y: 40 }}
           className="border-t border-aubi-border bg-aubi-surface/70 p-4"
         >
-          <div className="mb-3 font-mono text-[10px] uppercase tracking-[0.16em] text-aubi-muted">{"// RESPONSE PACKAGE"}</div>
+          <div className="mb-3 font-mono text-[10px] uppercase tracking-[0.16em] text-aubi-muted">{"// FIX PACKAGE"}</div>
           <div className="grid gap-4 xl:grid-cols-2">
-            <SlackMockup
-              message={result.slack_message}
-              agentName={owner?.name ?? "AUBI Agent"}
-              agentUsername={owner?.github_username ?? "github"}
-            />
-            <PostmortemDoc markdown={result.postmortem} />
+            <div className="rounded border border-aubi-border bg-aubi-bg p-4">
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-aubi-muted">Owner</p>
+              <p className="mt-2 font-syne text-xl text-white">{owner?.name ?? result.owners[0] ?? "Unassigned"}</p>
+              <p className="mt-3 text-sm leading-relaxed text-aubi-muted">
+                {result.fix_explanation ?? "Waiting for fix explanation..."}
+              </p>
+              {result.pr_url && (
+                <a className="mt-4 inline-flex font-mono text-xs text-aubi-cyan" href={result.pr_url} target="_blank" rel="noreferrer">
+                  Open GitHub PR
+                </a>
+              )}
+            </div>
+            <pre className="max-h-80 overflow-auto rounded border border-aubi-border bg-aubi-bg p-4 text-xs leading-relaxed text-aubi-text">
+              {result.patch_diff ?? "Waiting for patch..."}
+            </pre>
           </div>
-          {updated.length > 0 && (
+          {learned.length > 0 && (
             <div className="aubi-scrollbar mt-3 flex gap-2 overflow-x-auto pb-1">
-              {updated.map((id, index) => {
-                const agent = agents.find((item) => item.id === id);
-                return (
-                  <motion.span
-                    key={`${id}-${index}`}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    className="shrink-0 rounded border border-emerald-500/30 bg-aubi-surface px-3 py-1 font-mono text-[11px] text-emerald-400"
-                  >
-                    💾 {agent?.name ?? id} · constitution updated
-                  </motion.span>
-                );
-              })}
+              {learned.map((event, index) => (
+                <motion.span
+                  key={`${event.receivedAt}-${index}`}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  className="shrink-0 rounded border border-emerald-500/30 bg-aubi-surface px-3 py-1 font-mono text-[11px] text-emerald-400"
+                >
+                  {String(event.output?.update ?? "Memory updated")}
+                </motion.span>
+              ))}
             </div>
           )}
         </motion.section>

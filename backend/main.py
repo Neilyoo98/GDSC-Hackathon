@@ -18,7 +18,7 @@ import asyncio
 import json
 import logging
 import os
-import re
+import shutil
 from typing import Any
 from uuid import uuid4
 
@@ -27,6 +27,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from langgraph.types import Command
 from pydantic import BaseModel
+from dotenv import load_dotenv
+
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 from graphs.incident_graph import aubi_graph
 from constitution.store import ConstitutionStore
@@ -52,13 +55,10 @@ def get_store() -> ConstitutionStore:
     return _store
 
 # ---------------------------------------------------------------------------
-# In-memory agent registry (demo — swap for Firestore/Postgres in prod)
+# In-memory agent registry for agents created during this backend process.
 # ---------------------------------------------------------------------------
 
 _agents: dict[str, dict[str, Any]] = {}  # id → agent record
-_ownership_map: dict[str, str] = {}      # filepath_prefix → agent_id
-
-
 # ---------------------------------------------------------------------------
 # Request models
 # ---------------------------------------------------------------------------
@@ -87,22 +87,15 @@ class ConstitutionFactRequest(BaseModel):
 
 def _get_constitution_from_store(user_id: str) -> dict[str, Any]:
     """Fetch constitution facts from Qdrant grouped by category."""
-    try:
-        return get_store().get_by_user(user_id, "hackathon")
-    except Exception as e:
-        logger.warning("Could not fetch constitution for %s: %s", user_id, e)
-    return {}
+    return get_store().get_by_user(user_id, "hackathon")
 
 
-def _index_ownership_facts(agent_id: str, facts: list[dict[str, Any]]) -> None:
-    """Populate the in-memory prefix fallback from constitution ownership facts."""
-    for fact in facts:
-        if fact.get("category") != "code_ownership" or fact.get("predicate") != "owns":
-            continue
-        obj = str(fact.get("object", ""))
-        match = re.search(r"([A-Za-z0-9_.-]+/)", obj)
-        if match:
-            _ownership_map[match.group(1)] = agent_id
+def _flatten_constitution(grouped: dict[str, Any]) -> list[dict[str, Any]]:
+    facts: list[dict[str, Any]] = []
+    for value in grouped.values():
+        if isinstance(value, list):
+            facts.extend(fact for fact in value if isinstance(fact, dict))
+    return facts
 
 
 def _register_agent_record(
@@ -123,29 +116,7 @@ def _register_agent_record(
         "constitution_facts": facts,
     }
     _agents[agent_id] = record
-    _index_ownership_facts(agent_id, facts)
     return record
-
-
-def _load_seeded_demo_agents() -> None:
-    """Expose seed_demo.py agents through /agents even before POST /agents is used."""
-    if _agents:
-        return
-    try:
-        from seed_demo import DEMO_AGENTS
-    except Exception as e:
-        logger.warning("Could not load demo agents: %s", e)
-        return
-
-    for agent in DEMO_AGENTS:
-        _register_agent_record(
-            agent_id=agent["id"],
-            github_username=agent["github_username"],
-            name=agent["name"],
-            role=agent["role"],
-            facts=agent["facts"],
-            github_data_summary={"source": "seed_demo.py"},
-        )
 
 
 def _extract_interrupt_payload(result: dict[str, Any]) -> dict[str, Any] | None:
@@ -166,30 +137,24 @@ def _extract_interrupt_payload_from_chunk(chunk: dict[str, Any]) -> dict[str, An
     return value if isinstance(value, dict) else None
 
 
-def _fallback_agent_context(agent: dict[str, Any], incident_text: str) -> str:
-    """Constitution-only response when LLM credentials are unavailable."""
-    text = incident_text.lower()
-    facts = agent.get("constitution_facts", [])
-    relevant: list[dict[str, Any]] = []
-    for fact in facts:
-        haystack = f"{fact.get('predicate', '')} {fact.get('object', '')}".lower()
-        if fact.get("category") in {"known_issues", "code_ownership", "current_focus"}:
-            if any(token in haystack for token in text.replace("/", " ").split()):
-                relevant.append(fact)
-    if not relevant:
-        relevant = [
-            fact for fact in facts
-            if fact.get("category") in {"known_issues", "code_ownership", "current_focus"}
-        ][:3]
-
-    if not relevant:
-        return f"{agent['name']} has no specific matching constitution facts for this incident."
-
-    facts_text = "; ".join(f"{fact.get('predicate')}: {fact.get('object')}" for fact in relevant[:3])
-    return f"Yes/partial. {agent['name']}'s constitution has relevant context: {facts_text}. Check that area first."
+_gpt55 = None
 
 
-_load_seeded_demo_agents()
+def get_gpt55():
+    global _gpt55
+    if _gpt55 is None:
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise RuntimeError("OPENAI_API_KEY is not set")
+        from langchain_openai import ChatOpenAI
+        _gpt55 = ChatOpenAI(
+            model=os.getenv("OPENAI_MODEL", "gpt-5.5"),
+            api_key=api_key,
+            base_url=os.getenv("OPENAI_BASE_URL", "https://us.api.openai.com/v1"),
+            streaming=False,
+            use_responses_api=True,
+        )
+    return _gpt55
 
 
 # ---------------------------------------------------------------------------
@@ -199,7 +164,7 @@ _load_seeded_demo_agents()
 @app.post("/agents")
 async def create_agent(req: CreateAgentRequest):
     """Create an AUBI agent from a GitHub username. Builds constitution from GitHub."""
-    from ingestion.github_ingest import ingest_developer, build_ownership_map
+    from ingestion.github_ingest import ingest_developer
     from constitution.builder import build_constitution_from_github
 
     agent_id = str(uuid4())[:8]
@@ -213,11 +178,13 @@ async def create_agent(req: CreateAgentRequest):
     # 2. Build constitution facts via Gemini structured output
     facts = await build_constitution_from_github(github_data)
 
-    # 3. Store facts in Qdrant
-    try:
-        get_store().upsert_facts(agent_id, "hackathon", facts)
-    except Exception as e:
-        logger.warning("Could not store constitution in Qdrant: %s", e)
+    # 3. Store facts in Qdrant. This is a required part of agent creation.
+    stored_count = get_store().upsert_facts(agent_id, "hackathon", facts)
+    if stored_count != len(facts):
+        raise HTTPException(
+            status_code=500,
+            detail=f"Stored {stored_count} of {len(facts)} constitution facts",
+        )
 
     # 4. Register agent in-memory
     agent_record = _register_agent_record(
@@ -234,12 +201,6 @@ async def create_agent(req: CreateAgentRequest):
         },
     )
 
-    # 5. Update ownership map
-    new_map = build_ownership_map([github_data])
-    for path, owner_username in new_map.items():
-        if owner_username == req.github_username:
-            _ownership_map[path] = agent_id
-
     return {**agent_record, "facts_stored": len(facts)}
 
 
@@ -253,18 +214,11 @@ async def get_agent(agent_id: str):
     if agent_id not in _agents:
         raise HTTPException(status_code=404, detail="Agent not found")
     agent = _agents[agent_id].copy()
-    # Enrich with live constitution from Qdrant
     live_constitution = _get_constitution_from_store(agent_id)
-    if live_constitution:
-        agent["constitution"] = live_constitution
-    else:
-        # Fall back to in-memory facts
-        facts = agent.get("constitution_facts", [])
-        grouped: dict[str, list] = {}
-        for f in facts:
-            cat = f.get("category", "general")
-            grouped.setdefault(cat, []).append(f)
-        agent["constitution"] = grouped
+    if not live_constitution:
+        raise HTTPException(status_code=404, detail=f"No constitution facts found for agent {agent_id}")
+    agent["constitution"] = live_constitution
+    agent["constitution_facts"] = _flatten_constitution(live_constitution)
     return agent
 
 
@@ -275,25 +229,22 @@ async def query_agent(agent_id: str, req: QueryAgentRequest):
         raise HTTPException(status_code=404, detail="Agent not found")
 
     agent = _agents[agent_id]
-    constitution = json.dumps(agent.get("constitution_facts", [])[:20], indent=2)
+    facts = _flatten_constitution(_get_constitution_from_store(agent_id))
+    if not facts:
+        raise HTTPException(status_code=404, detail=f"No constitution facts found for agent {agent_id}")
+    constitution = json.dumps(facts[:20], indent=2)
 
-    try:
-        from langchain_anthropic import ChatAnthropic
-        from langchain_core.messages import HumanMessage, SystemMessage
-        haiku = ChatAnthropic(model=os.getenv("ANTHROPIC_HAIKU_MODEL", "claude-haiku-20240307"))
-        response = await haiku.ainvoke([
-            SystemMessage(content=(
-                f"You are {agent['name']}'s AI representative.\n"
-                f"Their constitution:\n{constitution}\n\n"
-                "Answer briefly: Is this incident in their domain? "
-                "What context do they have? What would they say when paged?"
-            )),
-            HumanMessage(content=f"Incident: {req.incident_text}"),
-        ])
-        context = response.content
-    except Exception as e:
-        logger.warning("Agent query LLM failed for %s; using constitution fallback: %s", agent_id, e)
-        context = _fallback_agent_context(agent, req.incident_text)
+    from langchain_core.messages import HumanMessage, SystemMessage
+    response = await get_gpt55().ainvoke([
+        SystemMessage(content=(
+            f"You are {agent['name']}'s AI representative.\n"
+            f"Their constitution:\n{constitution}\n\n"
+            "Answer briefly: Is this incident in their domain? "
+            "What context do they have? What would they say when paged?"
+        )),
+        HumanMessage(content=f"Incident: {req.incident_text}"),
+    ])
+    context = response.content
 
     return {"agent_id": agent_id, "agent_name": agent["name"], "context": context}
 
@@ -308,24 +259,17 @@ async def get_constitution(agent_id: str):
     live_constitution = _get_constitution_from_store(agent_id)
     if live_constitution:
         return live_constitution
-    if agent_id not in _agents:
-        raise HTTPException(status_code=404, detail="Agent not found")
-
-    grouped: dict[str, list[dict[str, Any]]] = {}
-    for fact in _agents[agent_id].get("constitution_facts", []):
-        grouped.setdefault(fact.get("category", "general"), []).append(fact)
-    return grouped
+    raise HTTPException(status_code=404, detail=f"No constitution facts found for agent {agent_id}")
 
 
 @app.patch("/constitution/{agent_id}")
 async def patch_constitution(agent_id: str, req: ConstitutionFactRequest):
     """Add a fact to an agent's constitution (called by memory_updater)."""
+    stored_count = get_store().upsert_facts(agent_id, "hackathon", [req.fact])
+    if stored_count != 1:
+        raise HTTPException(status_code=500, detail="Constitution fact was not stored")
     if agent_id in _agents:
         _agents[agent_id].setdefault("constitution_facts", []).append(req.fact)
-    try:
-        get_store().upsert_facts(agent_id, "hackathon", [req.fact])
-    except Exception as e:
-        logger.warning("Could not patch constitution in Qdrant: %s", e)
     return {"status": "ok", "agent_id": agent_id}
 
 
@@ -338,24 +282,14 @@ async def get_ownership(filepath: str):
     """Return which agent owns a filepath prefix."""
     try:
         owner_agent_id, confidence, evidence = get_store().search_ownership(filepath, "hackathon")
-        if owner_agent_id:
-            return {
-                "owner_agent_id": owner_agent_id,
-                "confidence": confidence,
-                "evidence_facts": evidence,
-            }
     except Exception as e:
-        logger.warning("Qdrant ownership lookup failed, using in-memory fallback: %s", e)
+        raise HTTPException(status_code=503, detail=f"Qdrant ownership lookup failed: {e}") from e
 
-    # Check exact match first, then prefix match
-    if filepath in _ownership_map:
-        return {"owner_agent_id": _ownership_map[filepath], "confidence": 0.9}
-    for prefix, agent_id in _ownership_map.items():
-        if filepath.startswith(prefix):
-            return {"owner_agent_id": agent_id, "confidence": 0.9}
-        if prefix.startswith(filepath.split("/")[0]):
-            return {"owner_agent_id": agent_id, "confidence": 0.7}
-    return {"owner_agent_id": None, "confidence": 0.0}
+    return {
+        "owner_agent_id": owner_agent_id,
+        "confidence": confidence,
+        "evidence_facts": evidence,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -365,6 +299,8 @@ async def get_ownership(filepath: str):
 class IssueRequest(BaseModel):
     issue_url: str | None = None
     incident_text: str | None = None
+    repo_name: str | None = None
+    issue_number: int | None = None
     thread_id: str | None = None
     auto_approve: bool = False
 
@@ -375,16 +311,34 @@ GRAPH_NODES = {
 }
 
 
-@app.post("/incidents/run")
-async def run_incident(req: IssueRequest):
-    """Blocking run. Stops at approval unless auto_approve=true."""
+def _target_repo() -> str:
+    return os.getenv("TARGET_REPO") or os.getenv("GITHUB_REPO", "")
+
+
+def _state_input_from_issue_request(req: IssueRequest) -> dict[str, Any]:
     state_input: dict[str, Any] = {}
     if req.issue_url:
         state_input["issue_url"] = req.issue_url
-    elif req.incident_text:
-        state_input["incident_text"] = req.incident_text
-    else:
+        return state_input
+
+    if not req.incident_text:
         raise HTTPException(status_code=400, detail="Provide issue_url or incident_text")
+
+    if not req.repo_name or req.issue_number is None:
+        raise HTTPException(
+            status_code=400,
+            detail="incident_text runs require repo_name and issue_number; use issue_url for the normal GitHub issue flow",
+        )
+    state_input["incident_text"] = req.incident_text
+    state_input["repo_name"] = req.repo_name
+    state_input["issue_number"] = req.issue_number
+    return state_input
+
+
+@app.post("/incidents/run")
+async def run_incident(req: IssueRequest):
+    """Blocking run. Stops at approval unless auto_approve=true."""
+    state_input = _state_input_from_issue_request(req)
 
     thread_id = req.thread_id or uuid4().hex
     config = {"configurable": {"thread_id": thread_id}}
@@ -434,17 +388,18 @@ async def run_incident(req: IssueRequest):
 async def stream_incident(
     issue_url: str | None = None,
     incident_text: str | None = None,
+    repo_name: str | None = None,
+    issue_number: int | None = None,
     thread_id: str | None = None,
 ):
     """SSE stream of the full AUBI graph execution."""
 
-    state_input: dict[str, Any] = {}
-    if issue_url:
-        state_input["issue_url"] = issue_url
-    elif incident_text:
-        state_input["incident_text"] = incident_text
-    else:
-        raise HTTPException(status_code=400, detail="Provide issue_url or incident_text")
+    state_input = _state_input_from_issue_request(IssueRequest(
+        issue_url=issue_url,
+        incident_text=incident_text,
+        repo_name=repo_name,
+        issue_number=issue_number,
+    ))
     run_thread_id = thread_id or uuid4().hex
     config = {"configurable": {"thread_id": run_thread_id}}
 
@@ -496,6 +451,12 @@ async def stream_incident(
 @app.post("/incidents/approve")
 async def approve_incident(thread_id: str, approved: bool = True):
     """Resume a paused graph after human approval/rejection."""
+    snapshot = aubi_graph.get_state({"configurable": {"thread_id": thread_id}})
+    if not snapshot.values:
+        raise HTTPException(status_code=404, detail=f"No incident thread found for {thread_id}")
+    if not snapshot.interrupts:
+        raise HTTPException(status_code=409, detail=f"Incident thread {thread_id} is not awaiting approval")
+
     try:
         result = await aubi_graph.ainvoke(
             Command(resume={"approved": approved}),
@@ -519,17 +480,47 @@ async def approve_incident(thread_id: str, approved: bool = True):
 
 @app.get("/github/poll")
 async def poll_github():
-    """Return the latest open issue on the demo repo (for live demo poller)."""
-    demo_repo = os.getenv("DEMO_REPO", "")
-    if not demo_repo:
-        return {"issue": None}
+    """Return the latest open issue on the configured target repo."""
+    repo_name = _target_repo()
+    if not repo_name:
+        raise HTTPException(status_code=400, detail="Set TARGET_REPO or GITHUB_REPO to poll GitHub issues")
     try:
         from ingestion.github_issue import get_latest_open_issue
-        return {"issue": get_latest_open_issue(demo_repo)}
+        return {"issue": get_latest_open_issue(repo_name)}
     except Exception as e:
-        return {"issue": None, "error": str(e)}
+        raise HTTPException(status_code=502, detail=f"GitHub issue poll failed: {e}") from e
 
 
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/ready")
+async def ready():
+    """Report whether the real demo dependencies are configured and reachable."""
+    checks: dict[str, Any] = {
+        "openai_api_key": bool(os.getenv("OPENAI_API_KEY")),
+        "gemini_api_key": bool(os.getenv("GEMINI_API_KEY")),
+        "github_token": bool(os.getenv("GITHUB_TOKEN")),
+        "target_repo": bool(_target_repo()),
+        "go_toolchain": bool(shutil.which("go")),
+    }
+    try:
+        get_store()
+        checks["qdrant"] = True
+    except Exception as e:
+        checks["qdrant"] = False
+        checks["qdrant_error"] = str(e)
+
+    required = [
+        "openai_api_key",
+        "gemini_api_key",
+        "github_token",
+        "go_toolchain",
+        "qdrant",
+    ]
+    return {
+        "ready": all(bool(checks.get(name)) for name in required),
+        "checks": checks,
+    }

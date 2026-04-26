@@ -9,6 +9,7 @@ Models: GPT-5.5 for everything. Gemini 2.0 Flash used in constitution/builder.py
 
 from __future__ import annotations
 
+import difflib
 import json
 import logging
 import os
@@ -20,8 +21,11 @@ from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import StateGraph, END
 from langgraph.types import Send, interrupt
+from dotenv import load_dotenv
 
 from .state import AUBIIssueState, AgentMessage
+
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 logger = logging.getLogger(__name__)
 
@@ -43,9 +47,6 @@ def _get_gpt55() -> ChatOpenAI:
             use_responses_api=True,
         )
     return _gpt55
-
-
-AGENTS_URL = os.getenv("AGENTS_SERVICE_URL", "http://localhost:8000")
 
 
 # ---------------------------------------------------------------------------
@@ -77,84 +78,12 @@ def _json(content: Any) -> Any:
     return {}
 
 
-def _fallback_issue_analysis(title: str, body: str) -> dict[str, Any]:
-    """Deterministic fallback for the planted demo issue."""
-    text = f"{title}\n{body}".lower()
-    if "auth" in text or "401" in text or "token" in text:
-        return {
-            "affected_service": "auth",
-            "affected_files": ["auth/token.go"],
-            "error_type": "401",
-            "urgency": "P1" if "blocking" in text or "prod" in text else "P2",
-        }
-    if "billing" in text or "payment" in text:
-        return {
-            "affected_service": "billing",
-            "affected_files": ["billing/"],
-            "error_type": "500",
-            "urgency": "P1",
-        }
-    return {
-        "affected_service": "unknown",
-        "affected_files": [],
-        "error_type": "unknown",
-        "urgency": "P2",
-    }
-
-
-def _seed_agent_data(agent_id: str) -> dict[str, Any] | None:
-    """Fallback agent registry for local graph smoke tests and seeded demos."""
-    try:
-        from seed_demo import DEMO_AGENTS
-    except Exception:
-        return None
-    for agent in DEMO_AGENTS:
-        if agent.get("id") == agent_id:
-            return {
-                "id": agent["id"],
-                "github_username": agent["github_username"],
-                "name": agent["name"],
-                "role": agent["role"],
-                "constitution_facts": agent["facts"],
-            }
-    return None
-
-
-def _demo_file_contents(files: list[str]) -> dict[str, str]:
-    """Fallback source for the planted demo bug when GitHub is unavailable."""
-    if "auth/token.go" not in files:
-        return {}
-    return {
-        "auth/token.go": """package auth
-
-// TokenCache caches user tokens in memory.
-// BUG: no mutex protection, so concurrent load can race on the cache map.
-type TokenCache struct {
-    cache map[string]string
-    // mu sync.Mutex intentionally missing
-}
-
-func NewTokenCache() *TokenCache {
-    return &TokenCache{cache: make(map[string]string)}
-}
-
-func (c *TokenCache) GetOrRefresh(userID string) (string, error) {
-    if cached := c.cache[userID]; cached != "" {
-        return cached, nil
-    }
-    token, err := refreshFromDB(userID)
-    if err != nil {
-        return "", err
-    }
-    c.cache[userID] = token
-    return token, nil
-}
-
-func refreshFromDB(userID string) (string, error) {
-    return "token_" + userID, nil
-}
-""",
-    }
+def _flatten_constitution(grouped: dict[str, Any]) -> list[dict[str, Any]]:
+    facts: list[dict[str, Any]] = []
+    for value in grouped.values():
+        if isinstance(value, list):
+            facts.extend(fact for fact in value if isinstance(fact, dict))
+    return facts
 
 
 # ---------------------------------------------------------------------------
@@ -163,60 +92,49 @@ func refreshFromDB(userID string) (string, error) {
 
 async def issue_reader(state: AUBIIssueState) -> dict[str, Any]:
     """Read GitHub issue or use raw incident text. Extract affected files."""
-    import httpx
-
     log = []
 
     # If we have an issue URL, fetch from GitHub
     if state.get("issue_url"):
-        try:
-            from ingestion.github_issue import read_issue
-            issue_data = read_issue(state["issue_url"])
-            title = issue_data["title"]
-            body  = issue_data["body"]
-            log.append(f"📋 Issue #{issue_data['issue_number']}: {title}")
-            issue_fields = {
-                "repo_name":    issue_data["repo_name"],
-                "issue_number": issue_data["issue_number"],
-                "issue_title":  title,
-                "issue_body":   body,
-                "issue_author": issue_data["author"],
-            }
-        except Exception as e:
-            logger.error("issue_reader: failed to fetch issue: %s", e)
-            issue_fields = {}
-            body = state.get("incident_text", "")
-            title = "Unknown issue"
+        from ingestion.github_issue import read_issue
+        issue_data = read_issue(state["issue_url"])
+        title = issue_data["title"]
+        body  = issue_data["body"]
+        log.append(f"📋 Issue #{issue_data['issue_number']}: {title}")
+        issue_fields = {
+            "repo_name":    issue_data["repo_name"],
+            "issue_number": issue_data["issue_number"],
+            "issue_title":  title,
+            "issue_body":   body,
+            "issue_author": issue_data["author"],
+        }
     else:
         body = state.get("incident_text", "")
         title = body[:80] if body else "Unknown"
-        issue_fields = {"issue_title": title, "issue_body": body}
+        repo_name = state.get("repo_name")
+        issue_number = state.get("issue_number")
+        if not repo_name or not issue_number:
+            raise ValueError("Raw incident runs require repo_name and issue_number so AUBI can read code and open a PR")
+        issue_fields = {
+            "repo_name": repo_name,
+            "issue_number": issue_number,
+            "issue_title": title,
+            "issue_body": body,
+        }
         log.append(f"📋 Incident: {title}")
 
-    try:
-        response = await _get_gpt55().ainvoke([
-            SystemMessage(content=(
-                "Extract from this issue report:\n"
-                '{"affected_service": "...", "affected_files": ["path/to/file"], '
-                '"error_type": "...", "urgency": "P1|P2|P3"}\n'
-                "Return JSON only. For auth/401/token issues in this demo, prefer auth/token.go."
-            )),
-            HumanMessage(content=f"Title: {title}\n\n{body}"),
-        ])
-        data = _json(response.content)
-    except Exception as e:
-        logger.warning("issue_reader: LLM extraction failed, using deterministic fallback: %s", e)
-        data = _fallback_issue_analysis(title, body)
-
-    if not data.get("affected_files"):
-        fallback = _fallback_issue_analysis(title, body)
-        data = {
-            **data,
-            "affected_files": fallback.get("affected_files", []),
-            "affected_service": data.get("affected_service") or fallback.get("affected_service"),
-            "error_type": data.get("error_type") or fallback.get("error_type"),
-            "urgency": data.get("urgency") or fallback.get("urgency", "P2"),
-        }
+    response = await _get_gpt55().ainvoke([
+        SystemMessage(content=(
+            "Extract from this issue report:\n"
+            '{"affected_service": "...", "affected_files": ["path/to/file"], '
+            '"error_type": "...", "urgency": "P1|P2|P3"}\n'
+            "Return JSON only. affected_files must be real repository paths likely relevant to the bug."
+        )),
+        HumanMessage(content=f"Title: {title}\n\n{body}"),
+    ])
+    data = _json(response.content)
+    if not isinstance(data, dict) or not data.get("affected_files"):
+        raise ValueError("Issue analysis did not identify any affected repository files")
 
     log.append(
         f"🔍 Identified: {data.get('affected_service','?')} — "
@@ -239,65 +157,19 @@ async def issue_reader(state: AUBIIssueState) -> dict[str, Any]:
 
 async def ownership_router(state: AUBIIssueState) -> dict[str, Any]:
     """Find which agents own the affected files via the constitution store."""
-    import httpx
-
     owner_ids: list[str] = []
     log: list[str] = []
 
-    demo_hints = {
-        "auth/": "alice01",
-        "billing/": "alice01",
-        "api/users/": "bob02",
-        "frontend/": "bob02",
-        "infra/": "carol03",
-        "deploy/": "carol03",
-    }
-
-    # Prefer direct Qdrant lookup. This avoids self-HTTP when the graph is
-    # running inside the FastAPI process and keeps the demo route deterministic.
-    try:
-        from constitution.store import ConstitutionStore
-        store = ConstitutionStore()
-        for filepath in (state.get("affected_files") or []):
-            owner_id, confidence, _evidence = store.search_ownership(filepath, "hackathon")
-            if owner_id and owner_id not in owner_ids:
-                owner_ids.append(owner_id)
-                log.append(f"📍 {filepath} → agent {owner_id} ({confidence})")
-    except Exception as e:
-        logger.warning("ownership_router: direct Qdrant lookup failed: %s", e)
-
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        for filepath in (state.get("affected_files") or []):
-            if owner_ids:
-                break
-            try:
-                resp = await client.get(f"{AGENTS_URL}/ownership", params={"filepath": filepath})
-                if resp.status_code == 200:
-                    data = resp.json()
-                    if oid := data.get("owner_agent_id"):
-                        if oid not in owner_ids:
-                            owner_ids.append(oid)
-                            log.append(f"📍 {filepath} → agent {oid}")
-            except Exception:
-                pass
+    from constitution.store import ConstitutionStore
+    store = ConstitutionStore()
+    for filepath in (state.get("affected_files") or []):
+        owner_id, confidence, _evidence = store.search_ownership(filepath, "hackathon")
+        if owner_id and owner_id not in owner_ids:
+            owner_ids.append(owner_id)
+            log.append(f"📍 {filepath} → agent {owner_id} ({confidence})")
 
     if not owner_ids:
-        for filepath in (state.get("affected_files") or []):
-            for prefix, owner_id in demo_hints.items():
-                if filepath.startswith(prefix) and owner_id not in owner_ids:
-                    owner_ids.append(owner_id)
-                    log.append(f"📍 {filepath} → demo agent {owner_id}")
-
-    # Fallback: use first registered agent
-    if not owner_ids:
-        try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                resp = await client.get(f"{AGENTS_URL}/agents")
-                if resp.status_code == 200 and resp.json():
-                    owner_ids = [resp.json()[0]["id"]]
-                    log.append(f"📍 Fallback: using first agent {owner_ids[0]}")
-        except Exception:
-            pass
+        raise ValueError(f"No AUBI agent owner found for files: {state.get('affected_files') or []}")
 
     return {"owner_ids": owner_ids, "stream_log": log}
 
@@ -316,8 +188,6 @@ def route_to_agents(state: AUBIIssueState):
 
 async def query_single_agent(state: AUBIIssueState) -> dict[str, Any]:
     """Query one agent's constitution and return its context + agent messages + routing evidence."""
-    import httpx
-
     agent_id = state.get("_query_agent_id", "")
     affected_files = state.get("affected_files") or []
     issue_summary = (
@@ -334,66 +204,45 @@ async def query_single_agent(state: AUBIIssueState) -> dict[str, Any]:
         "timestamp": time.time(),
     }
 
-    agent_data: dict = {}
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(f"{AGENTS_URL}/agents/{agent_id}")
-            if resp.status_code != 200:
-                agent_data = _seed_agent_data(agent_id) or {}
-            else:
-                agent_data = resp.json()
+    from constitution.store import ConstitutionStore
+    all_facts = _flatten_constitution(
+        ConstitutionStore().get_by_user(agent_id, "hackathon")
+    )
+    if not all_facts:
+        raise RuntimeError(f"Agent {agent_id} has no constitution facts")
+    agent_name = str(next((fact.get("subject") for fact in all_facts if fact.get("subject")), agent_id))
 
-            if not agent_data:
-                return {"agent_messages": [orchestrator_msg], "agent_contexts": [], "routing_evidence": [], "stream_log": []}
+    constitution = json.dumps(all_facts[:20], indent=2)
 
-            agent_name = agent_data.get("name", agent_id)
-            all_facts = agent_data.get("constitution_facts", [])
-            constitution = json.dumps(all_facts[:20], indent=2)
+    # Build routing evidence from facts that explain why this agent was chosen
+    evidence_facts = []
+    for fact in all_facts:
+        obj  = fact.get("object", "")
+        cat  = fact.get("category", "")
+        if cat == "code_ownership" and any(
+            f.split("/")[0] in obj or obj in f
+            for f in affected_files
+        ):
+            evidence_facts.append(fact)
+        elif cat == "known_issues":
+            evidence_facts.append(fact)
+        elif cat == "current_focus" and any(
+            kw in obj.lower() for kw in ["auth", "token", "security", "retry"]
+        ):
+            evidence_facts.append(fact)
 
-            # Build routing evidence from facts that explain why this agent was chosen
-            evidence_facts = []
-            for fact in all_facts:
-                pred = fact.get("predicate", "")
-                obj  = fact.get("object", "")
-                cat  = fact.get("category", "")
-                # Include ownership facts that match affected files, and known_issues facts
-                if cat == "code_ownership" and any(
-                    f.split("/")[0] in obj or obj in f
-                    for f in affected_files
-                ):
-                    evidence_facts.append(fact)
-                elif cat == "known_issues":
-                    evidence_facts.append(fact)
-                elif cat == "current_focus" and any(
-                    kw in obj.lower() for kw in ["auth", "token", "security", "retry"]
-                ):
-                    evidence_facts.append(fact)
-
-            response = await _get_gpt55().ainvoke([
-                SystemMessage(content=(
-                    f"You are {agent_name}'s Aubi (AI representative).\n"
-                    f"Their constitution:\n{constitution}\n\n"
-                    "Answer briefly in 2-3 sentences:\n"
-                    "1. Is this issue in their domain?\n"
-                    "2. What context do they have?\n"
-                    "3. What should be checked first?"
-                )),
-                HumanMessage(content=issue_summary),
-            ])
-            agent_reply = _extract_text(response.content)
-
-    except Exception as e:
-        agent_data = _seed_agent_data(agent_id) or agent_data
-        agent_name = agent_data.get("name", agent_id) if agent_data else agent_id
-        all_facts = agent_data.get("constitution_facts", []) if agent_data else []
-        evidence_facts = [
-            fact for fact in all_facts
-            if fact.get("category") in {"code_ownership", "known_issues", "current_focus"}
-        ][:4]
-        agent_reply = (
-            f"{agent_name} appears relevant from seeded constitution context. "
-            f"Most relevant note: {evidence_facts[0].get('object', 'ownership context unavailable') if evidence_facts else e}"
-        )
+    response = await _get_gpt55().ainvoke([
+        SystemMessage(content=(
+            f"You are {agent_name}'s Aubi (AI representative).\n"
+            f"Their constitution:\n{constitution}\n\n"
+            "Answer briefly in 2-3 sentences:\n"
+            "1. Is this issue in their domain?\n"
+            "2. What context do they have?\n"
+            "3. What should be checked first?"
+        )),
+        HumanMessage(content=issue_summary),
+    ])
+    agent_reply = _extract_text(response.content)
 
     agent_msg: AgentMessage = {
         "sender": f"{agent_name}_aubi",
@@ -419,7 +268,7 @@ async def query_single_agent(state: AUBIIssueState) -> dict[str, Any]:
             "agent_name": agent_name,
             "context": agent_reply,
             "communication_pref": (
-                next((f.get("object", "") for f in agent_data.get("constitution_facts", [])
+                next((f.get("object", "") for f in all_facts
                       if f.get("category") == "collaboration"), "")
             ),
         }],
@@ -434,28 +283,18 @@ async def query_single_agent(state: AUBIIssueState) -> dict[str, Any]:
 
 async def code_reader(state: AUBIIssueState) -> dict[str, Any]:
     """Read affected files from the GitHub repo."""
-    repo_name = state.get("repo_name") or os.getenv("DEMO_REPO", "")
+    repo_name = state.get("repo_name")
     files     = state.get("affected_files") or []
 
     if not repo_name or not files:
-        fallback_contents = _demo_file_contents(files)
-        if fallback_contents:
-            return {
-                "file_contents": fallback_contents,
-                "stream_log": ["📁 Using seeded demo source for auth/token.go"],
-            }
-        return {"file_contents": {}, "stream_log": ["📁 No repo/files to read"]}
+        raise ValueError("Cannot read code without repo_name and affected_files")
 
-    try:
-        from ingestion.github_issue import read_repo_files
-        contents = read_repo_files(repo_name, files)
-        if not contents:
-            contents = _demo_file_contents(files)
-        log = [f"📁 Read {len(contents)} file(s): {', '.join(contents.keys())}"]
-    except Exception as e:
-        logger.error("code_reader error: %s", e)
-        contents = _demo_file_contents(files)
-        log = [f"📁 GitHub read failed; using seeded demo source: {e}"] if contents else [f"📁 Could not read files: {e}"]
+    from ingestion.github_issue import read_repo_files
+    contents = read_repo_files(repo_name, files)
+    missing = [path for path in files if path not in contents]
+    if missing:
+        raise FileNotFoundError(f"Could not read required files from {repo_name}: {missing}")
+    log = [f"📁 Read {len(contents)} file(s): {', '.join(contents.keys())}"]
 
     return {"file_contents": contents, "stream_log": log}
 
@@ -463,69 +302,6 @@ async def code_reader(state: AUBIIssueState) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Node 5: fix_generator
 # ---------------------------------------------------------------------------
-
-def _deterministic_token_cache_fix(file_contents: dict[str, str]) -> dict[str, str] | None:
-    """Stable fallback for the planted auth/token.go race condition demo."""
-    import difflib
-    import re
-
-    path = "auth/token.go"
-    source = file_contents.get(path)
-    if not source or "type TokenCache struct" not in source or "cache map[string]string" not in source:
-        return None
-
-    fixed = source
-    if 'import "sync"' not in fixed:
-        fixed = fixed.replace("package auth\n\n", 'package auth\n\nimport "sync"\n\n', 1)
-
-    fixed = re.sub(r"(?m)^(\s*)//\s*mu\s+sync\.Mutex.*$", r"\1mu    sync.Mutex", fixed)
-
-    if not re.search(r"(?m)^\s*mu\s+sync\.Mutex\b", fixed):
-        fixed = fixed.replace(
-            "type TokenCache struct {\n\tcache map[string]string",
-            "type TokenCache struct {\n\tcache map[string]string\n\tmu    sync.Mutex",
-            1,
-        )
-        fixed = fixed.replace(
-            "type TokenCache struct {\n    cache map[string]string",
-            "type TokenCache struct {\n    cache map[string]string\n    mu    sync.Mutex",
-            1,
-        )
-
-    pattern = re.compile(
-        r"func \(c \*TokenCache\) GetOrRefresh\(userID string\) \(string, error\) \{.*?\n\}",
-        re.DOTALL,
-    )
-    replacement = """func (c *TokenCache) GetOrRefresh(userID string) (string, error) {
-\tc.mu.Lock()
-\tdefer c.mu.Unlock()
-
-\tif cached := c.cache[userID]; cached != "" {
-\t\treturn cached, nil
-\t}
-\ttoken, err := refreshFromDB(userID)
-\tif err != nil {
-\t\treturn "", err
-\t}
-\tc.cache[userID] = token
-\treturn token, nil
-}"""
-    fixed = pattern.sub(replacement, fixed, count=1)
-
-    diff = "".join(difflib.unified_diff(
-        source.splitlines(keepends=True),
-        fixed.splitlines(keepends=True),
-        fromfile=f"a/{path}",
-        tofile=f"b/{path}",
-    ))
-
-    return {
-        "fixed_file_path": path,
-        "fixed_file_content": fixed,
-        "patch_diff": diff,
-        "fix_explanation": "Added a sync.Mutex to TokenCache and lock-protected GetOrRefresh so concurrent reads and writes cannot race on the cache map.",
-    }
-
 
 FIX_SYSTEM = """\
 You are an expert software engineer fixing a bug.
@@ -552,7 +328,7 @@ Return valid JSON only. The fixed_file_content must be the COMPLETE file, not ju
 """
 
 async def fix_generator(state: AUBIIssueState) -> dict[str, Any]:
-    """Generate a code fix using GPT-5.5, with a deterministic demo fallback."""
+    """Generate a code fix using GPT-5.5."""
     issue_context = (
         f"Issue #{state.get('issue_number')}: {state.get('issue_title')}\n"
         f"{state.get('issue_body', '')}\n\n"
@@ -571,8 +347,7 @@ async def fix_generator(state: AUBIIssueState) -> dict[str, Any]:
     )
 
     if not file_context:
-        # No files available — generate conceptual fix
-        file_context = "(Source files could not be fetched — generate fix based on issue + agent context)"
+        raise ValueError("Fix generation requires source file contents")
 
     prompt = (
         f"ISSUE:\n{issue_context}\n\n"
@@ -580,20 +355,30 @@ async def fix_generator(state: AUBIIssueState) -> dict[str, Any]:
         f"SOURCE FILES:\n{file_context}"
     )
 
-    try:
-        response = await _get_gpt55().ainvoke([
-            SystemMessage(content=FIX_SYSTEM),
-            HumanMessage(content=prompt),
-        ])
-        data = _json(response.content)
-    except Exception as e:
-        logger.warning("fix_generator: GPT fix failed, using deterministic fallback: %s", e)
-        data = {}
+    response = await _get_gpt55().ainvoke([
+        SystemMessage(content=FIX_SYSTEM),
+        HumanMessage(content=prompt),
+    ])
+    data = _json(response.content)
+    if not isinstance(data, dict):
+        raise ValueError("Fix generator did not return a JSON object")
 
-    if not data.get("fixed_file_content") or not data.get("fixed_file_path"):
-        fallback = _deterministic_token_cache_fix(state.get("file_contents") or {})
-        if fallback:
-            data = fallback
+    fixed_path = data.get("fixed_file_path")
+    fixed_content = data.get("fixed_file_content")
+    if not fixed_path or not fixed_content:
+        raise ValueError("Fix generator did not return fixed_file_path and fixed_file_content")
+
+    original = (state.get("file_contents") or {}).get(fixed_path)
+    if original is None:
+        raise ValueError(f"Fix generator returned unknown file path: {fixed_path}")
+
+    if not data.get("patch_diff"):
+        data["patch_diff"] = "".join(difflib.unified_diff(
+            original.splitlines(keepends=True),
+            fixed_content.splitlines(keepends=True),
+            fromfile=f"a/{fixed_path}",
+            tofile=f"b/{fixed_path}",
+        ))
 
     return {
         "fixed_file_path":    data.get("fixed_file_path"),
@@ -609,14 +394,20 @@ async def fix_generator(state: AUBIIssueState) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 async def test_runner(state: AUBIIssueState) -> dict[str, Any]:
-    """Verify the generated Go file in a tiny temporary module when possible."""
+    """Verify the generated file by applying it inside a real repo checkout."""
     import shutil
     import subprocess
     import tempfile
     from pathlib import Path
 
+    repo_name = state.get("repo_name")
     fixed_path = state.get("fixed_file_path")
     fixed_content = state.get("fixed_file_content")
+    token = os.getenv("GITHUB_TOKEN", "")
+
+    def _sanitize(output: str) -> str:
+        return output.replace(token, "[redacted]") if token else output
+
     if not fixed_path or not fixed_content:
         return {
             "tests_passed": False,
@@ -624,39 +415,72 @@ async def test_runner(state: AUBIIssueState) -> dict[str, Any]:
             "stream_log": ["🧪 Tests skipped — no generated file"],
         }
 
+    if not repo_name:
+        return {
+            "tests_passed": False,
+            "test_output": "No repo_name available for verification.",
+            "stream_log": ["🧪 Verification failed — repo missing"],
+        }
+
     if not fixed_path.endswith(".go"):
         return {
-            "tests_passed": True,
-            "test_output": "No Go test runner needed for this file type.",
-            "stream_log": ["🧪 Verification passed"],
+            "tests_passed": False,
+            "test_output": f"No real test runner is configured for {fixed_path}. PR creation is blocked.",
+            "stream_log": ["🧪 Verification failed — unsupported file type"],
+        }
+
+    if shutil.which("git") is None:
+        return {
+            "tests_passed": False,
+            "test_output": "Git is unavailable. AUBI cannot clone the repository for verification.",
+            "stream_log": ["🧪 Verification failed — git unavailable"],
         }
 
     if shutil.which("go") is None:
-        static_checks = [
-            ("imports sync", 'import "sync"' in fixed_content),
-            ("adds mutex field", "sync.Mutex" in fixed_content),
-            ("locks before cache access", "c.mu.Lock()" in fixed_content and "defer c.mu.Unlock()" in fixed_content),
-            ("keeps refresh function", "func refreshFromDB" in fixed_content),
-        ]
-        passed = all(ok for _name, ok in static_checks)
-        checks = "\n".join(f"- {'PASS' if ok else 'FAIL'} {name}" for name, ok in static_checks)
-        output = (
-            "go test ./... PASS (simulated: Go toolchain unavailable)\n"
-            "static verification:\n"
-            f"{checks}"
-        )
+        output = "Go toolchain unavailable. Install Go so AUBI can run `go test ./...` before approval."
         return {
-            "tests_passed": passed,
+            "tests_passed": False,
             "test_output": output,
-            "stream_log": [f"🧪 go test ./... {'PASS' if passed else 'FAIL'}"],
+            "stream_log": ["🧪 go test ./... unavailable"],
         }
 
     with tempfile.TemporaryDirectory(prefix="aubi-test-") as tmp:
-        root = Path(tmp)
-        target = root / fixed_path
+        root = Path(tmp) / "repo"
+        clone_url = f"https://github.com/{repo_name}.git"
+        if token:
+            clone_url = f"https://x-access-token:{token}@github.com/{repo_name}.git"
+
+        clone = subprocess.run(
+            ["git", "clone", "--depth", "1", clone_url, str(root)],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=60,
+            check=False,
+        )
+        if clone.returncode != 0:
+            return {
+                "tests_passed": False,
+                "test_output": _sanitize(clone.stdout.strip() or "git clone failed"),
+                "stream_log": ["🧪 Verification failed — clone failed"],
+            }
+
+        target = (root / fixed_path).resolve()
+        if root.resolve() not in target.parents and target != root.resolve():
+            return {
+                "tests_passed": False,
+                "test_output": f"Refusing to write outside repository checkout: {fixed_path}",
+                "stream_log": ["🧪 Verification failed — invalid path"],
+            }
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(fixed_content, encoding="utf-8")
-        (root / "go.mod").write_text("module aubi-demo\n\ngo 1.22\n", encoding="utf-8")
+
+        if not (root / "go.mod").exists():
+            return {
+                "tests_passed": False,
+                "test_output": "Repository has no go.mod at its root; AUBI cannot run the intended Go verification.",
+                "stream_log": ["🧪 Verification failed — go.mod missing"],
+            }
 
         proc = subprocess.run(
             ["go", "test", "./..."],
@@ -664,11 +488,11 @@ async def test_runner(state: AUBIIssueState) -> dict[str, Any]:
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            timeout=15,
+            timeout=120,
             check=False,
         )
 
-    output = proc.stdout.strip() or ("PASS" if proc.returncode == 0 else "go test failed")
+    output = _sanitize(proc.stdout.strip() or ("PASS" if proc.returncode == 0 else "go test failed"))
     passed = proc.returncode == 0
     return {
         "tests_passed": passed,
@@ -731,16 +555,16 @@ Keep it concise. Do not impersonate the developer — write as their AI represen
 
 async def pr_pusher(state: AUBIIssueState) -> dict[str, Any]:
     """Push the fix as a branch and open a PR on GitHub."""
-    repo_name    = state.get("repo_name") or os.getenv("DEMO_REPO", "")
+    repo_name    = state.get("repo_name")
     issue_number = state.get("issue_number")
     fixed_path   = state.get("fixed_file_path")
     fixed_content = state.get("fixed_file_content")
 
     if not all([repo_name, issue_number, fixed_path, fixed_content]):
-        return {
-            "pr_url": None,
-            "stream_log": ["⚠️ PR push skipped — missing repo, issue number, or fix"],
-        }
+        raise ValueError("PR push requires repo_name, issue_number, fixed_file_path, and fixed_file_content")
+
+    if state.get("tests_passed") is not True:
+        raise RuntimeError(f"Refusing to push PR because tests did not pass: {state.get('test_output')}")
 
     # Generate PR body in owner's style
     contexts  = state.get("agent_contexts") or []
@@ -748,74 +572,54 @@ async def pr_pusher(state: AUBIIssueState) -> dict[str, Any]:
     comm_style = primary.get("communication_pref", "professional and direct")
 
     agent_name = primary.get("agent_name", "the code owner")
-    try:
-        pr_body_response = await _get_gpt55().ainvoke([
-            SystemMessage(content=PR_BODY_SYSTEM.format(
-                agent_name=agent_name,
-                comm_style=comm_style,
-                fix_explanation=state.get("fix_explanation", ""),
-                issue_number=issue_number,
-                issue_title=state.get("issue_title", ""),
-            )),
-        ])
-        pr_body = _extract_text(pr_body_response.content)
-    except Exception as e:
-        logger.warning("pr_pusher: PR body generation failed, using fallback: %s", e)
-        pr_body = (
-            "## What changed\n"
-            f"{state.get('fix_explanation', 'Generated fix.')}\n\n"
-            "## Why\n"
-            f"Fixes #{issue_number}: {state.get('issue_title', '')}\n\n"
-            "## Testing\n"
-            "- [x] go test ./... passes\n"
-            "- [x] AUBI approval gate reviewed before PR creation\n\n"
-            f"Closes #{issue_number}\n\n"
-            "Note: PR body follows the code owner's preferred communication style."
-        )
-
-    try:
-        from ingestion.github_issue import create_fix_pr
-        pr_url = create_fix_pr(
-            repo_name=repo_name,
+    pr_body_response = await _get_gpt55().ainvoke([
+        SystemMessage(content=PR_BODY_SYSTEM.format(
+            agent_name=agent_name,
+            comm_style=comm_style,
+            fix_explanation=state.get("fix_explanation", ""),
             issue_number=issue_number,
-            issue_title=state.get("issue_title", "fix"),
-            file_path=fixed_path,
-            new_file_content=fixed_content,
-            pr_body=pr_body,
-        )
-        log = [f"🚀 PR pushed: {pr_url}"]
-    except Exception as e:
-        logger.error("pr_pusher error: %s", e)
-        pr_url = None
-        log = [f"⚠️ PR push failed: {e}"]
+            issue_title=state.get("issue_title", ""),
+        )),
+    ])
+    pr_body = _extract_text(pr_body_response.content)
+    if not pr_body.strip():
+        raise ValueError("PR body generation returned empty text")
+
+    from ingestion.github_issue import create_fix_pr
+    pr_url = create_fix_pr(
+        repo_name=repo_name,
+        issue_number=issue_number,
+        issue_title=state.get("issue_title", "fix"),
+        file_path=fixed_path,
+        new_file_content=fixed_content,
+        pr_body=pr_body,
+    )
+    log = [f"🚀 PR pushed: {pr_url}"]
 
     learned_facts: list[dict] = []
     if pr_url:
         # Self-learning: store episode in Qdrant for each involved agent.
         from constitution.store import ConstitutionStore
-        try:
-            store = ConstitutionStore()
-            for ctx in (state.get("agent_contexts") or []):
-                agent_id   = ctx.get("agent_id", "")
-                agent_name_ctx = ctx.get("agent_name", agent_id)
-                if not agent_id:
-                    continue
-                episode = {
-                    "subject":    agent_id,
-                    "predicate":  "resolved_issue",
-                    "object":     f"Issue #{issue_number}: {state.get('issue_title', '')} — fixed with {state.get('fix_explanation', '')[:80]}",
-                    "category":   "episodes",
-                    "confidence": 0.9,
-                }
-                store.add_episode(agent_id, "hackathon", episode)
-                learned_facts.append({
-                    "agent_id":   agent_id,
-                    "agent_name": agent_name_ctx,
-                    "update":     f"Issue #{issue_number} resolved — {state.get('fix_explanation', '')[:80]}",
-                    "episode":    episode["object"],
-                })
-        except Exception as e:
-            logger.warning("Could not store episode: %s", e)
+        store = ConstitutionStore()
+        for ctx in (state.get("agent_contexts") or []):
+            agent_id   = ctx.get("agent_id", "")
+            agent_name_ctx = ctx.get("agent_name", agent_id)
+            if not agent_id:
+                continue
+            episode = {
+                "subject":    agent_id,
+                "predicate":  "resolved_issue",
+                "object":     f"Issue #{issue_number}: {state.get('issue_title', '')} — fixed with {state.get('fix_explanation', '')[:80]}",
+                "category":   "episodes",
+                "confidence": 0.9,
+            }
+            store.add_episode(agent_id, "hackathon", episode)
+            learned_facts.append({
+                "agent_id":   agent_id,
+                "agent_name": agent_name_ctx,
+                "update":     f"Issue #{issue_number} resolved — {state.get('fix_explanation', '')[:80]}",
+                "episode":    episode["object"],
+            })
 
     return {
         "pr_url":       pr_url,

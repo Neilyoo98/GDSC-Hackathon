@@ -16,17 +16,20 @@ from __future__ import annotations
 
 import logging
 import os
-import hashlib
 import json
 from functools import lru_cache
 from typing import Any
 from uuid import NAMESPACE_URL, uuid4, uuid5
+from dotenv import load_dotenv
+
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 logger = logging.getLogger(__name__)
 
 COLLECTION_FACTS    = "semantic_facts"
 COLLECTION_EPISODES = "episodes"
 EMBEDDING_DIM       = 384   # all-MiniLM-L6-v2
+FILTER_INDEX_FIELDS = ("user_id", "tenant_id", "scope_id", "category", "predicate")
 
 
 # ---------------------------------------------------------------------------
@@ -35,31 +38,12 @@ EMBEDDING_DIM       = 384   # all-MiniLM-L6-v2
 
 @lru_cache(maxsize=1)
 def _get_model():
-    try:
-        from sentence_transformers import SentenceTransformer
-        return SentenceTransformer("all-MiniLM-L6-v2")
-    except ModuleNotFoundError:
-        logger.warning("sentence_transformers not installed; using deterministic fallback embeddings")
-        return None
-
-
-def _fallback_embed(text: str) -> list[float]:
-    """Deterministic low-quality embedding used only when deps are missing."""
-    vector = [0.0] * EMBEDDING_DIM
-    for token in text.lower().replace("/", " / ").replace("-", " ").split():
-        digest = hashlib.sha256(token.encode("utf-8")).digest()
-        idx = int.from_bytes(digest[:4], "big") % EMBEDDING_DIM
-        sign = 1.0 if digest[4] % 2 == 0 else -1.0
-        vector[idx] += sign
-    norm = sum(v * v for v in vector) ** 0.5 or 1.0
-    return [v / norm for v in vector]
+    from sentence_transformers import SentenceTransformer
+    return SentenceTransformer("all-MiniLM-L6-v2")
 
 
 def embed(text: str) -> list[float]:
-    model = _get_model()
-    if model is None:
-        return _fallback_embed(text)
-    return model.encode(text, normalize_embeddings=True).tolist()
+    return _get_model().encode(text, normalize_embeddings=True).tolist()
 
 
 # ---------------------------------------------------------------------------
@@ -84,6 +68,26 @@ def _ensure_collection(name: str) -> None:
             vectors_config=VectorParams(size=EMBEDDING_DIM, distance=Distance.COSINE),
         )
         logger.info("Created Qdrant collection: %s", name)
+    _ensure_payload_indexes(name)
+
+
+def _ensure_payload_indexes(name: str) -> None:
+    """Create payload indexes required by filtered search/scroll/delete."""
+    from qdrant_client.models import PayloadSchemaType
+
+    client = _get_client()
+    for field_name in FILTER_INDEX_FIELDS:
+        try:
+            client.create_payload_index(
+                collection_name=name,
+                field_name=field_name,
+                field_schema=PayloadSchemaType.KEYWORD,
+                wait=True,
+            )
+        except Exception as e:
+            message = str(e).lower()
+            if "already exists" not in message and "already has" not in message:
+                raise
 
 
 def _vector_search(
@@ -265,8 +269,8 @@ class ConstitutionStore:
         """Find the most likely owner for a filepath from code_ownership facts.
 
         Returns (owner_agent_id, confidence, evidence_facts).
-        The score is boosted for deterministic directory-prefix matches so the
-        seeded demo path `auth/token.go` reliably routes to Alice.
+        The score is boosted for deterministic directory-prefix matches because
+        filepath ownership is more precise than pure semantic similarity.
         """
         from qdrant_client.models import FieldCondition, Filter, MatchValue
 
@@ -305,8 +309,8 @@ class ConstitutionStore:
             confidence = float(payload.get("confidence", 0.7) or 0.7)
             score = float(hit.score or 0.0) * confidence
 
-            # Prefix evidence should dominate pure semantic similarity for the
-            # live demo; it is also the right behavior for ownership facts.
+            # Prefix evidence should dominate pure semantic similarity for
+            # ownership facts.
             if first_segment and first_segment in obj:
                 score = max(score, confidence, 0.9)
             elif path_lower in obj:
