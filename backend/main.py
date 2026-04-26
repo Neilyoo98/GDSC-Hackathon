@@ -18,12 +18,14 @@ import asyncio
 import json
 import logging
 import os
+import re
 from typing import Any
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from langgraph.types import Command
 from pydantic import BaseModel
 
 from graphs.incident_graph import aubi_graph
@@ -179,10 +181,10 @@ async def query_agent(agent_id: str, req: QueryAgentRequest):
     constitution = json.dumps(agent.get("constitution_facts", [])[:20], indent=2)
 
     from langchain_core.messages import HumanMessage, SystemMessage
-    from langchain_anthropic import ChatAnthropic
-    haiku = ChatAnthropic(model="claude-haiku-20240307")
+    from langchain_openai import ChatOpenAI
+    gpt55 = ChatOpenAI(model="gpt-5.5", base_url="https://us.api.openai.com/v1", streaming=False, use_responses_api=True)
 
-    response = await haiku.ainvoke([
+    response = await gpt55.ainvoke([
         SystemMessage(content=(
             f"You are {agent['name']}'s AI representative.\n"
             f"Their constitution:\n{constitution}\n\n"
@@ -233,11 +235,13 @@ async def get_ownership(filepath: str):
 class IssueRequest(BaseModel):
     issue_url: str | None = None
     incident_text: str | None = None
+    thread_id: str | None = None
+    auto_approve: bool = False
 
 
 GRAPH_NODES = {
     "issue_reader", "ownership_router", "query_single_agent",
-    "code_reader", "fix_generator", "pr_pusher",
+    "code_reader", "fix_generator", "test_runner", "approval_gate", "pr_pusher",
 }
 
 
