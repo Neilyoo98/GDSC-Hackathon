@@ -28,8 +28,9 @@ logger = logging.getLogger(__name__)
 
 COLLECTION_FACTS    = "semantic_facts"
 COLLECTION_EPISODES = "episodes"
+DEFAULT_TEAM_ID     = "default"
 EMBEDDING_DIM       = 384   # all-MiniLM-L6-v2
-FILTER_INDEX_FIELDS = ("user_id", "tenant_id", "scope_id", "category", "predicate")
+FILTER_INDEX_FIELDS = ("user_id", "tenant_id", "scope", "scope_id", "category", "predicate")
 
 
 # ---------------------------------------------------------------------------
@@ -123,6 +124,18 @@ def _vector_search(
 def jsonish(value: Any) -> str:
     """Stable JSON string for deterministic Qdrant point IDs."""
     return json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
+
+
+def _team_scope_id(tenant_id: str, team_id: str = DEFAULT_TEAM_ID) -> str:
+    return f"{tenant_id}:team:{team_id}"
+
+
+def _hit_payload(hit: Any, *, collection: str | None = None) -> dict[str, Any]:
+    payload = dict(getattr(hit, "payload", None) or {})
+    payload["_score"] = float(getattr(hit, "score", 0.0) or 0.0)
+    if collection:
+        payload["_collection"] = collection
+    return payload
 
 
 # ---------------------------------------------------------------------------
@@ -225,6 +238,104 @@ class ConstitutionStore:
             )],
         )
 
+    def upsert_team_facts(
+        self,
+        tenant_id: str,
+        facts: list[dict[str, Any]],
+        *,
+        team_id: str = DEFAULT_TEAM_ID,
+        source_agent_id: str | None = None,
+    ) -> int:
+        """Store shared team facts into semantic_facts under scope=team."""
+        from qdrant_client.models import PointStruct
+
+        scope_id = _team_scope_id(tenant_id, team_id)
+        points: list[PointStruct] = []
+        for fact in facts:
+            text = f"{fact.get('subject','')} {fact.get('predicate','')} {fact.get('object','')}"
+            point_key = jsonish({
+                "tenant_id": tenant_id,
+                "scope": "team",
+                "scope_id": scope_id,
+                "subject": fact.get("subject", "team"),
+                "predicate": fact.get("predicate", ""),
+                "object": fact.get("object", ""),
+                "category": fact.get("category", "team_memory"),
+            })
+            payload = {
+                "user_id": "",
+                "scope": "team",
+                "scope_id": scope_id,
+                "team_id": team_id,
+                "tenant_id": tenant_id,
+                "subject": fact.get("subject", "team"),
+                "predicate": fact.get("predicate", ""),
+                "object": fact.get("object", ""),
+                "confidence": fact.get("confidence", 0.8),
+                "category": fact.get("category", "team_memory"),
+            }
+            if source_agent_id:
+                payload["source_agent_id"] = source_agent_id
+            for key in ("participants", "issue_number", "repo_name", "pr_url", "written_at"):
+                if key in fact:
+                    payload[key] = fact[key]
+            points.append(PointStruct(
+                id=str(uuid5(NAMESPACE_URL, point_key)),
+                vector=embed(text),
+                payload=payload,
+            ))
+
+        if points:
+            _get_client().upsert(collection_name=COLLECTION_FACTS, points=points)
+        logger.info("Stored %d shared team facts for %s", len(points), scope_id)
+        return len(points)
+
+    def add_team_episode(
+        self,
+        tenant_id: str,
+        episode: dict[str, Any],
+        *,
+        team_id: str = DEFAULT_TEAM_ID,
+    ) -> str:
+        """Record a team-scoped incident episode in shared memory."""
+        from qdrant_client.models import PointStruct
+
+        scope_id = _team_scope_id(tenant_id, team_id)
+        text = f"{episode.get('predicate','')} {episode.get('object','')}"
+        point_id = str(uuid4())
+        payload = {
+            "user_id": "",
+            "scope": "team",
+            "scope_id": scope_id,
+            "team_id": team_id,
+            "tenant_id": tenant_id,
+            "subject": episode.get("subject", "team"),
+            "predicate": episode.get("predicate", "learned"),
+            "object": episode.get("object", ""),
+            "confidence": episode.get("confidence", 0.9),
+            "category": "episodes",
+        }
+        for key in (
+            "participants",
+            "owner_ids",
+            "related_agent_ids",
+            "issue_number",
+            "issue_title",
+            "repo_name",
+            "affected_files",
+            "fixed_file_path",
+            "pr_url",
+            "tests_passed",
+            "written_at",
+        ):
+            if key in episode:
+                payload[key] = episode[key]
+        _get_client().upsert(
+            collection_name=COLLECTION_EPISODES,
+            points=[PointStruct(id=point_id, vector=embed(text), payload=payload)],
+        )
+        return point_id
+
     # ---- Read -----------------------------------------------------------------
 
     def search(
@@ -250,9 +361,93 @@ class ConstitutionStore:
             limit=top_k,
         )
         return [
-            {**hit.payload, "_score": hit.score}
+            _hit_payload(hit, collection=collection)
             for hit in results
         ]
+
+    def search_across_agent_facts(
+        self,
+        tenant_id: str,
+        query: str,
+        *,
+        top_k: int = 24,
+        categories: set[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Semantic search over all personal agent facts in a tenant."""
+        from qdrant_client.models import FieldCondition, Filter, MatchValue
+
+        results = _vector_search(
+            collection_name=COLLECTION_FACTS,
+            query_vector=embed(query),
+            query_filter=Filter(must=[
+                FieldCondition(key="tenant_id", match=MatchValue(value=tenant_id)),
+                FieldCondition(key="scope", match=MatchValue(value="user")),
+            ]),
+            limit=top_k,
+        )
+        hits = [_hit_payload(hit, collection=COLLECTION_FACTS) for hit in results]
+        if categories:
+            hits = [hit for hit in hits if str(hit.get("category", "")) in categories]
+        return hits
+
+    def search_team_memory(
+        self,
+        tenant_id: str,
+        query: str,
+        *,
+        team_id: str = DEFAULT_TEAM_ID,
+        top_k: int = 8,
+        collections: tuple[str, ...] = (COLLECTION_FACTS, COLLECTION_EPISODES),
+    ) -> list[dict[str, Any]]:
+        """Semantic search over shared team memory across facts and episodes."""
+        from qdrant_client.models import FieldCondition, Filter, MatchValue
+
+        scope_id = _team_scope_id(tenant_id, team_id)
+        query_vector = embed(query)
+        hits: list[dict[str, Any]] = []
+        for collection in collections:
+            results = _vector_search(
+                collection_name=collection,
+                query_vector=query_vector,
+                query_filter=Filter(must=[
+                    FieldCondition(key="tenant_id", match=MatchValue(value=tenant_id)),
+                    FieldCondition(key="scope", match=MatchValue(value="team")),
+                    FieldCondition(key="scope_id", match=MatchValue(value=scope_id)),
+                ]),
+                limit=top_k,
+            )
+            hits.extend(_hit_payload(hit, collection=collection) for hit in results)
+        hits.sort(key=lambda item: float(item.get("_score", 0.0)), reverse=True)
+        return hits[:top_k]
+
+    def list_team_memory(
+        self,
+        tenant_id: str,
+        *,
+        team_id: str = DEFAULT_TEAM_ID,
+        limit: int = 100,
+        collection: str | None = None,
+    ) -> dict[str, list[dict[str, Any]]]:
+        """Fetch shared team memory grouped by Qdrant collection."""
+        from qdrant_client.models import FieldCondition, Filter, MatchValue
+
+        scope_id = _team_scope_id(tenant_id, team_id)
+        collections = (collection,) if collection else (COLLECTION_FACTS, COLLECTION_EPISODES)
+        grouped: dict[str, list[dict[str, Any]]] = {}
+        for col in collections:
+            results, _offset = _get_client().scroll(
+                collection_name=col,
+                scroll_filter=Filter(must=[
+                    FieldCondition(key="tenant_id", match=MatchValue(value=tenant_id)),
+                    FieldCondition(key="scope", match=MatchValue(value="team")),
+                    FieldCondition(key="scope_id", match=MatchValue(value=scope_id)),
+                ]),
+                limit=limit,
+                with_payload=True,
+                with_vectors=False,
+            )
+            grouped[col] = [dict(point.payload or {}) for point in results]
+        return grouped
 
     def get_by_user(
         self,
@@ -296,6 +491,7 @@ class ConstitutionStore:
                 collection_name=COLLECTION_FACTS,
                 scroll_filter=Filter(must=[
                     FieldCondition(key="tenant_id", match=MatchValue(value=tenant_id)),
+                    FieldCondition(key="scope", match=MatchValue(value="user")),
                 ]),
                 limit=limit,
                 offset=offset,
