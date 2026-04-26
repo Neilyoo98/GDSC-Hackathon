@@ -48,11 +48,9 @@ Copilot Workspace, OpenHands, SWE-agent all open PRs automatically. None of them
 | Role | Model | Why |
 |---|---|---|
 | **Constitution building** (GitHub → structured facts) | **Gemini 2.0 Flash** `gemini-2.0-flash` | Gemini structured output is first-class; prize alignment |
-| **Orchestrator** (fix gen, analysis) | **GPT-5.5** `gpt-5.5` | Best code understanding for the actual fix |
-| **Agent constitution queries** (fast per-agent) | **Claude Haiku** `claude-haiku-20240307` | Fast, cheap, good at reading constitution and answering briefly |
-| **PR body writer** | **Claude Haiku** | Matching dev communication style |
+| **Everything else** (issue analysis, agent queries, fix gen, PR body) | **GPT-5.5** `gpt-5.5` | Consistent, capable, one model to rule the graph |
 
-Two API keys: `OPENAI_API_KEY` + `ANTHROPIC_API_KEY` + `GEMINI_API_KEY`
+Two API keys: `OPENAI_API_KEY` + `GEMINI_API_KEY`
 
 ---
 
