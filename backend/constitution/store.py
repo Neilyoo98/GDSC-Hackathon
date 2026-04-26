@@ -16,9 +16,11 @@ from __future__ import annotations
 
 import logging
 import os
+import hashlib
+import json
 from functools import lru_cache
 from typing import Any
-from uuid import uuid4
+from uuid import NAMESPACE_URL, uuid4, uuid5
 
 logger = logging.getLogger(__name__)
 
@@ -33,12 +35,31 @@ EMBEDDING_DIM       = 384   # all-MiniLM-L6-v2
 
 @lru_cache(maxsize=1)
 def _get_model():
-    from sentence_transformers import SentenceTransformer
-    return SentenceTransformer("all-MiniLM-L6-v2")
+    try:
+        from sentence_transformers import SentenceTransformer
+        return SentenceTransformer("all-MiniLM-L6-v2")
+    except ModuleNotFoundError:
+        logger.warning("sentence_transformers not installed; using deterministic fallback embeddings")
+        return None
+
+
+def _fallback_embed(text: str) -> list[float]:
+    """Deterministic low-quality embedding used only when deps are missing."""
+    vector = [0.0] * EMBEDDING_DIM
+    for token in text.lower().replace("/", " / ").replace("-", " ").split():
+        digest = hashlib.sha256(token.encode("utf-8")).digest()
+        idx = int.from_bytes(digest[:4], "big") % EMBEDDING_DIM
+        sign = 1.0 if digest[4] % 2 == 0 else -1.0
+        vector[idx] += sign
+    norm = sum(v * v for v in vector) ** 0.5 or 1.0
+    return [v / norm for v in vector]
 
 
 def embed(text: str) -> list[float]:
-    return _get_model().encode(text, normalize_embeddings=True).tolist()
+    model = _get_model()
+    if model is None:
+        return _fallback_embed(text)
+    return model.encode(text, normalize_embeddings=True).tolist()
 
 
 # ---------------------------------------------------------------------------
@@ -63,6 +84,38 @@ def _ensure_collection(name: str) -> None:
             vectors_config=VectorParams(size=EMBEDDING_DIM, distance=Distance.COSINE),
         )
         logger.info("Created Qdrant collection: %s", name)
+
+
+def _vector_search(
+    *,
+    collection_name: str,
+    query_vector: list[float],
+    query_filter,
+    limit: int,
+):
+    """Compatibility wrapper for older `.search()` and newer `.query_points()` clients."""
+    client = _get_client()
+    if hasattr(client, "search"):
+        return client.search(
+            collection_name=collection_name,
+            query_vector=query_vector,
+            query_filter=query_filter,
+            limit=limit,
+        )
+    response = client.query_points(
+        collection_name=collection_name,
+        query=query_vector,
+        query_filter=query_filter,
+        limit=limit,
+        with_payload=True,
+        with_vectors=False,
+    )
+    return response.points
+
+
+def jsonish(value: Any) -> str:
+    """Stable JSON string for deterministic Qdrant point IDs."""
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
 
 
 # ---------------------------------------------------------------------------
@@ -90,11 +143,21 @@ class ConstitutionStore:
         for fact in facts:
             text   = f"{fact.get('subject','')} {fact.get('predicate','')} {fact.get('object','')}"
             vector = embed(text)
+            point_key = jsonish({
+                "tenant_id": tenant_id,
+                "user_id": user_id,
+                "subject": fact.get("subject", ""),
+                "predicate": fact.get("predicate", ""),
+                "object": fact.get("object", ""),
+                "category": fact.get("category", "general"),
+            })
             points.append(PointStruct(
-                id=str(uuid4()),
+                id=str(uuid5(NAMESPACE_URL, point_key)),
                 vector=vector,
                 payload={
                     "user_id":    user_id,
+                    "scope":      "user",
+                    "scope_id":   user_id,
                     "tenant_id":  tenant_id,
                     "subject":    fact.get("subject", ""),
                     "predicate":  fact.get("predicate", ""),
@@ -127,6 +190,8 @@ class ConstitutionStore:
                 vector=vector,
                 payload={
                     "user_id":    user_id,
+                    "scope":      "user",
+                    "scope_id":   user_id,
                     "tenant_id":  tenant_id,
                     "subject":    episode.get("subject", user_id),
                     "predicate":  episode.get("predicate", "resolved"),
@@ -151,7 +216,7 @@ class ConstitutionStore:
         from qdrant_client.models import FieldCondition, Filter, MatchValue
 
         vector = embed(query)
-        results = _get_client().search(
+        results = _vector_search(
             collection_name=collection,
             query_vector=vector,
             query_filter=Filter(must=[
@@ -190,6 +255,72 @@ class ConstitutionStore:
             cat = point.payload.get("category", "general")
             grouped.setdefault(cat, []).append(point.payload)
         return grouped
+
+    def search_ownership(
+        self,
+        filepath: str,
+        tenant_id: str = "hackathon",
+        top_k: int = 8,
+    ) -> tuple[str | None, float, list[dict[str, Any]]]:
+        """Find the most likely owner for a filepath from code_ownership facts.
+
+        Returns (owner_agent_id, confidence, evidence_facts).
+        The score is boosted for deterministic directory-prefix matches so the
+        seeded demo path `auth/token.go` reliably routes to Alice.
+        """
+        from qdrant_client.models import FieldCondition, Filter, MatchValue
+
+        path = filepath.strip()
+        if not path:
+            return None, 0.0, []
+
+        path_lower = path.lower()
+        first_segment = path_lower.split("/", 1)[0] + "/" if "/" in path_lower else path_lower
+        query = f"code owner for {path}"
+
+        filt = Filter(must=[
+            FieldCondition(key="tenant_id", match=MatchValue(value=tenant_id)),
+            FieldCondition(key="category", match=MatchValue(value="code_ownership")),
+            FieldCondition(key="predicate", match=MatchValue(value="owns")),
+        ])
+
+        hits = _vector_search(
+            collection_name=COLLECTION_FACTS,
+            query_vector=embed(query),
+            query_filter=filt,
+            limit=top_k,
+        )
+
+        best_owner: str | None = None
+        best_score = 0.0
+        evidence: list[dict[str, Any]] = []
+
+        for hit in hits:
+            payload = dict(hit.payload or {})
+            owner = payload.get("scope_id") or payload.get("user_id")
+            if not owner:
+                continue
+
+            obj = str(payload.get("object", "")).lower()
+            confidence = float(payload.get("confidence", 0.7) or 0.7)
+            score = float(hit.score or 0.0) * confidence
+
+            # Prefix evidence should dominate pure semantic similarity for the
+            # live demo; it is also the right behavior for ownership facts.
+            if first_segment and first_segment in obj:
+                score = max(score, confidence, 0.9)
+            elif path_lower in obj:
+                score = max(score, confidence, 0.85)
+
+            payload["_score"] = score
+            evidence.append(payload)
+
+            if score > best_score:
+                best_owner = str(owner)
+                best_score = score
+
+        evidence.sort(key=lambda item: float(item.get("_score", 0.0)), reverse=True)
+        return best_owner, round(best_score, 3), evidence[:4]
 
     def delete_user(self, user_id: str, tenant_id: str) -> None:
         from qdrant_client.models import FieldCondition, Filter, MatchValue
