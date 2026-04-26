@@ -271,10 +271,10 @@ export default function Home() {
         .metric-tile:hover{transform:translateY(-4px);background:#e8e4dc08}
         .hero-chip{animation:softFloat 4s ease-in-out infinite}
         .mesh-scan{animation:meshScan 6s ease-in-out infinite;box-shadow:0 0 18px #39ff1455}
-        .mesh-path{stroke:#e8e4dc;stroke-opacity:.18;stroke-width:1;stroke-dasharray:12 22;animation:pathFlow 10s linear infinite}
-        .mesh-path-a{stroke:#39ff14;stroke-opacity:.22;animation-duration:8s}
-        .mesh-path-b{animation-duration:12s}
-        .mesh-path-c{stroke:#39ff14;stroke-opacity:.14;animation-duration:14s}
+        .mesh-path{stroke:#e8e4dc;stroke-opacity:.32;stroke-width:1.8;stroke-dasharray:14 18;animation:pathFlow 10s linear infinite}
+        .mesh-path-a{stroke:#39ff14;stroke-opacity:.45;stroke-width:2;animation-duration:8s}
+        .mesh-path-b{stroke-opacity:.28;stroke-width:1.8;animation-duration:12s}
+        .mesh-path-c{stroke:#39ff14;stroke-opacity:.28;stroke-width:1.6;animation-duration:14s}
         .mesh-node{transform-box:fill-box;transform-origin:center;animation:nodePulse 3.8s ease-in-out infinite}
         .mesh-node path{fill:#080808;stroke:#e8e4dc;stroke-opacity:.22;stroke-width:1}
         .mesh-node circle{fill:#39ff14}
