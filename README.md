@@ -174,7 +174,7 @@ Streaming        Server-Sent Events (SSE) — real-time graph node updates
 
 Built in 12 hours by four UMD students.
 
-**Vitthal Agarwal** · **Neil** · **Avhaang** · **Mitansh**
+**Vitthal Agarwal** · **Dayang** · **Avhaang** · **Mitansh**
 
 ---
 
