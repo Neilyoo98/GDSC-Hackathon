@@ -258,11 +258,11 @@ export default function Home() {
         .hero-word{display:inline-block;opacity:0;transform-origin:50% 80%;animation:wordLift .82s cubic-bezier(.16,1,.3,1) forwards;will-change:opacity,transform,filter}
         .hot-text{animation:wordLift .82s cubic-bezier(.16,1,.3,1) forwards,glyphGlow 3.4s ease-in-out 1.1s infinite}
         .mono-animate{animation:textReveal .72s cubic-bezier(.16,1,.3,1) forwards,monoBlink 3.2s ease-in-out 1s infinite}
-        .aubi-button{position:relative;isolation:isolate;overflow:hidden;border:1px solid #e8e4dc33;transition:transform .22s ease,border-color .22s ease,background .22s ease,color .22s ease}
+        .aubi-button{position:relative;isolation:isolate;overflow:hidden;border:1px solid #e8e4dccc;transition:transform .22s ease,border-color .22s ease,background .22s ease,color .22s ease}
         .aubi-button::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(90deg,transparent,#e8e4dc22,transparent);transform:translateX(-120%);transition:transform .42s ease}
-        .aubi-button:hover{transform:translateY(-2px);border-color:#39ff14}
+        .aubi-button:hover{transform:translateY(-2px);border-color:#39ff14;background:#39ff14;color:#080808}
         .aubi-button:hover::after{transform:translateX(120%)}
-        .aubi-button-primary{border-color:#39ff14;background:#39ff14;color:#080808}
+        .aubi-button-primary{background:#080808cc;color:#e8e4dc}
         .aubi-button-secondary{background:#080808cc;color:#e8e4dc}
         .interactive-surface{transition:transform .24s ease,border-color .24s ease,background .24s ease}
         .interactive-surface:hover{transform:translateY(-3px);border-color:#39ff1455;background:#0b0b0b}
