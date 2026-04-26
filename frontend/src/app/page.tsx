@@ -96,6 +96,19 @@ const pipelineNodes = [
   { label: "PR Pusher", state: "idle", icon: <PrIcon /> },
 ];
 
+const heroWords = [
+  { text: "Every" },
+  { text: "developer" },
+  { text: "gets" },
+  { text: "an" },
+  { text: "AI" },
+  { text: "coworker" },
+  { text: "that" },
+  { text: "actually", hot: true },
+  { text: "knows", hot: true },
+  { text: "them.", hot: true },
+];
+
 function IssueIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -226,13 +239,16 @@ export default function Home() {
         @keyframes activeNode { 0%,100%{border-color:#39ff14;background:#39ff1412}50%{border-color:#e8e4dc99;background:#39ff1420} }
         @keyframes textReveal { from{opacity:0;transform:translateY(18px);filter:blur(7px)} to{opacity:1;transform:translateY(0);filter:blur(0)} }
         @keyframes textSweep { 0%{transform:translateX(-115%);opacity:0}22%{opacity:.72}100%{transform:translateX(115%);opacity:0} }
-        @keyframes glyphGlow { 0%,100%{text-shadow:none}50%{text-shadow:0 0 18px #39ff1444,0 0 36px #39ff141f} }
+        @keyframes wordLift { 0%{opacity:0;transform:translateY(28px) rotateX(32deg);filter:blur(10px)} 58%{opacity:1;filter:blur(0)} 100%{opacity:1;transform:translateY(0) rotateX(0);filter:blur(0)} }
+        @keyframes glyphGlow { 0%,100%{text-shadow:none;transform:translateY(0)}50%{text-shadow:0 0 18px #39ff1455,0 0 36px #39ff1426;transform:translateY(-2px)} }
         @keyframes monoBlink { 0%,100%{opacity:.62}50%{opacity:1} }
         .landing-fade{opacity:0;animation:fadeup .7s ease forwards;will-change:opacity,transform}
         .typography-rise{opacity:0;animation:textReveal .82s cubic-bezier(.16,1,.3,1) forwards;will-change:opacity,transform,filter}
-        .typography-scan{position:relative;display:inline-block;overflow:hidden}
+        .typography-scan{position:relative;display:block;overflow:hidden}
         .typography-scan::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,#39ff1430,transparent);transform:translateX(-115%);animation:textSweep 1.25s ease .28s forwards;pointer-events:none}
-        .hot-text{animation:glyphGlow 3.4s ease-in-out infinite}
+        .hero-title{perspective:900px;text-align:center}
+        .hero-word{display:inline-block;opacity:0;transform-origin:50% 80%;animation:wordLift .82s cubic-bezier(.16,1,.3,1) forwards;will-change:opacity,transform,filter}
+        .hot-text{animation:wordLift .82s cubic-bezier(.16,1,.3,1) forwards,glyphGlow 3.4s ease-in-out 1.1s infinite}
         .mono-animate{animation:textReveal .72s cubic-bezier(.16,1,.3,1) forwards,monoBlink 3.2s ease-in-out 1s infinite}
         .aubi-button{position:relative;isolation:isolate;overflow:hidden;border:1px solid #e8e4dc33;transition:transform .22s ease,border-color .22s ease,background .22s ease,color .22s ease}
         .aubi-button::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(90deg,transparent,#e8e4dc22,transparent);transform:translateX(-120%);transition:transform .42s ease}
@@ -271,15 +287,23 @@ export default function Home() {
           <span className="font-mono text-[10px] uppercase tracking-[3px] text-[#e8e4dccc]">Live at GDSC Hackathon · UMD · April 26</span>
         </div>
 
-        <h1 className="typography-rise typography-scan font-syne mx-auto mt-8 max-w-[860px] text-[56px] font-normal leading-[1.18] tracking-[4px] text-[#e8e4dc] md:text-[84px]" style={{ animationDelay: ".1s" }}>
-          Every developer gets an AI coworker that <span className="hot-text text-[#39ff14]">actually knows them.</span>
+        <h1 className="hero-title typography-scan font-syne mx-auto mt-8 max-w-[860px] text-[56px] font-normal leading-[1.18] tracking-[4px] text-[#e8e4dc] md:text-[84px]">
+          {heroWords.map((word, index) => (
+            <span
+              key={`${word.text}-${index}`}
+              className={`hero-word ${word.hot ? "hot-text text-[#39ff14]" : ""}`}
+              style={{ animationDelay: `${0.08 + index * 0.055}s` }}
+            >
+              {word.text}{index < heroWords.length - 1 ? "\u00a0" : ""}
+            </span>
+          ))}
         </h1>
 
         <p className="mono-animate font-mono mx-auto mt-5 text-[10px] uppercase tracking-[4px] text-[#39ff14]" style={{ animationDelay: ".15s" }}>
           Autonomous Understanding &amp; Behaviour Inference
         </p>
 
-        <p className="typography-rise mx-auto mt-6 max-w-[580px] text-[16px] leading-[1.85] text-[#e8e4dc99]" style={{ animationDelay: ".2s" }}>
+        <p className="typography-rise mx-auto mt-6 max-w-[580px] text-center text-[16px] leading-[1.85] text-[#e8e4dc99]" style={{ animationDelay: ".75s" }}>
           AUBI reads your team&apos;s GitHub history and builds a persistent AI coworker for each developer. These coworkers know who owns what, share context with each other, and step in when something breaks — without anyone having to ask.
         </p>
 
