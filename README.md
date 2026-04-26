@@ -4,7 +4,7 @@
 
 
 
-### Autonomous Understanding and Behaviour Inference
+### AUBI - Autonomous Understanding and Behaviour Inference
 
 **A context layer for autonomous software engineering: persistent AI coworkers that understand ownership, share team memory, coordinate fixes, and turn GitHub issues into human-approved pull requests.**
 
