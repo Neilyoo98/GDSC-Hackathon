@@ -68,11 +68,16 @@ export function ConsiderationsPanel({ exchanges, agents, result }: Props) {
 
   return (
     <div className="self-start border border-[#1e2d45] bg-[#0a0e1a] p-4">
-      <div className="flex items-center justify-between mb-3">
-        <p className="font-mono text-[9px] text-[#4a6080] tracking-widest">{"// CONSIDERATIONS"}</p>
+      <div className="mb-3 flex items-start justify-between gap-4">
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-[3px] text-[#5d7194]">{"// CONSIDERATIONS"}</p>
+          <p className="mt-2 max-w-2xl text-[12px] leading-5 text-[#8ea3c3]">
+            Coworker checks verified against the generated fix.
+          </p>
+        </div>
         {hasfix && (
           <span className={[
-            "font-mono text-[9px] px-2 py-0.5 rounded border",
+            "shrink-0 border px-2.5 py-1 font-mono text-[10px]",
             resolvedCount === items.length
               ? "text-emerald-300 border-emerald-500/30 bg-emerald-500/10"
               : "text-amber-300 border-amber-500/30 bg-amber-500/10",
@@ -82,11 +87,7 @@ export function ConsiderationsPanel({ exchanges, agents, result }: Props) {
         )}
       </div>
 
-      <p className="text-[10px] text-[#4a6080] mb-3 leading-snug">
-        Items flagged by the coworker mesh — verified against the generated fix.
-      </p>
-
-      <div className="space-y-2">
+      <div className="max-h-[560px] space-y-2 overflow-y-auto pr-1 aubi-scrollbar">
         <AnimatePresence initial={false}>
           {items.map((item, i) => (
             <motion.div
@@ -95,7 +96,7 @@ export function ConsiderationsPanel({ exchanges, agents, result }: Props) {
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: i * 0.06, duration: 0.3 }}
               className={[
-                "flex items-start gap-2.5 px-3 py-2 rounded border transition-colors duration-500",
+                "grid grid-cols-[22px_minmax(0,1fr)_76px] items-start gap-3 border px-3 py-3 transition-colors duration-500",
                 item.resolved && hasfix
                   ? "border-emerald-500/25 bg-emerald-500/5"
                   : hasfix
@@ -104,23 +105,37 @@ export function ConsiderationsPanel({ exchanges, agents, result }: Props) {
               ].join(" ")}
             >
               {/* Status icon */}
-              <span className="mt-0.5 flex-shrink-0 text-[11px]">
+              <span className={[
+                "mt-0.5 font-mono text-[11px]",
+                item.resolved && hasfix ? "text-emerald-300" : hasfix ? "text-amber-300" : "text-[#8ea3c3]",
+              ].join(" ")}>
                 {hasfix ? (item.resolved ? "✓" : "?") : "⚑"}
               </span>
 
               <div className="flex-1 min-w-0">
                 <p className={[
-                  "text-[11px] leading-snug transition-colors duration-500",
+                  "text-[12px] leading-5 transition-colors duration-500",
                   item.resolved && hasfix
-                    ? "text-emerald-300 line-through decoration-emerald-500/60"
+                    ? "text-emerald-200"
                     : hasfix
                     ? "text-amber-300"
                     : "text-[#c8d6e8]",
                 ].join(" ")}>
                   {item.text}
                 </p>
-                <p className="font-mono text-[8px] text-[#4a6080] mt-0.5">flagged by {item.agentName}</p>
+                <p className="mt-1 font-mono text-[9px] text-[#5d7194]">flagged by {item.agentName}</p>
               </div>
+
+              <span className={[
+                "mt-0.5 justify-self-end border px-2 py-0.5 font-mono text-[9px] uppercase tracking-[1.5px]",
+                item.resolved && hasfix
+                  ? "border-emerald-500/25 text-emerald-300"
+                  : hasfix
+                  ? "border-amber-500/25 text-amber-300"
+                  : "border-[#1e2d45] text-[#4a6080]",
+              ].join(" ")}>
+                {hasfix ? (item.resolved ? "done" : "review") : "queued"}
+              </span>
             </motion.div>
           ))}
         </AnimatePresence>

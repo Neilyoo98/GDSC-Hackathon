@@ -254,11 +254,13 @@ export function CoworkerMeshPanel({
   const hasSignal = exchanges.length > 0 || memories.length > 0 || updates.length > 0;
 
   return (
-    <section className="border border-[#1e2d45] bg-[#0a0e1a] rounded p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
+    <section className="border border-[#1e2d45] bg-[#0a0e1a] p-4">
+      <div className="mb-4 flex items-start justify-between gap-4">
         <div>
-          <p className="font-mono text-[9px] text-[#4a6080] tracking-widest">{"// COWORKER MESH"}</p>
-          <p className="mt-1 text-xs text-[#8aa0c0]">AUBI coworkers exchange context and learn from the incident.</p>
+          <p className="font-mono text-[10px] uppercase tracking-[3px] text-[#5d7194]">{"// COWORKER MESH"}</p>
+          <p className="mt-2 max-w-md text-[13px] leading-5 text-[#9db0cf]">
+            AUBI coworkers exchange context and learn from the incident.
+          </p>
         </div>
         <div className="flex shrink-0 gap-1.5">
           {[
@@ -268,7 +270,7 @@ export function CoworkerMeshPanel({
           ].map(([label, type]) => (
             <span
               key={type}
-              className="rounded border border-[#1e2d45] px-2 py-1 font-mono text-[9px] text-[#4a6080]"
+              className="border border-[#223554] px-2.5 py-1 font-mono text-[10px] text-[#6f86aa]"
             >
               {label} {eventCount(events, type)}
             </span>
@@ -277,13 +279,13 @@ export function CoworkerMeshPanel({
       </div>
 
       {!hasSignal && (
-        <div className="rounded border border-dashed border-[#1e2d45] px-3 py-3 font-mono text-[10px] leading-relaxed text-[#4a6080]">
+        <div className="border border-dashed border-[#1e2d45] px-4 py-4 font-mono text-[11px] leading-5 text-[#5d7194]">
           Waiting for coworker context, shared memory, and memory writes.
         </div>
       )}
 
       {exchanges.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {exchanges.slice(0, 3).map((exchange, index) => {
             const from = sourceName(exchange, agents, result, index);
             const to = targetName(exchange, agents, result, index);
@@ -292,15 +294,15 @@ export function CoworkerMeshPanel({
                 key={`${from}-${to}-${index}`}
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="rounded border border-violet-500/20 bg-violet-500/5 p-3"
+                className="border border-violet-500/25 bg-violet-500/5 p-4"
               >
-                <p className="font-mono text-[10px] text-violet-300">
+                <p className="font-mono text-[11px] tracking-[1.5px] text-violet-300">
                   {from} asked {to}
                 </p>
-                <p className="mt-1 text-[11px] leading-relaxed text-[#8aa0c0]">
+                <p className="mt-2 text-[12px] leading-5 text-[#8ea3c3]">
                   Why: {text(exchange.reason ?? exchange.why ?? exchange.why_it_matters, "relevant ownership context")}
                 </p>
-                <p className="mt-2 text-xs leading-relaxed text-[#c8d6e8]">{contextText(exchange)}</p>
+                <p className="mt-3 text-[13px] leading-6 text-[#d5dfef]">{contextText(exchange)}</p>
               </motion.div>
             );
           })}
@@ -308,13 +310,13 @@ export function CoworkerMeshPanel({
       )}
 
       {memories.length > 0 && (
-        <div className="mt-3">
-          <p className="mb-2 font-mono text-[9px] text-[#4a6080] tracking-widest">{"// SHARED TEAM MEMORY USED"}</p>
+        <div className="mt-4">
+          <p className="mb-2 font-mono text-[10px] uppercase tracking-[3px] text-[#5d7194]">{"// SHARED TEAM MEMORY USED"}</p>
           <div className="space-y-2">
             {memories.map((memory, index) => (
-              <div key={`${memorySource(memory, agents)}-${index}`} className="rounded border border-cyan-500/20 bg-cyan-500/5 px-3 py-2">
-                <p className="font-mono text-[10px] text-cyan-300">{memorySource(memory, agents)}</p>
-                <p className="mt-1 text-[11px] leading-relaxed text-[#8aa0c0]">{memorySummary(memory)}</p>
+              <div key={`${memorySource(memory, agents)}-${index}`} className="border border-cyan-500/20 bg-cyan-500/5 px-3 py-3">
+                <p className="font-mono text-[11px] text-cyan-300">{memorySource(memory, agents)}</p>
+                <p className="mt-2 line-clamp-3 text-[12px] leading-5 text-[#8ea3c3]">{memorySummary(memory)}</p>
               </div>
             ))}
           </div>
@@ -322,13 +324,13 @@ export function CoworkerMeshPanel({
       )}
 
       {updates.length > 0 && (
-        <div className="mt-3">
-          <p className="mb-2 font-mono text-[9px] text-[#4a6080] tracking-widest">{"// MEMORY WRITTEN"}</p>
+        <div className="mt-4">
+          <p className="mb-2 font-mono text-[10px] uppercase tracking-[3px] text-[#5d7194]">{"// MEMORY WRITTEN"}</p>
           <div className="space-y-2">
             {updates.map((update, index) => (
-              <div key={`${updateOwner(update, agents)}-${index}`} className="rounded border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
-                <p className="font-mono text-[10px] text-emerald-300">{updateOwner(update, agents)}</p>
-                <p className="mt-1 text-[11px] leading-relaxed text-[#8aa0c0]">{updateText(update)}</p>
+              <div key={`${updateOwner(update, agents)}-${index}`} className="border border-emerald-500/20 bg-emerald-500/5 px-3 py-3">
+                <p className="font-mono text-[11px] text-emerald-300">{updateOwner(update, agents)}</p>
+                <p className="mt-2 line-clamp-3 text-[12px] leading-5 text-[#8ea3c3]">{updateText(update)}</p>
               </div>
             ))}
           </div>
