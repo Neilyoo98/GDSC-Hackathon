@@ -100,6 +100,23 @@ export interface ApprovalResult {
   stream_log?: string[];
 }
 
+export interface GitHubIssue {
+  url: string;
+  html_url?: string;
+  repo_name: string;
+  issue_number: number;
+  title: string;
+  body?: string;
+  user?: string;
+  created_at?: string;
+  updated_at?: string;
+  labels?: string[];
+}
+
+export interface GitHubPollResult {
+  issue: GitHubIssue | null;
+}
+
 export interface StreamLike {
   onmessage: ((event: MessageEvent<string>) => void) | null;
   onerror: ((event: Event) => void) | null;
