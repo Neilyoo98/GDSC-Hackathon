@@ -1,8 +1,10 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { coworkerPossessiveName } from "@/lib/agents";
 import type {
   Agent,
+  AgentMessage,
   CoworkerContextExchange,
   IncidentResult,
   MemoryUpdate,
@@ -14,22 +16,161 @@ function text(value: unknown, fallback = "pending"): string {
   return typeof value === "string" && value.trim() ? value : fallback;
 }
 
-function coworkerName(value: unknown, agents: Agent[]): string {
-  const raw = text(value, "AUBI coworker");
-  const agent = agents.find((a) => a.id === raw || a.github_username === raw || a.name === raw);
-  return agent ? `${agent.name} AUBI` : raw;
+function normalizedIdentity(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/@/g, "")
+    .replace(/['’]s\b/g, "")
+    .replace(/\baubi\b/g, "")
+    .replace(/\bcoworker\b/g, "")
+    .replace(/[_\s-]+agent$/g, "")
+    .replace(/[_\s-]+/g, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function shortHumanName(agent: Agent): string {
+  const source = agent.name || agent.github_username || "Developer";
+  return source.split(/[\s-]+/).find(Boolean) ?? source;
+}
+
+function identityValues(agent: Agent): string[] {
+  return [
+    agent.id,
+    agent.github_username,
+    agent.name,
+    shortHumanName(agent),
+    `${agent.name}_aubi`,
+    `${agent.github_username}_aubi`,
+  ].filter(Boolean);
+}
+
+function findAgentByValue(value: unknown, agents: Agent[], excludeIds: string[] = []): Agent | undefined {
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  const raw = normalizedIdentity(value);
+  if (!raw) return undefined;
+  return agents.find((agent) => {
+    if (excludeIds.includes(agent.id)) return false;
+    return identityValues(agent).some((candidate) => {
+      const normalized = normalizedIdentity(candidate);
+      return normalized.length > 1 && (raw === normalized || raw.includes(normalized) || normalized.includes(raw));
+    });
+  });
+}
+
+function inferAgentFromText(value: unknown, agents: Agent[], excludeIds: string[] = []): Agent | undefined {
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  const haystack = normalizedIdentity(value);
+  if (!haystack) return undefined;
+  return agents
+    .filter((agent) => !excludeIds.includes(agent.id))
+    .sort((a, b) => (b.name || b.github_username).length - (a.name || a.github_username).length)
+    .find((agent) => identityValues(agent).some((candidate) => {
+      const needle = normalizedIdentity(candidate);
+      return needle.length > 2 && haystack.includes(needle);
+    }));
+}
+
+function firstAgentFromValues(values: unknown[], agents: Agent[], excludeIds: string[] = []): Agent | undefined {
+  for (const value of values) {
+    if (Array.isArray(value)) {
+      const match = firstAgentFromValues(value, agents, excludeIds);
+      if (match) return match;
+      continue;
+    }
+    const direct = findAgentByValue(value, agents, excludeIds);
+    if (direct) return direct;
+  }
+  return undefined;
+}
+
+function meshMessages(result: IncidentResult | null): AgentMessage[] {
+  return (result?.agent_messages ?? []).filter((message) => {
+    const sender = message.sender.toLowerCase();
+    const recipient = message.recipient.toLowerCase();
+    return sender !== "orchestrator" && recipient !== "orchestrator";
+  });
+}
+
+function exchangeMessage(result: IncidentResult | null, index: number): AgentMessage | undefined {
+  const messages = meshMessages(result);
+  return messages[index * 2] ?? messages[index];
+}
+
+function sourceAgent(exchange: CoworkerContextExchange, result: IncidentResult | null, agents: Agent[], index: number): Agent | undefined {
+  const message = exchangeMessage(result, index);
+  const ownerId = result?.owners?.[0];
+  return firstAgentFromValues([
+    exchange.requester_agent_id,
+    exchange.requester_agent_name,
+    exchange.requester_agent_ids,
+    exchange.requester_agent_names,
+    exchange.requester_aubi,
+    exchange.source_aubi,
+    exchange.sender,
+    exchange.from,
+    message?.sender,
+    ownerId,
+  ], agents);
+}
+
+function targetAgent(exchange: CoworkerContextExchange, result: IncidentResult | null, agents: Agent[], index: number, source?: Agent): Agent | undefined {
+  const excludeIds = source ? [source.id] : [];
+  const message = exchangeMessage(result, index);
+  const direct = firstAgentFromValues([
+    exchange.responder_agent_id,
+    exchange.responder_agent_name,
+    exchange.responder_aubi,
+    exchange.target_aubi,
+    exchange.recipient,
+    exchange.to,
+    message?.recipient,
+  ], agents, excludeIds);
+  if (direct) return direct;
+
+  const evidenceText = [
+    exchange.request,
+    exchange.context_shared,
+    exchange.shared_context,
+    exchange.context,
+    exchange.summary,
+    exchange.message,
+    exchange.reason,
+    exchange.why,
+    exchange.why_it_matters,
+    ...(exchange.evidence_facts ?? []).map((fact) => JSON.stringify(fact)),
+  ].join(" ");
+  return inferAgentFromText(evidenceText, agents, excludeIds);
+}
+
+function coworkerLabel(agent: Agent | undefined, fallback: unknown): string {
+  if (agent) return coworkerPossessiveName(agent);
+  const raw = text(fallback, "");
+  const cleaned = raw
+    .replace(/[_-]?aubi$/i, "")
+    .replace(/[_-]+/g, " ")
+    .trim();
+  if (!cleaned || /^(aubi\s*)?coworker$/i.test(cleaned)) return "AUBI mesh";
+  const base = cleaned.split(/\s+/).find(Boolean) ?? cleaned;
+  return `${base}${base.toLowerCase().endsWith("s") ? "'" : "'s"} AUBI`;
 }
 
 function contextText(exchange: CoworkerContextExchange): string {
   return text(exchange.context_shared ?? exchange.shared_context ?? exchange.context ?? exchange.summary ?? exchange.message, "Waiting for shared context...");
 }
 
-function sourceName(exchange: CoworkerContextExchange, agents: Agent[]): string {
-  return coworkerName(exchange.requester_agent_name ?? exchange.requester_aubi ?? exchange.source_aubi ?? exchange.sender ?? exchange.from, agents);
+function sourceName(exchange: CoworkerContextExchange, agents: Agent[], result: IncidentResult | null, index: number): string {
+  return coworkerLabel(
+    sourceAgent(exchange, result, agents, index),
+    exchange.requester_agent_name ?? exchange.requester_aubi ?? exchange.source_aubi ?? exchange.sender ?? exchange.from
+  );
 }
 
-function targetName(exchange: CoworkerContextExchange, agents: Agent[]): string {
-  return coworkerName(exchange.responder_agent_name ?? exchange.responder_aubi ?? exchange.target_aubi ?? exchange.recipient ?? exchange.to, agents);
+function targetName(exchange: CoworkerContextExchange, agents: Agent[], result: IncidentResult | null, index: number): string {
+  const source = sourceAgent(exchange, result, agents, index);
+  return coworkerLabel(
+    targetAgent(exchange, result, agents, index, source),
+    exchange.responder_agent_name ?? exchange.responder_aubi ?? exchange.target_aubi ?? exchange.recipient ?? exchange.to
+  );
 }
 
 function memorySummary(memory: SharedMemoryHit): string {
@@ -40,8 +181,9 @@ function memorySummary(memory: SharedMemoryHit): string {
   return text(memory.object ?? memory.memory ?? memory.content ?? memory.summary ?? memory.title, "Team memory matched");
 }
 
-function memorySource(memory: SharedMemoryHit): string {
-  return text(memory.agent_name ?? memory.source ?? memory.agent_id ?? memory._collection, "Shared team memory");
+function memorySource(memory: SharedMemoryHit, agents: Agent[]): string {
+  const agent = firstAgentFromValues([memory.agent_id, memory.agent_name, memory.source, memory.subject], agents);
+  return agent ? coworkerPossessiveName(agent) : text(memory.agent_name ?? memory.source ?? memory.agent_id ?? memory._collection, "Shared team memory");
 }
 
 function updateText(update: MemoryUpdate): string {
@@ -49,33 +191,42 @@ function updateText(update: MemoryUpdate): string {
 }
 
 function updateOwner(update: MemoryUpdate, agents: Agent[]): string {
-  return coworkerName(update.coworker_aubi ?? update.agent_name ?? update.agent_id ?? update.subject, agents);
+  const agent = firstAgentFromValues([update.agent_id, update.agent_name, update.coworker_aubi, update.subject], agents);
+  return coworkerLabel(agent, update.coworker_aubi ?? update.agent_name ?? update.agent_id ?? update.subject);
 }
 
-function derivedExchange(result: IncidentResult | null, agents: Agent[]): CoworkerContextExchange[] {
-  if (result?.coworker_exchanges?.length) return result.coworker_exchanges;
-  if (result?.coworker_contexts?.length) return result.coworker_contexts;
+function isExchangePayload(exchange: CoworkerContextExchange): boolean {
+  const hasRequester = Boolean(
+    exchange.requester_agent_id ||
+    exchange.requester_agent_name ||
+    exchange.requester_agent_ids?.length ||
+    exchange.requester_agent_names?.length ||
+    exchange.requester_aubi ||
+    exchange.source_aubi ||
+    exchange.sender ||
+    exchange.from
+  );
+  const hasResponder = Boolean(
+    exchange.responder_agent_id ||
+    exchange.responder_agent_name ||
+    exchange.responder_aubi ||
+    exchange.target_aubi ||
+    exchange.recipient ||
+    exchange.to
+  );
+  return hasRequester || hasResponder;
+}
 
-  const routed = result?.routing_evidence?.[0];
-  if (!routed) return [];
-
-  const agentId = text(routed.agent_id, "");
-  const agentName = text(routed.agent_name, agentId);
-  const agentContext = result?.agent_messages?.find((msg) => msg.sender !== "orchestrator")?.message;
-  const target = agentName || agents.find((a) => a.id === agentId)?.name;
-
-  return [{
-    requester_aubi: "Incident router AUBI",
-    responder_aubi: target ? `${target} AUBI` : "Owner AUBI",
-    reason: "Ownership and expertise memory matched this incident.",
-    shared_context: agentContext ?? "Awaiting owner coworker context...",
-  }];
+function derivedExchange(result: IncidentResult | null): CoworkerContextExchange[] {
+  const exchanges = (result?.coworker_exchanges ?? []).filter(isExchangePayload);
+  if (exchanges.length > 0) return exchanges;
+  return (result?.coworker_contexts ?? []).filter(isExchangePayload);
 }
 
 function derivedSharedMemory(result: IncidentResult | null): SharedMemoryHit[] {
   if (result?.shared_memory_hits?.length) return result.shared_memory_hits;
   if (result?.shared_memory?.length) return result.shared_memory;
-  return (result?.routing_evidence ?? []).map((evidence) => evidence as SharedMemoryHit);
+  return [];
 }
 
 function derivedUpdates(result: IncidentResult | null): MemoryUpdate[] {
@@ -97,7 +248,7 @@ export function CoworkerMeshPanel({
   agents: Agent[];
   events: SSEEvent[];
 }) {
-  const exchanges = derivedExchange(result, agents);
+  const exchanges = derivedExchange(result);
   const memories = derivedSharedMemory(result).slice(0, 3);
   const updates = derivedUpdates(result).slice(0, 3);
   const hasSignal = exchanges.length > 0 || memories.length > 0 || updates.length > 0;
@@ -133,22 +284,26 @@ export function CoworkerMeshPanel({
 
       {exchanges.length > 0 && (
         <div className="space-y-2">
-          {exchanges.slice(0, 3).map((exchange, index) => (
-            <motion.div
-              key={`${sourceName(exchange, agents)}-${targetName(exchange, agents)}-${index}`}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="rounded border border-violet-500/20 bg-violet-500/5 p-3"
-            >
-              <p className="font-mono text-[10px] text-violet-300">
-                {sourceName(exchange, agents)} asked {targetName(exchange, agents)}
-              </p>
-              <p className="mt-1 text-[11px] leading-relaxed text-[#8aa0c0]">
-                Why: {text(exchange.reason ?? exchange.why ?? exchange.why_it_matters, "relevant ownership context")}
-              </p>
-              <p className="mt-2 text-xs leading-relaxed text-[#c8d6e8]">{contextText(exchange)}</p>
-            </motion.div>
-          ))}
+          {exchanges.slice(0, 3).map((exchange, index) => {
+            const from = sourceName(exchange, agents, result, index);
+            const to = targetName(exchange, agents, result, index);
+            return (
+              <motion.div
+                key={`${from}-${to}-${index}`}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded border border-violet-500/20 bg-violet-500/5 p-3"
+              >
+                <p className="font-mono text-[10px] text-violet-300">
+                  {from} asked {to}
+                </p>
+                <p className="mt-1 text-[11px] leading-relaxed text-[#8aa0c0]">
+                  Why: {text(exchange.reason ?? exchange.why ?? exchange.why_it_matters, "relevant ownership context")}
+                </p>
+                <p className="mt-2 text-xs leading-relaxed text-[#c8d6e8]">{contextText(exchange)}</p>
+              </motion.div>
+            );
+          })}
         </div>
       )}
 
@@ -157,8 +312,8 @@ export function CoworkerMeshPanel({
           <p className="mb-2 font-mono text-[9px] text-[#4a6080] tracking-widest">{"// SHARED TEAM MEMORY USED"}</p>
           <div className="space-y-2">
             {memories.map((memory, index) => (
-              <div key={`${memorySource(memory)}-${index}`} className="rounded border border-cyan-500/20 bg-cyan-500/5 px-3 py-2">
-                <p className="font-mono text-[10px] text-cyan-300">{memorySource(memory)}</p>
+              <div key={`${memorySource(memory, agents)}-${index}`} className="rounded border border-cyan-500/20 bg-cyan-500/5 px-3 py-2">
+                <p className="font-mono text-[10px] text-cyan-300">{memorySource(memory, agents)}</p>
                 <p className="mt-1 text-[11px] leading-relaxed text-[#8aa0c0]">{memorySummary(memory)}</p>
               </div>
             ))}
