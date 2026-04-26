@@ -1,9 +1,9 @@
 """Context Constitution builder.
 
-Takes structured GitHub data → gpt-4o-mini (JSON mode) → list of ConstitutionFacts
+Takes structured GitHub data → gpt-5.4-mini (JSON mode) → list of ConstitutionFacts
 → stored as Qdrant semantic_facts points.
 
-gpt-4o-mini is used here because structured JSON extraction is exactly what it excels
+gpt-5.4-mini is used here because structured JSON extraction is exactly what it excels
 at — fast, cheap, and schema-faithful. GPT-5.5 handles all reasoning-heavy nodes.
 """
 
@@ -165,7 +165,7 @@ async def build_constitution_from_github(
     )
 
     response = await _get_client().chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-5.4-mini",
         messages=[
             {"role": "system", "content": CONSTITUTION_SYSTEM},
             {"role": "user", "content": prompt},
@@ -177,12 +177,12 @@ async def build_constitution_from_github(
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError as e:
-        raise ValueError(f"gpt-4o-mini did not return valid JSON: {raw[:500]}") from e
+        raise ValueError(f"gpt-5.4-mini did not return valid JSON: {raw[:500]}") from e
 
     raw_facts = parsed.get("facts") if isinstance(parsed, dict) else parsed
     facts = _normalize_facts(raw_facts, username)
     if not facts:
-        raise ValueError(f"gpt-4o-mini returned no usable constitution facts for {username}")
+        raise ValueError(f"gpt-5.4-mini returned no usable constitution facts for {username}")
 
     return facts
 
