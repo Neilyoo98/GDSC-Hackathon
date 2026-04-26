@@ -6,6 +6,7 @@ import { useAgents } from "@/hooks/useAgents";
 import { DossierPanel } from "@/components/DossierPanel";
 import { api } from "@/lib/api";
 import { coworkerName } from "@/lib/agents";
+import { PerspectiveGrid } from "@/components/PerspectiveGrid";
 import type { Agent } from "@/lib/types";
 
 // ── Constitution category colours (matching team page ring key) ────────────
@@ -513,11 +514,8 @@ export default function AgentsPage() {
       {/* ── Main canvas ── */}
       <div className="flex-1 relative overflow-hidden">
 
-        {/* Subtle grid */}
-        <div
-          className="absolute inset-0 pointer-events-none opacity-[0.04]"
-          style={{ backgroundImage: "linear-gradient(#e8e4dc 1px,transparent 1px),linear-gradient(90deg,#e8e4dc 1px,transparent 1px)", backgroundSize: "64px 64px" }}
-        />
+        {/* Interactive 3D perspective grid */}
+        <PerspectiveGrid />
 
         {/* Top bar */}
         <div className="absolute top-6 left-6 z-10 pointer-events-none">
