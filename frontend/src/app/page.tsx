@@ -1,6 +1,5 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
-import { PaperShaderBackground } from "@/components/ui/background-paper-shaders";
 
 const steps = [
   {
@@ -220,8 +219,6 @@ export default function Home() {
           animation: slide 2.4s linear infinite;
         }
       ` }} />
-
-      <PaperShaderBackground className="z-0 opacity-90" />
 
       <section className="relative z-10 px-6 pb-28 pt-24 text-center md:px-10">
         <div className="landing-fade mx-auto inline-flex items-center gap-3 rounded-full border border-[#e8e4dc33] px-4 py-2" style={{ animationDelay: "0s" }}>
