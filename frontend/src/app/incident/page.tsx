@@ -75,6 +75,7 @@ export default function IncidentPage() {
 
   const hasResult = !!result;
   const hasEvents = events.length > 0;
+  const memoryWrites = result?.memory_writes ?? result?.memory_updates ?? [];
 
   return (
     <div className="flex h-[calc(100vh-52px)] overflow-hidden">
@@ -268,19 +269,20 @@ export default function IncidentPage() {
               </div>
 
               {/* Constitution update strip */}
-              {result.owners.length > 0 && (
+              {memoryWrites.length > 0 && (
                 <div className="flex items-center gap-2 px-5 py-2.5 border-t border-[#1e2d45] flex-shrink-0 overflow-x-auto">
-                  {result.owners.map((ownerId, i) => {
-                    const agent = agents.find((a) => a.id === ownerId);
+                  {memoryWrites.map((write, i) => {
+                    const agentId = write.agent_id ?? write.subject ?? write.team_id ?? "team";
+                    const agent = agents.find((a) => a.id === agentId || a.name === write.agent_name);
                     return (
                       <motion.span
-                        key={ownerId}
+                        key={`${write.scope ?? "memory"}-${agentId}-${i}`}
                         initial={{ opacity: 0, scale: 0.9 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ delay: i * 0.12 }}
                         className="flex-shrink-0 font-mono text-[10px] text-[#10b981] border border-emerald-500/30 bg-[#0d1224] px-3 py-1 rounded whitespace-nowrap"
                       >
-                        💾 {agent?.name ?? ownerId} · constitution updated
+                        {agent?.name ?? write.agent_name ?? (write.scope === "team" ? "Team memory" : agentId)} · memory written
                       </motion.span>
                     );
                   })}

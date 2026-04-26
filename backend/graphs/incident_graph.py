@@ -158,6 +158,20 @@ def _tokens(text: str) -> set[str]:
     }
 
 
+def _identity_key(value: Any) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(value or "").lower())
+
+
+def _owner_identity_keys(owner_ids: list[str], all_user_facts: dict[str, list[dict[str, Any]]]) -> set[str]:
+    keys = {_identity_key(owner_id) for owner_id in owner_ids}
+    for owner_id in owner_ids:
+        for fact in all_user_facts.get(owner_id, []):
+            subject = fact.get("subject")
+            if subject:
+                keys.add(_identity_key(subject))
+    return {key for key in keys if key}
+
+
 def _file_signals(files: list[str]) -> set[str]:
     signals: set[str] = set()
     for path in files:
@@ -183,6 +197,7 @@ def _select_related_coworkers(
     file_signals = _file_signals(files)
 
     all_user_facts = store.list_user_facts(_tenant_id())
+    owner_keys = _owner_identity_keys(owner_ids, all_user_facts)
     semantic_hits = store.search_across_agent_facts(
         _tenant_id(),
         query,
@@ -196,9 +211,12 @@ def _select_related_coworkers(
         if not agent_id or agent_id in owner_ids:
             return
         facts = all_user_facts.get(agent_id, [])
+        agent_name = _agent_name_from_facts(agent_id, facts)
+        if _identity_key(agent_id) in owner_keys or _identity_key(agent_name) in owner_keys:
+            return
         candidate = candidates.setdefault(agent_id, {
             "agent_id": agent_id,
-            "agent_name": _agent_name_from_facts(agent_id, facts),
+            "agent_name": agent_name,
             "score": 0.0,
             "selection_signals": [],
             "matched_facts": [],
