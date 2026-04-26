@@ -27,7 +27,7 @@ function Card({
   const ref    = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true, margin: "-80px" });
   const [mouse, setMouse] = useState({ x: 50, y: 50, over: false });
-  const pal    = PALETTE[index] ?? PALETTE[0];
+  const pal    = PALETTE[0];
 
   const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const r = ref.current!.getBoundingClientRect();
@@ -72,7 +72,7 @@ function Card({
       <div
         className="absolute -right-4 -bottom-6 font-syne font-bold leading-none select-none pointer-events-none"
         style={{
-          fontSize: featured ? "clamp(140px,18vw,200px)" : "clamp(100px,12vw,150px)",
+          fontSize: "clamp(100px,12vw,150px)",
           color: pal.accent,
           opacity: 0.045,
           letterSpacing: "-0.05em",
@@ -88,7 +88,7 @@ function Card({
       />
 
       {/* Content */}
-      <div className={`relative z-10 flex flex-col ${featured ? "p-8 md:p-10" : "p-7"}`}>
+      <div className="relative z-10 flex flex-col p-7">
 
         {/* Tag + number row */}
         <div className="flex items-center justify-between mb-6">
@@ -100,12 +100,6 @@ function Card({
               color: pal.accent,
             }}
           >
-            {step.hot && (
-              <span
-                className="w-1.5 h-1.5 rounded-full animate-pulse"
-                style={{ background: pal.accent }}
-              />
-            )}
             {step.tag}
           </div>
           <span
@@ -118,14 +112,14 @@ function Card({
 
         {/* Title */}
         <h3
-          className={`font-syne font-normal leading-tight text-[#e8e4dc] mb-4 ${featured ? "text-[28px] md:text-[36px]" : "text-[20px] md:text-[24px]"}`}
+          className="font-syne font-normal leading-tight text-[#e8e4dc] mb-4 text-[20px] md:text-[24px]"
         >
           {step.title}
         </h3>
 
         {/* Description */}
         <p
-          className={`leading-relaxed text-[#e8e4dcc7] ${featured ? "text-[15px] max-w-2xl" : "text-[14px]"}`}
+          className="text-[14px] leading-relaxed text-[#e8e4dcc7]"
         >
           {step.description}
         </p>
@@ -137,10 +131,10 @@ function Card({
               key={i}
               className="h-px flex-1 transition-all duration-500"
               style={{
-                background: i <= index
+                background: i === 0
                   ? pal.accent
                   : "rgba(255,255,255,0.08)",
-                opacity: i <= index ? (i === index ? 0.9 : 0.35) : 1,
+                opacity: i === 0 ? 0.9 : 1,
               }}
             />
           ))}
