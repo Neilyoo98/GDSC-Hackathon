@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRef } from "react";
 import type { CSSProperties } from "react";
-import { StepCard } from "@/components/StepCard";
+import { StepCards } from "@/components/StepCard";
 
 const coworkerCards = [
   {
@@ -433,11 +433,7 @@ export default function Home() {
       {/* ── HOW IT WORKS ── */}
       <section id="how-it-works" className="relative z-10 px-6 py-20 md:px-10">
         <SectionHeading eyebrow="How it works" title="Coworkers consult. Bug gets fixed." />
-        <div className="mt-10">
-          {useCaseSteps.map((step, i) => (
-            <StepCard key={step.number} step={step} index={i} />
-          ))}
-        </div>
+        <StepCards steps={useCaseSteps} />
       </section>
 
       {/* ── CONTEXT CONSTITUTION ── */}

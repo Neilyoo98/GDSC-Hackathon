@@ -11,128 +11,166 @@ interface Step {
   hot?: boolean;
 }
 
-export function StepCard({ step, index }: { step: Step; index: number }) {
-  const cardRef  = useRef<HTMLDivElement>(null);
-  const inView   = useInView(cardRef, { once: true, margin: "-60px" });
-  const [glow, setGlow] = useState({ x: 50, y: 50, visible: false });
+const PALETTE = [
+  { accent: "#ff6b6b", glow: "rgba(255,107,107,0.12)", border: "rgba(255,107,107,0.22)", dim: "rgba(255,107,107,0.06)" },
+  { accent: "#4ecdc4", glow: "rgba(78,205,196,0.12)",  border: "rgba(78,205,196,0.22)",  dim: "rgba(78,205,196,0.06)"  },
+  { accent: "#39ff14", glow: "rgba(57,255,20,0.18)",   border: "rgba(57,255,20,0.35)",   dim: "rgba(57,255,20,0.09)"   },
+  { accent: "#a78bfa", glow: "rgba(167,139,250,0.12)", border: "rgba(167,139,250,0.22)", dim: "rgba(167,139,250,0.06)" },
+  { accent: "#00f0ff", glow: "rgba(0,240,255,0.12)",   border: "rgba(0,240,255,0.22)",   dim: "rgba(0,240,255,0.06)"   },
+];
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = cardRef.current!.getBoundingClientRect();
-    setGlow({
-      x: ((e.clientX - rect.left) / rect.width)  * 100,
-      y: ((e.clientY - rect.top)  / rect.height) * 100,
-      visible: true,
-    });
+function Card({
+  step, index, featured = false,
+}: {
+  step: Step; index: number; featured?: boolean;
+}) {
+  const ref    = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { once: true, margin: "-80px" });
+  const [mouse, setMouse] = useState({ x: 50, y: 50, over: false });
+  const pal    = PALETTE[index] ?? PALETTE[0];
+
+  const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const r = ref.current!.getBoundingClientRect();
+    setMouse({ x: ((e.clientX - r.left) / r.width) * 100, y: ((e.clientY - r.top) / r.height) * 100, over: true });
   };
-
-  const accent = step.hot ? "#39ff14" : "#00f0ff";
 
   return (
     <motion.div
-      ref={cardRef}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={() => setGlow((g) => ({ ...g, visible: false }))}
-      initial={{ opacity: 0, y: 28 }}
+      ref={ref}
+      onMouseMove={onMove}
+      onMouseLeave={() => setMouse(m => ({ ...m, over: false }))}
+      initial={{ opacity: 0, y: 32 }}
       animate={inView ? { opacity: 1, y: 0 } : {}}
-      transition={{ duration: 0.55, delay: index * 0.1, ease: [0.22, 1, 0.36, 1] }}
-      whileHover={{ y: -2 }}
-      className="group relative overflow-hidden"
+      transition={{ duration: 0.6, delay: index * 0.08, ease: [0.22, 1, 0.36, 1] }}
+      whileHover={{ y: -4, transition: { duration: 0.25 } }}
+      className={`group relative overflow-hidden ${featured ? "md:col-span-2" : ""}`}
       style={{
-        borderTop: "1px solid rgba(255,255,255,0.06)",
+        background: `linear-gradient(135deg, ${pal.dim} 0%, rgba(8,8,8,0.9) 60%)`,
+        border: `1px solid ${pal.border}`,
+        boxShadow: `0 0 32px ${pal.glow}, inset 0 1px 0 rgba(255,255,255,0.04)`,
       }}
     >
-      {/* ── Liquid glass background ───────────────────────────────────────── */}
+      {/* Mouse glow */}
       <div
-        className="absolute inset-0 transition-opacity duration-300"
+        className="absolute inset-0 pointer-events-none transition-opacity duration-300"
         style={{
-          background: `radial-gradient(circle at ${glow.x}% ${glow.y}%, ${accent}14 0%, transparent 65%)`,
-          opacity: glow.visible ? 1 : 0,
+          background: `radial-gradient(circle at ${mouse.x}% ${mouse.y}%, ${pal.glow} 0%, transparent 60%)`,
+          opacity: mouse.over ? 1 : 0,
         }}
       />
 
-      {/* Frosted glass card surface */}
+      {/* Scanline texture */}
       <div
-        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+        className="absolute inset-0 pointer-events-none opacity-[0.03]"
         style={{
-          background: "linear-gradient(135deg, rgba(255,255,255,0.025) 0%, rgba(255,255,255,0.005) 100%)",
-          backdropFilter: "blur(1px)",
+          backgroundImage: "repeating-linear-gradient(0deg,transparent,transparent 2px,#fff 2px,#fff 3px)",
+          backgroundSize: "100% 3px",
         }}
       />
 
-      {/* Left accent line */}
-      <motion.div
-        className="absolute left-0 top-0 bottom-0 w-px"
-        style={{ background: `linear-gradient(to bottom, transparent, ${accent}, transparent)` }}
-        initial={{ scaleY: 0, opacity: 0 }}
-        animate={glow.visible ? { scaleY: 1, opacity: 1 } : { scaleY: 0, opacity: 0 }}
-        transition={{ duration: 0.3 }}
-      />
-
-      {/* Top shimmer line on hover */}
-      <motion.div
-        className="absolute top-0 left-0 right-0 h-px"
+      {/* Giant background number */}
+      <div
+        className="absolute -right-4 -bottom-6 font-syne font-bold leading-none select-none pointer-events-none"
         style={{
-          background: `linear-gradient(to right, transparent, ${accent}80, transparent)`,
+          fontSize: featured ? "clamp(140px,18vw,200px)" : "clamp(100px,12vw,150px)",
+          color: pal.accent,
+          opacity: 0.045,
+          letterSpacing: "-0.05em",
         }}
-        initial={{ scaleX: 0, opacity: 0 }}
-        animate={glow.visible ? { scaleX: 1, opacity: 1 } : { scaleX: 0, opacity: 0 }}
-        transition={{ duration: 0.4 }}
-      />
-
-      {/* ── Content ──────────────────────────────────────────────────────── */}
-      <div className="relative grid grid-cols-[96px_1px_1fr] py-9 md:grid-cols-[120px_1px_1fr]">
-
-        {/* Number */}
-        <motion.div
-          className="font-syne leading-none tracking-[4px] select-none"
-          style={{ fontSize: "clamp(52px, 6vw, 72px)" }}
-          animate={{ color: glow.visible ? `${accent}55` : "#e8e4dc12" }}
-          transition={{ duration: 0.3 }}
-        >
-          {step.number}
-        </motion.div>
-
-        {/* Divider */}
-        <div
-          className="transition-all duration-300"
-          style={{
-            background: glow.visible
-              ? `linear-gradient(to bottom, transparent, ${accent}60, transparent)`
-              : "#1f1f1f",
-          }}
-        />
-
-        {/* Text */}
-        <div className="pl-6 md:pl-10 flex flex-col justify-center">
-          <motion.h3
-            className="font-medium leading-snug transition-colors duration-300"
-            style={{ fontSize: "clamp(14px, 1.5vw, 17px)" }}
-            animate={{ color: glow.visible ? "#ffffff" : "#e8e4dc" }}
-          >
-            {step.title}
-          </motion.h3>
-
-          <p className="mt-2 max-w-[600px] text-[12px] leading-[1.9] text-[#e8e4dc55] group-hover:text-[#e8e4dc80] transition-colors duration-300">
-            {step.description}
-          </p>
-
-          <motion.span
-            className="mt-3 font-mono text-[9px] uppercase tracking-[2.5px] inline-block"
-            animate={{ color: glow.visible ? accent : step.hot ? "#39ff1488" : "#e8e4dc33" }}
-            transition={{ duration: 0.3 }}
-          >
-            {step.tag}
-          </motion.span>
-        </div>
+      >
+        {step.number}
       </div>
 
-      {/* Corner decoration */}
+      {/* Top edge accent */}
       <div
-        className="absolute bottom-3 right-4 font-mono text-[8px] tracking-[2px] transition-all duration-300 opacity-0 group-hover:opacity-40 select-none"
-        style={{ color: accent }}
-      >
-        ▸
+        className="absolute top-0 left-0 right-0 h-px"
+        style={{ background: `linear-gradient(to right, transparent, ${pal.accent}99, transparent)` }}
+      />
+
+      {/* Content */}
+      <div className={`relative z-10 flex flex-col ${featured ? "p-8 md:p-10" : "p-7"}`}>
+
+        {/* Tag + number row */}
+        <div className="flex items-center justify-between mb-6">
+          <div
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 font-mono text-[9px] uppercase tracking-[2px]"
+            style={{
+              background: `${pal.glow}`,
+              border: `1px solid ${pal.border}`,
+              color: pal.accent,
+            }}
+          >
+            {step.hot && (
+              <span
+                className="w-1.5 h-1.5 rounded-full animate-pulse"
+                style={{ background: pal.accent }}
+              />
+            )}
+            {step.tag}
+          </div>
+          <span
+            className="font-syne font-bold text-[11px] tracking-[3px]"
+            style={{ color: pal.accent, opacity: 0.7 }}
+          >
+            {step.number}
+          </span>
+        </div>
+
+        {/* Title */}
+        <h3
+          className={`font-syne font-normal leading-tight text-[#e8e4dc] mb-4 ${featured ? "text-[28px] md:text-[36px]" : "text-[20px] md:text-[24px]"}`}
+        >
+          {step.title}
+        </h3>
+
+        {/* Description */}
+        <p
+          className={`leading-relaxed text-[#e8e4dc88] ${featured ? "text-[14px] max-w-2xl" : "text-[13px]"}`}
+        >
+          {step.description}
+        </p>
+
+        {/* Bottom row */}
+        <div className="mt-6 flex items-center gap-3">
+          {[...Array(5)].map((_, i) => (
+            <div
+              key={i}
+              className="h-px flex-1 transition-all duration-500"
+              style={{
+                background: i <= index
+                  ? pal.accent
+                  : "rgba(255,255,255,0.08)",
+                opacity: i <= index ? (i === index ? 0.9 : 0.35) : 1,
+              }}
+            />
+          ))}
+          <span
+            className="font-mono text-[9px] tracking-widest ml-1 transition-colors duration-300 group-hover:opacity-100 opacity-40"
+            style={{ color: pal.accent }}
+          >
+            ◉
+          </span>
+        </div>
       </div>
     </motion.div>
   );
+}
+
+export function StepCards({ steps }: { steps: Step[] }) {
+  return (
+    <div className="mt-12 grid gap-3 md:grid-cols-2">
+      {steps.slice(0, 2).map((step, i) => (
+        <Card key={step.number} step={step} index={i} />
+      ))}
+      {steps[2] && <Card step={steps[2]} index={2} featured />}
+      {steps.slice(3).map((step, i) => (
+        <Card key={step.number} step={step} index={i + 3} />
+      ))}
+    </div>
+  );
+}
+
+/* Keep old export name for backwards compat */
+export function StepCard({ step, index }: { step: Step; index: number }) {
+  return <Card step={step} index={index} />;
 }
