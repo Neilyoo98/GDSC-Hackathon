@@ -73,6 +73,9 @@ function tokensFromFacts(agent: Agent, categories: string[]): string[] {
 function readableList(values: string[], max = 2): string {
   return values.slice(0, max).join(", ");
 }
+function connectionKey(conn: MeshConnection, agents: Agent[]): string {
+  return `${agents[conn.a]?.id ?? conn.a}-${agents[conn.b]?.id ?? conn.b}-${conn.category}-${conn.label}`;
+}
 function buildConnection(a: Agent, b: Agent, ai: number, bi: number): MeshConnection | null {
   const sharedDirs  = overlap(ownershipPaths(a), ownershipPaths(b));
   const sharedLangs = overlap(languages(a), languages(b));
@@ -98,27 +101,6 @@ function meshConnections(agents: Agent[]): MeshConnection[] {
   return links.sort((l, r) => r.score - l.score).slice(0, Math.max(agents.length, 4));
 }
 
-// ── Feature 1: Search ──────────────────────────────────────────────────────
-function searchAgents(query: string, agents: Agent[]): Set<string> {
-  if (!query.trim()) return new Set();
-  const q = query.toLowerCase();
-  return new Set(
-    agents
-      .filter((a) => {
-        if ((a.name ?? "").toLowerCase().includes(q)) return true;
-        if ((a.github_username ?? "").toLowerCase().includes(q)) return true;
-        if ((a.role ?? "").toLowerCase().includes(q)) return true;
-        if ((a.constitution_facts ?? []).some((f) =>
-          f.object.toLowerCase().includes(q) || f.predicate.toLowerCase().includes(q) || f.category.includes(q)
-        )) return true;
-        if ((a.github_data_summary?.languages ?? []).some((l) => l.toLowerCase().includes(q))) return true;
-        if ((a.github_data_summary?.top_files ?? []).some((f) => f.toLowerCase().includes(q))) return true;
-        return false;
-      })
-      .map((a) => a.id)
-  );
-}
-
 // ── Feature 4: Fact ticker text ────────────────────────────────────────────
 function tickerFact(agent: Agent, tick: number): string {
   const facts = (agent.constitution_facts ?? []).filter((f) =>
@@ -139,17 +121,17 @@ function arcPath(cx: number, cy: number, r: number, startDeg: number, endDeg: nu
 }
 
 // ── Feature 2: Particles (subtle, single-color) ───────────────────────────
-function ConnectionParticles({ ax, ay, bx, by, connIdx }: {
-  ax: number; ay: number; bx: number; by: number; connIdx: number;
+function ConnectionParticles({ ax, ay, bx, by, connIdx, color }: {
+  ax: number; ay: number; bx: number; by: number; connIdx: number; color: string;
 }) {
   return (
     <>
       {[0, 1].map((p) => (
         <motion.circle
           key={p}
-          r={1.5}
-          fill="#e8e4dc"
-          animate={{ cx: [ax, bx], cy: [ay, by], opacity: [0, 0.28, 0.28, 0] }}
+          r={2.2}
+          fill={color}
+          animate={{ cx: [ax, bx], cy: [ay, by], opacity: [0, 0.9, 0.9, 0] }}
           transition={{
             duration: 3.0 + connIdx * 0.4,
             repeat: Infinity,
@@ -166,17 +148,16 @@ function ConnectionParticles({ ax, ay, bx, by, connIdx }: {
 // ── Mesh graph ─────────────────────────────────────────────────────────────
 function MeshGraph({
   agents, connections, selectedId, onSelect,
-  matchedIds, searchActive,
   onConnectionClick,
+  activeConnectionKey,
   entered, tick,
 }: {
   agents: Agent[];
   connections: MeshConnection[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
-  matchedIds: Set<string>;
-  searchActive: boolean;
   onConnectionClick: (c: MeshConnection, svgMx: number, svgMy: number) => void;
+  activeConnectionKey: string | null;
   entered: boolean;
   tick: number;
 }) {
@@ -190,10 +171,10 @@ function MeshGraph({
 
   if (!agents.length) return null;
 
-  const W = 900; const H = 600; const CX = W / 2; const CY = H / 2;
-  const RADIUS = Math.min(210, 70 * agents.length);
-  const NODE_R  = 36;
-  const ARC_R   = NODE_R + 14;
+  const W = 1160; const H = 760; const CX = W / 2; const CY = H / 2;
+  const RADIUS = Math.min(230, Math.max(175, 64 * agents.length));
+  const NODE_R  = 38;
+  const ARC_R   = NODE_R + 16;
 
   const positions = agents.map((_, i) => {
     const angle = ((i / agents.length) * 360 - 90) * (Math.PI / 180);
@@ -220,12 +201,12 @@ function MeshGraph({
         </radialGradient>
       </defs>
 
-      <circle cx={CX} cy={CY} r={RADIUS + 60} fill="url(#center-glow)" />
+      <circle cx={CX} cy={CY} r={RADIUS + 82} fill="url(#center-glow)" />
 
       {/* Orbit ring */}
       <motion.circle
         cx={CX} cy={CY} r={RADIUS}
-        fill="none" stroke="#e8e4dc" strokeWidth={0.4} strokeOpacity={0.06} strokeDasharray="4 14"
+        fill="none" stroke="#39ff14" strokeWidth={0.8} strokeOpacity={0.16} strokeDasharray="6 14"
         initial={{ opacity: 0 }} animate={{ opacity: entered ? 1 : 0 }}
         transition={{ duration: 0.8, delay: 0.2 }}
       />
@@ -234,41 +215,66 @@ function MeshGraph({
       {connections.map((conn, ci) => {
         const a = positions[conn.a]; const b = positions[conn.b];
         if (!a || !b) return null;
-        const isActive = selectedId === agents[conn.a]?.id || selectedId === agents[conn.b]?.id;
+        const key = connectionKey(conn, agents);
+        const isActive =
+          activeConnectionKey === key ||
+          selectedId === agents[conn.a]?.id ||
+          selectedId === agents[conn.b]?.id;
         const mx = (a.x + b.x) / 2; const my = (a.y + b.y) / 2;
-
-        const aMatched = !searchActive || matchedIds.has(agents[conn.a]?.id ?? "");
-        const bMatched = !searchActive || matchedIds.has(agents[conn.b]?.id ?? "");
-        const connVisible = aMatched || bMatched;
+        const centerDistance = Math.hypot(mx - CX, my - CY);
+        const lineLength = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+        const labelOffset = centerDistance < 118 ? 82 : 0;
+        const labelX = mx + (-(b.y - a.y) / lineLength) * labelOffset;
+        const labelY = my + ((b.x - a.x) / lineLength) * labelOffset;
+        const color = CAT_COLORS[conn.category] ?? "#e8e4dc";
+        const labelKey = `${conn.category}:${conn.label.toLowerCase()}`;
+        const firstLabelIndex = connections.findIndex((candidate) => `${candidate.category}:${candidate.label.toLowerCase()}` === labelKey);
+        const showLabel = isActive || firstLabelIndex === ci;
 
         return (
           <motion.g
             key={`${agents[conn.a]?.id}-${agents[conn.b]?.id}`}
             initial={{ opacity: 0 }}
-            animate={{ opacity: entered ? (connVisible ? 1 : 0.05) : 0 }}
+            animate={{ opacity: entered ? 1 : 0 }}
             transition={{ duration: 0.7, delay: 0.5 + ci * 0.1 }}
             style={{ cursor: "pointer" }}
             onClick={(e) => { e.stopPropagation(); onConnectionClick(conn, mx, my); }}
           >
-            {/* Line */}
+            {/* Relationship line */}
             <line x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-              stroke="#e8e4dc"
-              strokeWidth={isActive ? 1.2 : 0.7}
-              strokeOpacity={isActive ? 0.5 : 0.12}
-              strokeDasharray={isActive ? "none" : "5 12"}
+              stroke={color}
+              strokeWidth={isActive ? 3.4 : 2}
+              strokeOpacity={isActive ? 0.9 : 0.45}
+              strokeDasharray={isActive ? "none" : "8 10"}
               strokeDashoffset={-dash} />
+            <line x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+              stroke={color}
+              strokeWidth={isActive ? 10 : 7}
+              strokeOpacity={isActive ? 0.11 : 0.055}
+            />
             {/* Wide hit area */}
             <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="transparent" strokeWidth={18} />
-            {/* Midpoint label — only when active */}
-            {isActive && (
-              <text x={mx} y={my - 6} textAnchor="middle" fill="#e8e4dc"
-                fontSize={7} fontFamily="'Space Mono', monospace" letterSpacing="0.08em"
-                opacity={0.5} style={{ textTransform: "uppercase", userSelect: "none" }}>
-                {conn.label.slice(0, 14)}
-              </text>
+            {/* Midpoint label */}
+            {showLabel && (
+              <g opacity={isActive ? 1 : 0.34}>
+                <rect
+                  x={labelX - 50}
+                  y={labelY - 16}
+                  width={100}
+                  height={20}
+                  fill="#080808"
+                  stroke={color}
+                  strokeOpacity={isActive ? 0.75 : 0.16}
+                />
+                <text x={labelX} y={labelY - 2} textAnchor="middle" fill={isActive ? color : "#e8e4dc"}
+                  fontSize={8} fontFamily="'Space Mono', monospace" letterSpacing="0.1em"
+                  opacity={isActive ? 0.95 : 0.62} style={{ textTransform: "uppercase", userSelect: "none" }}>
+                  {conn.label.slice(0, 14)}
+                </text>
+              </g>
             )}
-            {/* Subtle particles */}
-            <ConnectionParticles ax={a.x} ay={a.y} bx={b.x} by={b.y} connIdx={ci} />
+            {/* Visible particles */}
+            <ConnectionParticles ax={a.x} ay={a.y} bx={b.x} by={b.y} connIdx={ci} color={color} />
           </motion.g>
         );
       })}
@@ -294,7 +300,6 @@ function MeshGraph({
       {agents.map((agent, i) => {
         const { x, y } = positions[i];
         const isSelected  = selectedId === agent.id;
-        const dimmed = searchActive && !matchedIds.has(agent.id);
         const facts  = agent.constitution_facts ?? [];
 
         return (
@@ -304,7 +309,7 @@ function MeshGraph({
             onClick={(e) => { e.stopPropagation(); onSelect(isSelected ? null : agent.id); }}
             initial={{ opacity: 0, scale: 0.4 }}
             animate={{
-              opacity: entered ? (dimmed ? 0.15 : 1) : 0,
+              opacity: entered ? 1 : 0,
               scale:   entered ? 1 : 0.4,
             }}
             transition={{ duration: 0.5, delay: 0.3 + i * 0.12, ease: "backOut" }}
@@ -314,15 +319,6 @@ function MeshGraph({
               <circle cx={x} cy={y} r={ARC_R + 12} fill="none"
                 stroke="#39ff14" strokeWidth={1} strokeOpacity={0.6}
                 style={{ filter: "drop-shadow(0 0 10px #39ff14)" }} />
-            )}
-
-            {/* Search highlight ring */}
-            {searchActive && matchedIds.has(agent.id) && (
-              <motion.circle cx={x} cy={y} r={ARC_R + 16} fill="none"
-                stroke="#39ff14" strokeWidth={2} strokeOpacity={0.8}
-                animate={{ r: [ARC_R + 14, ARC_R + 20, ARC_R + 14] }}
-                transition={{ duration: 1.6, repeat: Infinity }}
-              />
             )}
 
             {/* Constitution progress ring — single clean arc */}
@@ -358,7 +354,7 @@ function MeshGraph({
             {/* Name */}
             <text x={x} y={y + NODE_R + 18}
               textAnchor="middle"
-              fill={isSelected ? "#39ff14" : searchActive && matchedIds.has(agent.id) ? "#39ff14" : "#e8e4dc"}
+              fill={isSelected ? "#39ff14" : "#e8e4dc"}
               fontSize={11} fontFamily="'Space Mono', monospace"
               letterSpacing="0.15em"
               style={{ textTransform: "uppercase", userSelect: "none" }}>
@@ -427,9 +423,9 @@ function ConnectionCard({
     collaboration:  "Shared context",
   };
 
-  // Convert SVG coords (0-900, 0-600) to percentages
-  const leftPct = (svgMx / 900) * 100;
-  const topPct  = (svgMy / 600) * 100;
+  // Convert SVG coords (0-1160, 0-760) to percentages.
+  const leftPct = (svgMx / 1160) * 100;
+  const topPct  = (svgMy / 760) * 100;
 
   return (
     <motion.div
@@ -503,9 +499,6 @@ export default function AgentsPage() {
   const [creating,   setCreating]       = useState(false);
   const [createError,setCreateError]    = useState<string | null>(null);
 
-  // Feature 1: search
-  const [searchQuery, setSearchQuery]   = useState("");
-
   // Feature 3: entrance
   const [entered, setEntered]           = useState(false);
 
@@ -518,8 +511,7 @@ export default function AgentsPage() {
   const agentList     = useMemo(() => (Array.isArray(agents) ? agents : []), [agents]);
   const selectedAgent = agentList.find((a) => a.id === selectedId) ?? null;
   const connections   = useMemo(() => meshConnections(agentList), [agentList]);
-  const matchedIds    = useMemo(() => searchAgents(searchQuery, agentList), [searchQuery, agentList]);
-  const searchActive  = searchQuery.trim().length > 0;
+  const activeConnectionKey = connCard ? connectionKey(connCard.conn, agentList) : null;
 
   // Feature 3: trigger entrance once agents load
   useEffect(() => {
@@ -597,43 +589,6 @@ export default function AgentsPage() {
           </p>
         </div>
 
-        {/* Feature 1: Search bar — top-center */}
-        {!isLoading && agentList.length > 0 && (
-          <div className="absolute top-6 left-1/2 -translate-x-1/2 z-20 w-72 pointer-events-auto">
-            <div className="relative">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => { setSearchQuery(e.target.value); setConnCard(null); }}
-                placeholder='Ask the mesh… "auth", "Go", "security"'
-                className="w-full bg-[#080808] border border-[#1f1f1f] px-4 py-2 pr-8 font-mono text-[11px] text-[#e8e4dc] placeholder-[#e8e4dc33] focus:outline-none focus:border-[#39ff1455] focus:bg-[#0a0a0a]"
-              />
-              {searchQuery && (
-                <button onClick={() => setSearchQuery("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#e8e4dc44] hover:text-[#e8e4dc] text-base leading-none">
-                  ×
-                </button>
-              )}
-            </div>
-            <AnimatePresence>
-              {searchQuery && (
-                <motion.div
-                  initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
-                  className="border border-t-0 border-[#1f1f1f] bg-[#080808] px-3 py-1.5"
-                >
-                  {matchedIds.size > 0 ? (
-                    <p className="font-mono text-[9px] text-[#39ff14]">
-                      {matchedIds.size} coworker{matchedIds.size !== 1 ? "s" : ""} match · click to view
-                    </p>
-                  ) : (
-                    <p className="font-mono text-[9px] text-[#e8e4dc44]">No constitution facts match</p>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        )}
-
         {/* Status */}
         <div className="absolute top-6 right-6 z-10 flex items-center gap-2 pointer-events-none">
           <span className="w-1.5 h-1.5 rounded-full bg-[#39ff14] animate-pulse" />
@@ -661,9 +616,8 @@ export default function AgentsPage() {
                 connections={connections}
                 selectedId={selectedId}
                 onSelect={handleSelect}
-                matchedIds={matchedIds}
-                searchActive={searchActive}
                 onConnectionClick={handleConnectionClick}
+                activeConnectionKey={activeConnectionKey}
                 entered={entered}
                 tick={tick}
               />
@@ -708,7 +662,7 @@ export default function AgentsPage() {
         {/* Hint strip */}
         {!isLoading && agentList.length > 0 && (
           <p className="absolute bottom-7 left-1/2 -translate-x-1/2 z-10 font-mono text-[9px] text-[#e8e4dc22] tracking-[2px] pointer-events-none">
-            click agent · click connection line · search above
+            click agent · click a relationship line to inspect why coworkers are connected
           </p>
         )}
       </div>
