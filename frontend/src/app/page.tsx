@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRef } from "react";
 import type { CSSProperties } from "react";
+import { StepCard } from "@/components/StepCard";
 
 const coworkerCards = [
   {
@@ -427,16 +428,8 @@ export default function Home() {
       <section id="how-it-works" className="relative z-10 px-6 py-20 md:px-10">
         <SectionHeading eyebrow="How it works" title="Coworkers consult. Bug gets fixed." />
         <div className="mt-10">
-          {useCaseSteps.map((step) => (
-            <div key={step.number} className="interactive-surface grid grid-cols-[96px_1px_1fr] border-t border-[#1f1f1f] py-8 md:grid-cols-[120px_1px_1fr]">
-              <div className="font-syne text-[64px] font-normal leading-none tracking-[4px] text-[#e8e4dc14] md:text-[72px]">{step.number}</div>
-              <div className="bg-[#1f1f1f]" />
-              <div className="pl-6 md:pl-8">
-                <h3 className="text-[14px] font-medium text-[#e8e4dc]">{step.title}</h3>
-                <p className="mt-2 max-w-[620px] text-[12px] leading-[1.85] text-[#e8e4dc66]">{step.description}</p>
-                <p className={`font-mono mt-3 text-[9px] uppercase tracking-[2px] ${step.hot ? "text-[#39ff14]" : "text-[#e8e4dc66]"}`}>{step.tag}</p>
-              </div>
-            </div>
+          {useCaseSteps.map((step, i) => (
+            <StepCard key={step.number} step={step} index={i} />
           ))}
         </div>
       </section>
