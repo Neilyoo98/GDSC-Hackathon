@@ -527,7 +527,6 @@ async def ready():
     """Report whether the real demo dependencies are configured and reachable."""
     checks: dict[str, Any] = {
         "openai_api_key": bool(os.getenv("OPENAI_API_KEY")),
-        "gemini_api_key": bool(os.getenv("GEMINI_API_KEY")),
         "github_token": bool(os.getenv("GITHUB_TOKEN")),
         "target_repo": bool(_target_repo()),
         "go_toolchain": bool(shutil.which("go")),
@@ -541,8 +540,8 @@ async def ready():
 
     required = [
         "openai_api_key",
-        "gemini_api_key",
         "github_token",
+        "target_repo",
         "go_toolchain",
         "qdrant",
     ]
