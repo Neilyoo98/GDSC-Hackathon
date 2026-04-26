@@ -36,6 +36,55 @@ export interface AgentMessage {
   timestamp?: number;
 }
 
+export interface CoworkerContextExchange {
+  requester_aubi?: string;
+  responder_aubi?: string;
+  source_aubi?: string;
+  target_aubi?: string;
+  sender?: string;
+  recipient?: string;
+  from?: string;
+  to?: string;
+  reason?: string;
+  why?: string;
+  context?: string;
+  shared_context?: string;
+  summary?: string;
+  message?: string;
+  related_files?: string[];
+  timestamp?: number | string;
+}
+
+export interface SharedMemoryHit {
+  agent_id?: string;
+  agent_name?: string;
+  source?: string;
+  title?: string;
+  memory?: string;
+  content?: string;
+  summary?: string;
+  relevance?: string;
+  score?: number;
+  confidence?: number;
+  matched_files?: string[];
+  evidence_facts?: Record<string, unknown>[];
+}
+
+export interface MemoryUpdate {
+  agent_id?: string;
+  agent_name?: string;
+  coworker_aubi?: string;
+  update?: string;
+  episode?: string;
+  memory?: string;
+  fact?: string;
+  subject?: string;
+  predicate?: string;
+  object?: string;
+  category?: string;
+  confidence?: number;
+}
+
 export interface GitHubIssue {
   url: string;
   html_url?: string;
@@ -60,6 +109,9 @@ export type AUBIEvent =
   | { event: "node_done"; node: string; data: Record<string, unknown> | null }
   | { event: "agent_message"; data: AgentMessage }
   | { event: "routing_evidence"; data: Record<string, unknown> }
+  | { event: "coworker_context"; data: CoworkerContextExchange }
+  | { event: "shared_memory"; data: SharedMemoryHit }
+  | { event: "memory_update"; data: MemoryUpdate }
   | { event: "aubi_learned"; data: Record<string, unknown> }
   | { event: "awaiting_approval"; data: Record<string, unknown> }
   | { event: "complete"; data: Record<string, unknown> | null }
@@ -83,6 +135,7 @@ export type SSENode =
   | "error";
 
 export interface SSEEvent {
+  eventType?: string;
   node: SSENode;
   status: "running" | "done" | "error";
   output: Record<string, unknown> | null;
@@ -102,6 +155,9 @@ export interface IncidentResult {
   owners: string[];
   agent_messages?: AgentMessage[];
   routing_evidence?: Record<string, unknown>[];
+  coworker_contexts?: CoworkerContextExchange[];
+  shared_memory?: SharedMemoryHit[];
+  memory_updates?: MemoryUpdate[];
   learned_facts?: Record<string, unknown>[];
   stream_log: string[];
 }

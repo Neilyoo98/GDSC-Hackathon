@@ -44,6 +44,10 @@ class AUBIIssueState(TypedDict):
     # Routing evidence — why this agent was chosen (shown in "Why Alice?" panel)
     routing_evidence: Annotated[list[dict[str, Any]], operator.add]
 
+    # Coworker mesh output — owner agents exchange context with related agents
+    coworker_exchanges: Annotated[list[dict[str, Any]], operator.add]
+    shared_memory_hits: Annotated[list[dict[str, Any]], operator.add]
+
     # Code reader output
     file_contents: dict[str, str]   # {filepath: raw_code}
 
@@ -66,6 +70,7 @@ class AUBIIssueState(TypedDict):
 
     # Memory update — what AUBI learned after this incident (shown in "AUBI learned" strip)
     learned_facts: Annotated[list[dict[str, Any]], operator.add]
+    memory_writes: Annotated[list[dict[str, Any]], operator.add]
 
     # Slack-style response (incident mode)
     slack_message: Optional[str]

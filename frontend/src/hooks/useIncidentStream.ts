@@ -2,7 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
-import type { IncidentResult, SSEEvent, SSENode, StreamLike } from "@/lib/types";
+import type {
+  CoworkerContextExchange,
+  IncidentResult,
+  MemoryUpdate,
+  SSEEvent,
+  SSENode,
+  SharedMemoryHit,
+  StreamLike,
+} from "@/lib/types";
 
 type BackendEvent = {
   event?: string;
@@ -13,13 +21,17 @@ type BackendEvent = {
 const GRAPH_NODES = new Set<SSENode>([
   "thread",
   "issue_reader",
+  "incident_analyzer",
   "ownership_router",
   "query_single_agent",
+  "agent_querier",
   "code_reader",
   "fix_generator",
   "test_runner",
   "approval_gate",
   "pr_pusher",
+  "response_drafter",
+  "memory_updater",
   "complete",
   "error",
 ]);
@@ -42,17 +54,18 @@ function normalizeBackendEvent(raw: BackendEvent): SSEEvent {
   const eventType = raw.event ?? "message";
 
   if (eventType === "thread") {
-    return { node: "thread", status: "done", output: asOutput(raw.data) };
+    return { eventType, node: "thread", status: "done", output: asOutput(raw.data) };
   }
   if (eventType === "node_start") {
-    return { node: asNode(raw.node, "issue_reader"), status: "running", output: null };
+    return { eventType, node: asNode(raw.node, "issue_reader"), status: "running", output: null };
   }
   if (eventType === "node_done") {
-    return { node: asNode(raw.node, "issue_reader"), status: "done", output: asOutput(raw.data) };
+    return { eventType, node: asNode(raw.node, "issue_reader"), status: "done", output: asOutput(raw.data) };
   }
   if (eventType === "agent_message") {
     const output = asOutput(raw.data);
     return {
+      eventType,
       node: "query_single_agent",
       status: "done",
       output,
@@ -60,27 +73,41 @@ function normalizeBackendEvent(raw: BackendEvent): SSEEvent {
     };
   }
   if (eventType === "routing_evidence") {
-    return { node: "ownership_router", status: "done", output: asOutput(raw.data) };
+    return { eventType, node: "ownership_router", status: "done", output: asOutput(raw.data) };
+  }
+  if (eventType === "coworker_context") {
+    return { eventType, node: "agent_querier", status: "done", output: asOutput(raw.data) };
+  }
+  if (eventType === "shared_memory") {
+    return { eventType, node: "ownership_router", status: "done", output: asOutput(raw.data) };
+  }
+  if (eventType === "memory_update") {
+    return { eventType, node: "memory_updater", status: "done", output: asOutput(raw.data) };
   }
   if (eventType === "aubi_learned") {
-    return { node: "pr_pusher", status: "done", output: asOutput(raw.data) };
+    return { eventType, node: "memory_updater", status: "done", output: asOutput(raw.data) };
   }
   if (eventType === "awaiting_approval") {
-    return { node: "approval_gate", status: "done", output: asOutput(raw.data) };
+    return { eventType, node: "approval_gate", status: "done", output: asOutput(raw.data) };
   }
   if (eventType === "error") {
-    return { node: "error", status: "error", output: asOutput(raw.data) };
+    return { eventType, node: "error", status: "error", output: asOutput(raw.data) };
   }
   if (eventType === "complete") {
-    return { node: "complete", status: "done", output: asOutput(raw.data) };
+    return { eventType, node: "complete", status: "done", output: asOutput(raw.data) };
   }
 
-  return { node: "error", status: "error", output: { message: `Unknown SSE event: ${eventType}` } };
+  return { eventType, node: "error", status: "error", output: { message: `Unknown SSE event: ${eventType}` } };
 }
 
 function mergeArrays<T>(left: T[] | undefined, right: unknown): T[] | undefined {
   if (!Array.isArray(right)) return left;
   return [...(left ?? []), ...(right as T[])];
+}
+
+function appendPayload<T>(left: T[] | undefined, event: SSEEvent, eventTypes: string[]): T[] | undefined {
+  if (!event.eventType || !eventTypes.includes(event.eventType) || !event.output) return left;
+  return [...(left ?? []), event.output as T];
 }
 
 function mergeResult(event: SSEEvent, current: IncidentResult | null): IncidentResult {
@@ -103,7 +130,26 @@ function mergeResult(event: SSEEvent, current: IncidentResult | null): IncidentR
     owners: owners ?? next.owners,
     agent_messages: mergeArrays(next.agent_messages, output.agent_messages),
     routing_evidence: mergeArrays(next.routing_evidence, output.routing_evidence),
-    learned_facts: mergeArrays(next.learned_facts, output.learned_facts),
+    coworker_contexts: appendPayload<CoworkerContextExchange>(
+      mergeArrays(next.coworker_contexts, output.coworker_contexts ?? output.agent_contexts),
+      event,
+      ["coworker_context"]
+    ),
+    shared_memory: appendPayload<SharedMemoryHit>(
+      mergeArrays(next.shared_memory, output.shared_memory ?? output.shared_memory_hits),
+      event,
+      ["shared_memory"]
+    ),
+    memory_updates: appendPayload<MemoryUpdate>(
+      mergeArrays(next.memory_updates, output.memory_updates),
+      event,
+      ["memory_update", "aubi_learned"]
+    ),
+    learned_facts: appendPayload<Record<string, unknown>>(
+      mergeArrays(next.learned_facts, output.learned_facts),
+      event,
+      ["aubi_learned"]
+    ),
     stream_log: mergeArrays(next.stream_log, output.stream_log) ?? next.stream_log,
   };
 }

@@ -190,22 +190,38 @@ class ConstitutionStore:
 
         text   = f"{episode.get('predicate','')} {episode.get('object','')}"
         vector = embed(text)
+        payload = {
+            "user_id":    user_id,
+            "scope":      "user",
+            "scope_id":   user_id,
+            "tenant_id":  tenant_id,
+            "subject":    episode.get("subject", user_id),
+            "predicate":  episode.get("predicate", "resolved"),
+            "object":     episode.get("object", ""),
+            "confidence": episode.get("confidence", 0.9),
+            "category":   "episodes",
+        }
+        for key in (
+            "participants",
+            "owner_ids",
+            "related_agent_ids",
+            "issue_number",
+            "issue_title",
+            "repo_name",
+            "affected_files",
+            "fixed_file_path",
+            "pr_url",
+            "tests_passed",
+            "written_at",
+        ):
+            if key in episode:
+                payload[key] = episode[key]
         _get_client().upsert(
             collection_name=COLLECTION_EPISODES,
             points=[PointStruct(
                 id=str(uuid4()),
                 vector=vector,
-                payload={
-                    "user_id":    user_id,
-                    "scope":      "user",
-                    "scope_id":   user_id,
-                    "tenant_id":  tenant_id,
-                    "subject":    episode.get("subject", user_id),
-                    "predicate":  episode.get("predicate", "resolved"),
-                    "object":     episode.get("object", ""),
-                    "confidence": episode.get("confidence", 0.9),
-                    "category":   "episodes",
-                },
+                payload=payload,
             )],
         )
 
@@ -229,6 +245,7 @@ class ConstitutionStore:
             query_filter=Filter(must=[
                 FieldCondition(key="user_id",   match=MatchValue(value=user_id)),
                 FieldCondition(key="tenant_id", match=MatchValue(value=tenant_id)),
+                FieldCondition(key="scope", match=MatchValue(value="user")),
             ]),
             limit=top_k,
         )
@@ -251,6 +268,7 @@ class ConstitutionStore:
             scroll_filter=Filter(must=[
                 FieldCondition(key="user_id",   match=MatchValue(value=user_id)),
                 FieldCondition(key="tenant_id", match=MatchValue(value=tenant_id)),
+                FieldCondition(key="scope", match=MatchValue(value="user")),
             ]),
             limit=limit,
             with_payload=True,
@@ -317,6 +335,7 @@ class ConstitutionStore:
 
         filt = Filter(must=[
             FieldCondition(key="tenant_id", match=MatchValue(value=tenant_id)),
+            FieldCondition(key="scope", match=MatchValue(value="user")),
             FieldCondition(key="category", match=MatchValue(value="code_ownership")),
             FieldCondition(key="predicate", match=MatchValue(value="owns")),
         ])
