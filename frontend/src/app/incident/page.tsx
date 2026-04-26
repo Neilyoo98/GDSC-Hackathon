@@ -7,6 +7,7 @@ import { useAgents } from "@/hooks/useAgents";
 import { IncidentTerminal } from "@/components/IncidentTerminal";
 import { NeuralTrace } from "@/components/NeuralTrace";
 import { HexGrid } from "@/components/HexGrid";
+import { CoworkerMeshPanel } from "@/components/CoworkerMeshPanel";
 import { api } from "@/lib/api";
 import type { GitHubIssue } from "@/lib/types";
 
@@ -130,6 +131,8 @@ export default function IncidentPage() {
             {error}
           </div>
         )}
+
+        <CoworkerMeshPanel result={result} agents={agents} events={events} />
 
         {/* Mini agent map */}
         {agents.length > 0 && (

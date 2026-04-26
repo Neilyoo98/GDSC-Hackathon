@@ -12,7 +12,10 @@ export function ResponsePanel({
   agents: Agent[];
   events: SSEEvent[];
 }) {
-  const learned = events.filter((event) => event.node === "pr_pusher" && event.status === "done");
+  const learned = events.filter((event) => (
+    event.status === "done" &&
+    (event.eventType === "memory_update" || event.eventType === "aubi_learned" || event.node === "memory_updater")
+  ));
   const owner = agents.find((agent) => result?.owners?.includes(agent.id)) ?? agents[0];
 
   return (
@@ -52,7 +55,7 @@ export function ResponsePanel({
                   transition={{ delay: index * 0.1 }}
                   className="shrink-0 rounded border border-emerald-500/30 bg-aubi-surface px-3 py-1 font-mono text-[11px] text-emerald-400"
                 >
-                  {String(event.output?.update ?? "Memory updated")}
+                  {String(event.output?.update ?? event.output?.episode ?? event.output?.object ?? "Memory updated")}
                 </motion.span>
               ))}
             </div>

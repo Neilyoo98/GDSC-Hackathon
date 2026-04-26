@@ -107,16 +107,12 @@ export function CoworkerMeshPanel({
           <p className="mt-1 text-xs text-[#8aa0c0]">AUBI coworkers exchange context and learn from the incident.</p>
         </div>
         <div className="flex shrink-0 gap-1.5">
-          {[
-            ["CTX", "coworker_context"],
-            ["MEM", "shared_memory"],
-            ["WRITE", "memory_update"],
-          ].map(([label, type]) => (
+          {["coworker_context", "shared_memory", "memory_update"].map((type) => (
             <span
               key={type}
               className="rounded border border-[#1e2d45] px-2 py-1 font-mono text-[9px] text-[#4a6080]"
             >
-              {label} {eventCount(events, type)}
+              {eventCount(events, type)}
             </span>
           ))}
         </div>

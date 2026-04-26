@@ -162,6 +162,19 @@ function ConstellationAnimation() {
 function outputSummary(event: SSEEvent): string {
   if (!event.output) return "";
   const o = event.output;
+  if (event.eventType === "coworker_context") {
+    const from = o.requester_aubi ?? o.source_aubi ?? o.sender ?? o.from ?? "coworker";
+    const to = o.responder_aubi ?? o.target_aubi ?? o.recipient ?? o.to ?? "coworker";
+    return `${String(from)} -> ${String(to)} · ${String(o.reason ?? o.why ?? o.context ?? "").slice(0, 80)}...`;
+  }
+  if (event.eventType === "shared_memory") {
+    const memory = o.memory ?? o.content ?? o.summary ?? o.title ?? "memory matched";
+    return `TEAM MEMORY: ${String(memory).slice(0, 90)}...`;
+  }
+  if (event.eventType === "memory_update" || event.eventType === "aubi_learned") {
+    const update = o.update ?? o.episode ?? o.memory ?? o.object ?? "memory written";
+    return `LEARNED: ${String(update).slice(0, 90)}...`;
+  }
   switch (event.node) {
     case "incident_analyzer":
     case "issue_reader":

@@ -29,6 +29,7 @@ from .state import AUBIIssueState, AgentMessage
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 logger = logging.getLogger(__name__)
+RELATED_FACT_CATEGORIES = {"code_ownership", "expertise", "current_focus", "known_issues", "collaboration"}
 
 # ---------------------------------------------------------------------------
 # Models — GPT-5.5 only. Gemini lives in constitution/builder.py.
@@ -87,6 +88,165 @@ def _flatten_constitution(grouped: dict[str, Any]) -> list[dict[str, Any]]:
     return facts
 
 
+def _tenant_id() -> str:
+    return os.getenv("AUBI_TENANT_ID", "hackathon")
+
+
+def _team_id() -> str:
+    return os.getenv("AUBI_TEAM_ID", "default")
+
+
+def _issue_query(state: AUBIIssueState) -> str:
+    return "\n".join([
+        f"Issue: {state.get('issue_title', '')}",
+        f"Body: {state.get('issue_body', '')}",
+        f"Service: {state.get('affected_service', '')}",
+        f"Error: {state.get('error_type', '')}",
+        f"Files: {', '.join(state.get('affected_files') or [])}",
+    ]).strip()
+
+
+def _agent_name_from_facts(agent_id: str, facts: list[dict[str, Any]]) -> str:
+    return str(next((fact.get("subject") for fact in facts if fact.get("subject")), agent_id))
+
+
+def _compact_fact(fact: dict[str, Any], *, max_object_len: int = 220) -> dict[str, Any]:
+    obj = str(fact.get("object", ""))
+    compact = {
+        "user_id": fact.get("user_id") or fact.get("scope_id"),
+        "subject": fact.get("subject"),
+        "predicate": fact.get("predicate"),
+        "object": obj[:max_object_len],
+        "category": fact.get("category"),
+        "confidence": fact.get("confidence"),
+    }
+    if "_score" in fact:
+        compact["_score"] = round(float(fact.get("_score") or 0.0), 3)
+    if "_collection" in fact:
+        compact["_collection"] = fact.get("_collection")
+    for key in ("scope", "scope_id", "team_id", "participants", "issue_number", "pr_url"):
+        if key in fact:
+            compact[key] = fact[key]
+    return compact
+
+
+def _dedupe_facts(facts: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
+    seen: set[str] = set()
+    deduped: list[dict[str, Any]] = []
+    for fact in facts:
+        key = json.dumps({
+            "subject": fact.get("subject"),
+            "predicate": fact.get("predicate"),
+            "object": fact.get("object"),
+            "category": fact.get("category"),
+            "_collection": fact.get("_collection"),
+        }, sort_keys=True, default=str)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(_compact_fact(fact))
+        if len(deduped) >= limit:
+            break
+    return deduped
+
+
+def _tokens(text: str) -> set[str]:
+    return {
+        token
+        for token in re.findall(r"[a-zA-Z0-9_./-]{3,}", text.lower())
+        if token not in {"the", "and", "for", "with", "from", "this", "that", "issue"}
+    }
+
+
+def _file_signals(files: list[str]) -> set[str]:
+    signals: set[str] = set()
+    for path in files:
+        lowered = path.lower()
+        signals.add(lowered)
+        if "/" in lowered:
+            signals.add(lowered.split("/", 1)[0] + "/")
+        signals.update(part for part in re.split(r"[/_.-]", lowered) if len(part) >= 3)
+    return signals
+
+
+def _select_related_coworkers(
+    *,
+    store: Any,
+    state: AUBIIssueState,
+    owner_ids: list[str],
+    shared_hits: list[dict[str, Any]],
+    limit: int = 3,
+) -> list[dict[str, Any]]:
+    query = _issue_query(state)
+    files = state.get("affected_files") or []
+    query_tokens = _tokens(query)
+    file_signals = _file_signals(files)
+
+    all_user_facts = store.list_user_facts(_tenant_id())
+    semantic_hits = store.search_across_agent_facts(
+        _tenant_id(),
+        query,
+        top_k=64,
+        categories=RELATED_FACT_CATEGORIES,
+    )
+
+    candidates: dict[str, dict[str, Any]] = {}
+
+    def add_candidate(agent_id: str, fact: dict[str, Any], score: float, signal: str) -> None:
+        if not agent_id or agent_id in owner_ids:
+            return
+        facts = all_user_facts.get(agent_id, [])
+        candidate = candidates.setdefault(agent_id, {
+            "agent_id": agent_id,
+            "agent_name": _agent_name_from_facts(agent_id, facts),
+            "score": 0.0,
+            "selection_signals": [],
+            "matched_facts": [],
+        })
+        candidate["score"] += score
+        if signal not in candidate["selection_signals"]:
+            candidate["selection_signals"].append(signal)
+        candidate["matched_facts"].append(fact)
+
+    for hit in semantic_hits:
+        agent_id = str(hit.get("user_id") or hit.get("scope_id") or "")
+        category = str(hit.get("category") or "")
+        score = float(hit.get("_score") or 0.0)
+        signal = f"semantic_{category or 'fact'}"
+        add_candidate(agent_id, hit, score, signal)
+
+    for agent_id, facts in all_user_facts.items():
+        if agent_id in owner_ids:
+            continue
+        for fact in facts:
+            category = str(fact.get("category") or "")
+            if category not in RELATED_FACT_CATEGORIES:
+                continue
+            obj = str(fact.get("object") or "").lower()
+            obj_tokens = _tokens(obj)
+            overlap = query_tokens & obj_tokens
+            file_overlap = {signal for signal in file_signals if signal and signal in obj}
+            if file_overlap:
+                add_candidate(agent_id, fact, 1.25, f"{category}_file_overlap")
+            elif overlap and category in {"expertise", "current_focus", "known_issues"}:
+                add_candidate(agent_id, fact, min(0.9, 0.25 * len(overlap)), f"{category}_topic_overlap")
+
+    for hit in shared_hits:
+        participants = hit.get("participants") or hit.get("owner_ids") or []
+        if isinstance(participants, str):
+            participants = [participants]
+        for participant in participants:
+            agent_id = str(participant)
+            if agent_id and agent_id not in owner_ids:
+                add_candidate(agent_id, hit, 0.7, "shared_memory_overlap")
+
+    selected = sorted(candidates.values(), key=lambda item: float(item["score"]), reverse=True)[:limit]
+    for candidate in selected:
+        candidate["score"] = round(float(candidate["score"]), 3)
+        candidate["matched_facts"] = _dedupe_facts(candidate["matched_facts"], 5)
+    return selected
+
+
 # ---------------------------------------------------------------------------
 # Node 1: issue_reader
 # ---------------------------------------------------------------------------
@@ -132,6 +292,7 @@ async def issue_reader(state: AUBIIssueState) -> dict[str, Any]:
             '"error_type": "...", "urgency": "P1|P2|P3"}\n'
             "Return JSON only. affected_files must be real repository paths likely relevant to the bug."
         )),
+        HumanMessage(content=f"Title: {title}\n\nBody:\n{body}"),
     ])
     data = _json(response.content)
     if not isinstance(data, dict) or not data.get("affected_files"):
@@ -164,7 +325,7 @@ async def ownership_router(state: AUBIIssueState) -> dict[str, Any]:
     from constitution.store import ConstitutionStore
     store = ConstitutionStore()
     for filepath in (state.get("affected_files") or []):
-        owner_id, confidence, _evidence = store.search_ownership(filepath, "hackathon")
+        owner_id, confidence, _evidence = store.search_ownership(filepath, _tenant_id())
         if owner_id and owner_id not in owner_ids:
             owner_ids.append(owner_id)
             log.append(f"📍 {filepath} → agent {owner_id} ({confidence})")
@@ -207,7 +368,7 @@ async def query_single_agent(state: AUBIIssueState) -> dict[str, Any]:
 
     from constitution.store import ConstitutionStore
     all_facts = _flatten_constitution(
-        ConstitutionStore().get_by_user(agent_id, "hackathon")
+        ConstitutionStore().get_by_user(agent_id, _tenant_id())
     )
     if not all_facts:
         raise RuntimeError(f"Agent {agent_id} has no constitution facts")
