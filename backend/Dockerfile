@@ -3,17 +3,19 @@ FROM python:3.11-slim
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    golang-go \
     git \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python deps (sentence-transformers excluded — uses sha256 fallback on Railway)
+# Install Python deps, including the real embedding model runtime.
 COPY backend/requirements.txt .
-RUN pip install --no-cache-dir $(grep -v "sentence-transformers" requirements.txt | grep -v "^#" | grep -v "^$" | tr '\n' ' ')
+RUN pip install --no-cache-dir -r requirements.txt
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
 
 # Copy source
 COPY backend/ .
 
 EXPOSE 8000
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
