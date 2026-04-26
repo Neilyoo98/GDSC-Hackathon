@@ -198,10 +198,12 @@ export function AgentMeshLines({
   messages = [],
   activeMessage,
   events = [],
+  className = "h-[224px]",
 }: {
   messages?: AgentMessage[];
   activeMessage?: AgentMessage | null;
   events?: AUBIEvent[];
+  className?: string;
 }) {
   const directory = endpointDirectory(events, messages);
   const endpoints = uniqueEndpoints(messages, activeMessage, directory);
@@ -220,7 +222,7 @@ export function AgentMeshLines({
 
   if (endpoints.length === 0) {
     return (
-      <div className="relative flex h-[224px] items-center justify-center overflow-hidden border border-[#e8e4dc33] bg-[#080808]">
+      <div className={`relative flex items-center justify-center overflow-hidden border border-[#e8e4dc33] bg-[#080808] ${className}`}>
         <div className="text-center">
           <p className="font-mono text-[10px] uppercase tracking-[3px] text-[#e8e4dc66]">Awaiting Coworker Mesh</p>
           <p className="mt-2 font-mono text-[9px] uppercase tracking-[2px] text-[#e8e4dc44]">Run a live issue to draw message paths</p>
@@ -230,7 +232,7 @@ export function AgentMeshLines({
   }
 
   return (
-    <div className="relative h-[224px] overflow-hidden border border-[#e8e4dc33] bg-[#080808]">
+    <div className={`relative overflow-hidden border border-[#e8e4dc33] bg-[#080808] ${className}`}>
       <div className="absolute left-4 top-4 z-10 max-w-[calc(100%-2rem)]">
         <p className="font-mono text-[10px] uppercase tracking-[3px] text-[#e8e4dc99]">{"// COWORKER MESSAGE MESH"}</p>
         <p className="mt-1 font-mono text-[9px] uppercase tracking-[2px] text-[#e8e4dc66]">{activeRoute}</p>
