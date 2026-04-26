@@ -2,8 +2,9 @@
 
 Three responsibilities:
 1. read_issue()        — parse a GitHub issue URL → structured dict
-2. read_repo_files()   — fetch file contents from a repo
-3. create_fix_pr()     — create branch, commit fix, open PR
+2. list_repo_files()   — list repository file paths for issue grounding
+3. read_repo_files()   — fetch file contents from a repo
+4. create_fix_pr()     — create branch, commit fix, open PR
 """
 
 from __future__ import annotations
@@ -87,6 +88,25 @@ def read_repo_files(repo_name: str, filepaths: list[str], ref: str = "main") -> 
     return contents
 
 
+def list_repo_files(repo_name: str, ref: str | None = None, max_files: int = 500) -> list[str]:
+    """Return repository file paths from the default branch or a requested ref."""
+    g = _get_github()
+    try:
+        repo = g.get_repo(repo_name)
+        branch_name = ref or repo.default_branch
+        branch = repo.get_branch(branch_name)
+        tree = repo.get_git_tree(branch.commit.sha, recursive=True).tree
+    except GithubException as e:
+        raise ValueError(f"Could not list files for repo {repo_name}: {e}") from e
+
+    paths = sorted(
+        item.path
+        for item in tree
+        if getattr(item, "type", "") == "blob" and getattr(item, "path", "")
+    )
+    return paths[:max_files]
+
+
 def create_fix_pr(
     *,
     repo_name: str,
@@ -116,7 +136,11 @@ def create_fix_pr(
         base_branch = repo.default_branch
         base = repo.get_branch(base_branch)
 
-    # 2. Create fix branch
+    # 2. Create fix branch in the target repo. If the token cannot write to
+    # the target repo, fall back to a fork-based PR, which is the normal path
+    # for public repos owned by teammates.
+    write_repo = repo
+    pr_head = branch
     try:
         repo.create_git_ref(f"refs/heads/{branch}", base.commit.sha)
     except GithubException as e:
@@ -124,8 +148,8 @@ def create_fix_pr(
 
     # 3. Commit the fixed file
     try:
-        existing = repo.get_contents(file_path, ref=base_branch)
-        repo.update_file(
+        existing = write_repo.get_contents(file_path, ref=branch)
+        write_repo.update_file(
             path=existing.path,
             message=commit_msg,
             content=new_file_content,
@@ -141,7 +165,7 @@ def create_fix_pr(
         pr = repo.create_pull(
             title=pr_title,
             body=pr_body,
-            head=branch,
+            head=pr_head,
             base=base_branch,
         )
         return pr.html_url

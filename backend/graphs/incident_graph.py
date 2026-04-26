@@ -13,6 +13,7 @@ import difflib
 import json
 import logging
 import os
+import re
 import time
 from typing import Any
 
@@ -93,6 +94,7 @@ def _flatten_constitution(grouped: dict[str, Any]) -> list[dict[str, Any]]:
 async def issue_reader(state: AUBIIssueState) -> dict[str, Any]:
     """Read GitHub issue or use raw incident text. Extract affected files."""
     log = []
+    repo_files: list[str] = []
 
     # If we have an issue URL, fetch from GitHub
     if state.get("issue_url"):
@@ -130,7 +132,6 @@ async def issue_reader(state: AUBIIssueState) -> dict[str, Any]:
             '"error_type": "...", "urgency": "P1|P2|P3"}\n'
             "Return JSON only. affected_files must be real repository paths likely relevant to the bug."
         )),
-        HumanMessage(content=f"Title: {title}\n\n{body}"),
     ])
     data = _json(response.content)
     if not isinstance(data, dict) or not data.get("affected_files"):
