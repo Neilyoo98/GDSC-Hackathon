@@ -14,17 +14,66 @@ GDSC Hackathon 2026 - University of Maryland
 
 ---
 
-## The Idea
+## Why AUBI Exists
 
-Most coding agents start by asking, "What code should I edit?"
+Modern coding agents can generate code, but real developer productivity is blocked by something earlier than code generation: **missing team context**.
 
-AUBI starts one level earlier:
+On a real engineering team, an issue is rarely solved by only reading the file that failed. A good developer also knows:
 
-> "Which teammate's context matters here, what has the team already learned, and which AI coworker should handle the fix?"
+- who owns the affected area,
+- who recently changed nearby code,
+- what previous incidents looked similar,
+- what tests or edge cases the team already learned to care about,
+- what should be checked before opening a PR.
 
-AUBI gives each developer a persistent AI coworker backed by a **Context Constitution**: structured memory about ownership, expertise, collaboration style, current focus, known issues, and resolved incidents. When a GitHub issue arrives, AUBI routes it to the right coworker, lets related coworkers exchange context, reads live repository files, generates a patch, runs verification, pauses for human approval, opens a PR, and writes the outcome back into memory.
+Most AI coding tools treat every task like a fresh prompt. AUBI treats software work like a team memory problem.
 
-The result is not just an autonomous patch. It is an explainable, team-aware issue-to-PR workflow.
+AUBI gives every developer a persistent AI coworker with a **Context Constitution**: a living memory of that person's ownership, expertise, collaboration style, current focus, known issues, and resolved incidents. Instead of one generic bot guessing what matters, AUBI routes issues through the coworker mesh so the right developer-shaped agents share context before a patch is generated.
+
+The result is an issue-to-PR system that can explain:
+
+```text
+why this owner was selected
+what team memory was used
+which coworkers contributed context
+what the generated fix changed
+which checks passed
+what memory was learned for next time
+```
+
+---
+
+## What AUBI Does
+
+AUBI turns a GitHub issue into a human-approved pull request through a live, explainable agent workflow.
+
+```mermaid
+flowchart LR
+    issue["1. GitHub issue"] --> understand["2. Understand incident"]
+    understand --> route["3. Route to owner AUBI"]
+    route --> exchange["4. Coworkers exchange context"]
+    exchange --> read["5. Read live repo files"]
+    read --> patch["6. Generate patch"]
+    patch --> verify["7. Run verification"]
+    verify --> approve["8. Human approval"]
+    approve --> pr["9. Open PR"]
+    pr --> memory["10. Write memory back"]
+```
+
+| Step | What happens |
+|---|---|
+| **Issue intake** | AUBI loads a live GitHub issue or accepts an issue URL like `owner/repo#123`. |
+| **Incident understanding** | The backend extracts affected files, service area, error type, severity, and likely fix direction. |
+| **Ownership routing** | Qdrant memory and filepath evidence select the coworker AUBI most likely to own the issue. |
+| **Coworker context exchange** | Related AUBIs are consulted for adjacent context, previous fixes, risks, and should-check items. |
+| **Code reading** | AUBI reads the relevant files from the target GitHub repository. |
+| **Patch generation** | The fix is generated using the issue, owner constitution, coworker context, shared memory, and source files. |
+| **Verification** | For Go repos, AUBI applies the generated file in a temp checkout and runs `go test ./...`. |
+| **Approval gate** | The graph pauses until a human approves the PR push. |
+| **PR creation** | AUBI pushes a branch and opens a GitHub PR linked to the issue. |
+| **Learning loop** | The resolved incident is stored back into user and team memory for future retrieval. |
+
+In short: **AUBI is not a chat assistant. It is a context-aware coworker mesh for moving issues from signal to reviewed PR.**
 
 ---
 
