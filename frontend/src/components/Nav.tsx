@@ -45,7 +45,7 @@ export function Nav() {
       </div>
 
       <div className="system-online-fade flex items-center gap-2 justify-self-end">
-        <span className="h-2 w-2 animate-pulse rounded-full bg-[#39ff14]" />
+        <span className="h-2 w-2 rounded-full bg-[#39ff14]" />
         <span className="font-mono text-[10px] uppercase tracking-[3px] text-[#39ff14]">
           System Online
         </span>
