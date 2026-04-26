@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useIncidentStream } from "@/hooks/useIncidentStream";
 import { useAgents } from "@/hooks/useAgents";
@@ -9,9 +9,12 @@ import { NeuralTrace } from "@/components/NeuralTrace";
 import { HexGrid } from "@/components/HexGrid";
 import { CoworkerMeshPanel } from "@/components/CoworkerMeshPanel";
 import { ProcessDashboard } from "@/components/ProcessDashboard";
+import { LiveExchangeFeed } from "@/components/aubi/LiveExchangeFeed";
+import { ConsiderationsPanel } from "@/components/aubi/ConsiderationsPanel";
 import { api } from "@/lib/api";
 import { coworkerName } from "@/lib/agents";
-import type { GitHubIssue } from "@/lib/types";
+import { firstAgentFromValues } from "@/lib/agentLookup";
+import type { GitHubIssue, CoworkerContextExchange } from "@/lib/types";
 
 export default function IncidentPage() {
   const [issueUrl, setIssueUrl] = useState("");
@@ -23,7 +26,53 @@ export default function IncidentPage() {
   const { events, isStreaming, result, error, start, approve, reset } = useIncidentStream();
   const { agents } = useAgents();
 
-  const pulsingAgentId: string | null = null;
+  // ── Derive pulsingAgentId from live SSE events ────────────────────────────
+  const [pulsingAgentId, setPulsingAgentId] = useState<string | null>(null);
+  const pulseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flashPulse = useCallback((agentId: string | null) => {
+    if (!agentId) return;
+    if (pulseTimerRef.current) clearTimeout(pulseTimerRef.current);
+    setPulsingAgentId(agentId);
+    pulseTimerRef.current = setTimeout(() => setPulsingAgentId(null), 1600);
+  }, []);
+
+  useEffect(() => {
+    const latest = events[events.length - 1];
+    if (!latest) return;
+
+    const { eventType, node } = latest;
+
+    // Pulse owner during ownership + fix phases
+    if (
+      (node === "query_single_agent" || node === "fix_generator" || node === "code_reader") &&
+      latest.status === "running"
+    ) {
+      const ownerId = result?.owners?.[0];
+      const owner = agents.find((a) => a.id === ownerId);
+      if (owner) flashPulse(owner.id);
+      return;
+    }
+
+    // Pulse the responder agent during each coworker exchange
+    if (eventType === "coworker_exchange" || eventType === "coworker_context") {
+      const exchange = latest.output as CoworkerContextExchange | null;
+      if (!exchange) return;
+      const responder = firstAgentFromValues(
+        [
+          exchange.responder_agent_id,
+          exchange.responder_agent_name,
+          exchange.responder_aubi,
+          exchange.target_aubi,
+          exchange.recipient,
+          exchange.to,
+        ],
+        agents
+      );
+      if (responder) flashPulse(responder.id);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [events]);
 
   const primaryOwner = result?.owners?.[0]
     ? agents.find((a) => a.id === result.owners[0])
@@ -136,6 +185,13 @@ export default function IncidentPage() {
         )}
 
         <CoworkerMeshPanel result={result} agents={agents} events={events} />
+        {result?.coworker_exchanges?.length ? (
+          <LiveExchangeFeed
+            exchanges={result.coworker_exchanges}
+            agents={agents}
+            result={result}
+          />
+        ) : null}
 
         {/* Mini agent map */}
         {agents.length > 0 && (
@@ -246,6 +302,14 @@ export default function IncidentPage() {
                       </pre>
                     )}
                   </div>
+
+                  {(result.coworker_exchanges?.length ?? 0) > 0 && (
+                    <ConsiderationsPanel
+                      exchanges={result.coworker_exchanges ?? []}
+                      agents={agents}
+                      result={result}
+                    />
+                  )}
 
                   {result.awaiting_approval && (
                     <button
