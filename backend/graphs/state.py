@@ -41,6 +41,9 @@ class AUBIIssueState(TypedDict):
     agent_messages: Annotated[list[AgentMessage], operator.add]
     agent_contexts: Annotated[list[dict[str, Any]], operator.add]
 
+    # Routing evidence — why this agent was chosen (shown in "Why Alice?" panel)
+    routing_evidence: Annotated[list[dict[str, Any]], operator.add]
+
     # Code reader output
     file_contents: dict[str, str]   # {filepath: raw_code}
 
@@ -53,6 +56,9 @@ class AUBIIssueState(TypedDict):
     # PR pusher output
     pr_url: Optional[str]
     branch_name: Optional[str]
+
+    # Memory update — what AUBI learned after this incident (shown in "AUBI learned" strip)
+    learned_facts: Annotated[list[dict[str, Any]], operator.add]
 
     # Slack-style response (incident mode)
     slack_message: Optional[str]
