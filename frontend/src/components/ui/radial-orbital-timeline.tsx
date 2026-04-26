@@ -193,7 +193,7 @@ export default function RadialOrbitalTimeline({
       x:       radius * Math.cos(radian),
       y:       radius * Math.sin(radian),
       zIndex:  Math.round(100 + 50 * Math.cos(radian)),
-      opacity: Math.max(0.45, Math.min(1, 0.45 + 0.55 * ((1 + Math.sin(radian)) / 2))),
+      opacity: Math.max(0.7, Math.min(1, 0.7 + 0.3 * ((1 + Math.sin(radian)) / 2))),
     };
   };
 
@@ -234,9 +234,13 @@ export default function RadialOrbitalTimeline({
             {centerSublabel && <span className="font-mono text-[8px] text-[#4a6080] mt-0.5">{centerSublabel}</span>}
           </div>
 
+          {/* Radial glow backdrop */}
+          <div className="absolute w-[560px] h-[560px] rounded-full pointer-events-none" style={{ background: "radial-gradient(circle, #00f0ff08 0%, #3b82f610 35%, transparent 70%)" }} />
+
           {/* Orbit rings */}
-          <div className="absolute w-[520px] h-[520px] rounded-full border border-[#00f0ff]/10 pointer-events-none" />
-          <div className="absolute w-[500px] h-[500px] rounded-full border border-white/5 pointer-events-none" />
+          <div className="absolute w-[520px] h-[520px] rounded-full border border-[#00f0ff]/30 pointer-events-none" style={{ boxShadow: "0 0 18px #00f0ff12 inset" }} />
+          <div className="absolute w-[500px] h-[500px] rounded-full border border-[#8b5cf6]/20 pointer-events-none" />
+          <div className="absolute w-[200px] h-[200px] rounded-full border border-[#00f0ff]/15 pointer-events-none" />
 
           {/* Persistent coworker mesh links */}
           <svg
@@ -260,12 +264,12 @@ export default function RadialOrbitalTimeline({
                   x2={target.x}
                   y2={target.y}
                   stroke={active ? "#00f0ff" : "#8b5cf6"}
-                  strokeWidth={active ? 1.2 : 0.8}
-                  strokeOpacity={active ? 0.7 : 0.28}
+                  strokeWidth={active ? 1.5 : 1}
+                  strokeOpacity={active ? 0.85 : 0.5}
                   strokeDasharray="4 10"
                   animate={{ strokeDashoffset: [0, -28] }}
                   transition={{ duration: active ? 1 : 2.4, repeat: Infinity, ease: "linear" }}
-                  style={{ filter: active ? "drop-shadow(0 0 5px #00f0ff)" : "drop-shadow(0 0 3px #8b5cf677)" }}
+                  style={{ filter: active ? "drop-shadow(0 0 6px #00f0ff)" : "drop-shadow(0 0 4px #8b5cf6aa)" }}
                 />
               );
             })}
@@ -288,12 +292,12 @@ export default function RadialOrbitalTimeline({
                   x1={0} y1={0}
                   x2={pos.x} y2={pos.y}
                   stroke="#00f0ff"
-                  strokeWidth={isExpanded ? 1 : 0.5}
-                  strokeOpacity={isExpanded ? 0.55 : 0.18}
+                  strokeWidth={isExpanded ? 1.5 : 0.8}
+                  strokeOpacity={isExpanded ? 0.75 : 0.35}
                   strokeDasharray={`3 ${Math.max(6, lineLen / 8)}`}
                   animate={{ strokeDashoffset: [0, -12] }}
                   transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-                  style={{ filter: isExpanded ? "drop-shadow(0 0 4px #00f0ff)" : undefined }}
+                  style={{ filter: isExpanded ? "drop-shadow(0 0 5px #00f0ff)" : "drop-shadow(0 0 2px #00f0ff44)" }}
                 />
               );
             })}
