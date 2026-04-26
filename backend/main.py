@@ -121,6 +121,85 @@ def _group_facts_by_category(facts: list[dict[str, Any]]) -> dict[str, list[dict
     return grouped
 
 
+def _identity_key(value: Any) -> str:
+    return "".join(ch for ch in str(value or "").lower() if ch.isalnum())
+
+
+def _agent_record_identity(record: dict[str, Any]) -> str:
+    facts = record.get("constitution_facts") if isinstance(record.get("constitution_facts"), list) else []
+    subject = next((fact.get("subject") for fact in facts if isinstance(fact, dict) and fact.get("subject")), "")
+    return (
+        _identity_key(record.get("github_username")) or
+        _identity_key(record.get("name")) or
+        _identity_key(subject) or
+        _identity_key(record.get("id"))
+    )
+
+
+def _fact_key(fact: dict[str, Any]) -> str:
+    return "|".join(str(fact.get(key, "")).lower() for key in ("category", "subject", "predicate", "object"))
+
+
+def _dedupe_fact_records(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    deduped: dict[str, dict[str, Any]] = {}
+    for fact in facts:
+        if isinstance(fact, dict):
+            deduped[_fact_key(fact)] = fact
+    return list(deduped.values())
+
+
+def _string_list(value: Any) -> list[str]:
+    return [item for item in value if isinstance(item, str)] if isinstance(value, list) else []
+
+
+def _agent_record_score(record: dict[str, Any]) -> int:
+    summary = record.get("github_data_summary") if isinstance(record.get("github_data_summary"), dict) else {}
+    facts = record.get("constitution_facts") if isinstance(record.get("constitution_facts"), list) else []
+    return (
+        len(facts) * 10 +
+        len(_string_list(summary.get("top_files"))) * 3 +
+        len(_string_list(summary.get("languages"))) * 2 +
+        int(summary.get("commit_count") or 0) +
+        int(summary.get("pr_count") or 0)
+    )
+
+
+def _merge_agent_records(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
+    primary, secondary = (right, left) if _agent_record_score(right) > _agent_record_score(left) else (left, right)
+    primary_summary = primary.get("github_data_summary") if isinstance(primary.get("github_data_summary"), dict) else {}
+    secondary_summary = secondary.get("github_data_summary") if isinstance(secondary.get("github_data_summary"), dict) else {}
+    facts = _dedupe_fact_records(
+        list(secondary.get("constitution_facts") or []) +
+        list(primary.get("constitution_facts") or [])
+    )
+    merged = {
+        **primary,
+        "github_username": primary.get("github_username") or secondary.get("github_username"),
+        "name": primary.get("name") or secondary.get("name"),
+        "role": primary.get("role") or secondary.get("role"),
+        "github_data_summary": {
+            "commit_count": max(int(primary_summary.get("commit_count") or 0), int(secondary_summary.get("commit_count") or 0)),
+            "pr_count": max(int(primary_summary.get("pr_count") or 0), int(secondary_summary.get("pr_count") or 0)),
+            "top_files": list(dict.fromkeys(_string_list(primary_summary.get("top_files")) + _string_list(secondary_summary.get("top_files")))),
+            "languages": list(dict.fromkeys(_string_list(primary_summary.get("languages")) + _string_list(secondary_summary.get("languages")))),
+        },
+        "constitution_facts": facts,
+        "constitution": _group_facts_by_category(facts),
+    }
+    return merged
+
+
+def _dedupe_agent_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    by_identity: dict[str, dict[str, Any]] = {}
+    for record in records:
+        key = _agent_record_identity(record) or _identity_key(record.get("id"))
+        if key in by_identity:
+            by_identity[key] = _merge_agent_records(by_identity[key], record)
+        else:
+            by_identity[key] = record
+    return list(by_identity.values())
+
+
 def _public_memory_record(record: dict[str, Any]) -> dict[str, Any]:
     allowed = {
         "scope",
@@ -279,7 +358,7 @@ async def list_agents():
         else:
             records[agent_id]["constitution_facts"] = facts
             records[agent_id]["constitution"] = _group_facts_by_category(facts)
-    return list(records.values())
+    return _dedupe_agent_records(list(records.values()))
 
 
 @app.get("/agents/{agent_id}")
