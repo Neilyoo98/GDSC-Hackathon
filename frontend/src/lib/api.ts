@@ -1,4 +1,5 @@
 import type { Agent, ApprovalResult, GitHubPollResult, IncidentResult, StreamLike } from "./types";
+import { normalizeAgent, normalizeAgents } from "./agents";
 
 const BASE = "/api";
 
@@ -14,19 +15,23 @@ async function fetchJson<T>(input: RequestInfo | URL, init?: RequestInit): Promi
 
 export const api = {
   async getAgents(): Promise<Agent[]> {
-    return fetchJson<Agent[]>(`${BASE}/agents`);
+    return normalizeAgents(await fetchJson<Agent[]>(`${BASE}/agents`));
   },
 
   async getAgent(id: string): Promise<Agent> {
-    return fetchJson<Agent>(`${BASE}/agents/${id}`);
+    return normalizeAgent(await fetchJson<Agent>(`${BASE}/agents/${id}`));
   },
 
   async createAgent(body: { github_username: string; name?: string; role?: string }): Promise<Agent> {
-    return fetchJson<Agent>(`${BASE}/agents`, {
+    return normalizeAgent(await fetchJson<Agent>(`${BASE}/agents`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
-    });
+    }));
+  },
+
+  async pollGitHub(): Promise<GitHubPollResult> {
+    return fetchJson<GitHubPollResult>(`${BASE}/github/poll`);
   },
 
   async runIncident(issueUrl: string): Promise<IncidentResult> {
@@ -46,9 +51,5 @@ export const api = {
       `${BASE}/incidents/approve?thread_id=${encodeURIComponent(threadId)}&approved=${approved}`,
       { method: "POST" }
     );
-  },
-
-  async pollGitHub(): Promise<GitHubPollResult> {
-    return fetchJson<GitHubPollResult>(`${BASE}/github/poll`);
   },
 };

@@ -1,12 +1,11 @@
 import { NextRequest } from "next/server";
-
-const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
+import { backendUrl } from "@/lib/backend";
 
 export async function GET(req: NextRequest) {
   const issueUrl = req.nextUrl.searchParams.get("issue_url") ?? "";
   try {
     const upstream = await fetch(
-      `${BACKEND}/incidents/stream?issue_url=${encodeURIComponent(issueUrl)}`,
+      `${backendUrl()}/incidents/stream?issue_url=${encodeURIComponent(issueUrl)}`,
       { cache: "no-store" }
     );
     return new Response(upstream.body, {

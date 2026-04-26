@@ -1,27 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-
-const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
+import { backendUrl, proxyJson } from "@/lib/backend";
+import { normalizeAgent, normalizeAgents } from "@/lib/agents";
+import type { Agent } from "@/lib/types";
 
 export async function GET() {
-  try {
-    const res = await fetch(`${BACKEND}/agents`, { cache: "no-store" });
-    const data = await res.json();
-    return NextResponse.json(data, { status: res.status });
-  } catch {
-    return NextResponse.json({ error: "Backend unavailable" }, { status: 502 });
-  }
+  return proxyJson<Agent[]>(`${backendUrl()}/agents`, { cache: "no-store" }, normalizeAgents);
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const res = await fetch(`${BACKEND}/agents`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json();
-    return NextResponse.json(data, { status: res.status });
+    return proxyJson<Agent>(
+      `${backendUrl()}/agents`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+      normalizeAgent
+    );
   } catch {
     return NextResponse.json({ error: "Backend unavailable" }, { status: 502 });
   }
