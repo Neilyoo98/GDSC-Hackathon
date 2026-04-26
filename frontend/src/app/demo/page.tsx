@@ -6,8 +6,6 @@ import { AgentCommFeed } from "@/components/aubi/AgentCommFeed";
 import { AgentMeshLines } from "@/components/aubi/AgentMeshLines";
 import { useAUBIStream } from "@/hooks/useAUBIStream";
 
-const SAMPLE_ISSUE = "Neilyoo98/GDSC-Hackathon#1";
-
 const FLOW_NODES = [
   ["issue_reader", "Issue Read"],
   ["ownership_router", "Ownership Found"],
@@ -52,7 +50,7 @@ const DEMO_MESSAGES = [
 ];
 
 export default function DemoPage() {
-  const [inputIssueUrl, setInputIssueUrl] = useState(SAMPLE_ISSUE);
+  const [inputIssueUrl, setInputIssueUrl] = useState("");
   const [issueUrl, setIssueUrl] = useState<string | null>(null);
   const [visualStep, setVisualStep] = useState(0);
   const { events, agentMessages, nodeStatuses, isStreaming, reset } = useAUBIStream(issueUrl);
@@ -231,7 +229,7 @@ export default function DemoPage() {
                 >
                   <p className="mb-2 font-mono text-[9px] uppercase tracking-[3px] text-[#e8e4dc66]">Pull request title</p>
                   <p className="text-sm font-medium text-[#e8e4dc]">Fix routed issue with AUBI-generated patch</p>
-                  <p className="mt-2 font-mono text-[10px] uppercase tracking-[2px] text-[#e8e4dc66]">{trimmedIssue || SAMPLE_ISSUE}</p>
+                  <p className="mt-2 font-mono text-[10px] uppercase tracking-[2px] text-[#e8e4dc66]">{trimmedIssue || "No issue selected"}</p>
                 </motion.div>
                 <div className="grid gap-2">
                   {PR_CHECKS.map((check, index) => {

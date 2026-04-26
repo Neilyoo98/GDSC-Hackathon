@@ -8,6 +8,7 @@ import { IncidentTerminal } from "@/components/IncidentTerminal";
 import { NeuralTrace } from "@/components/NeuralTrace";
 import { HexGrid } from "@/components/HexGrid";
 import { CoworkerMeshPanel } from "@/components/CoworkerMeshPanel";
+import { ProcessDashboard } from "@/components/ProcessDashboard";
 import { api } from "@/lib/api";
 import { coworkerName } from "@/lib/agents";
 import type { GitHubIssue } from "@/lib/types";
@@ -135,6 +136,13 @@ export default function IncidentPage() {
         )}
 
         <CoworkerMeshPanel result={result} agents={agents} events={events} />
+        <ProcessDashboard
+          result={result}
+          events={events}
+          agents={agents}
+          latestIssue={latestIssue}
+          isStreaming={isStreaming}
+        />
 
         {/* Mini agent map */}
         {agents.length > 0 && (
