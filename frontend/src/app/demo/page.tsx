@@ -28,12 +28,34 @@ const DIFF_LINES = [
 
 const PR_CHECKS = ["Issue linked", "Owner validated", "Patch generated", "Tests attached"] as const;
 
+const DEMO_MESSAGES = [
+  {
+    sender: "orchestrator",
+    recipient: "alice_aubi",
+    message: "Issue reader found auth 401 failures in the student submission path. Checking ownership memory."
+  },
+  {
+    sender: "alice_aubi",
+    recipient: "orchestrator",
+    message: "I own auth middleware and recent token validation changes. Pulling context from the constitution."
+  },
+  {
+    sender: "orchestrator",
+    recipient: "bob_aubi",
+    message: "Cross-check payments side effects before fix generation. Need shared context on billing callbacks."
+  },
+  {
+    sender: "bob_aubi",
+    recipient: "orchestrator",
+    message: "No payment callback regression detected. Route fix back to Alice and generate the PR patch."
+  }
+];
+
 export default function DemoPage() {
   const [inputIssueUrl, setInputIssueUrl] = useState(SAMPLE_ISSUE);
   const [issueUrl, setIssueUrl] = useState<string | null>(null);
   const [visualStep, setVisualStep] = useState(0);
   const { events, agentMessages, nodeStatuses, isStreaming, reset } = useAUBIStream(issueUrl);
-  const activeMessage = agentMessages.at(-1) ?? null;
   const hasRun = !!issueUrl || events.length > 0 || agentMessages.length > 0;
   const trimmedIssue = inputIssueUrl.trim();
 
@@ -74,6 +96,10 @@ export default function DemoPage() {
   );
 
   const progressPercent = Math.round((completedCount / FLOW_NODES.length) * 100);
+  const displayMessages = agentMessages.length > 0
+    ? agentMessages
+    : DEMO_MESSAGES.slice(0, hasRun ? Math.max(1, Math.min(DEMO_MESSAGES.length, visualStep + 1)) : 2);
+  const activeMessage = agentMessages.at(-1) ?? DEMO_MESSAGES[visualStep % DEMO_MESSAGES.length];
 
   function runFlow() {
     if (!trimmedIssue || isStreaming) return;
@@ -117,8 +143,8 @@ export default function DemoPage() {
 
       <div className="grid min-h-0 flex-1 grid-cols-[360px_1fr] gap-6 p-6">
         <div className="flex min-h-0 flex-col gap-6">
-          <AgentMeshLines messages={agentMessages} activeMessage={activeMessage} />
-          <AgentCommFeed messages={agentMessages} isStreaming={isStreaming} />
+          <AgentMeshLines activeMessage={activeMessage} />
+          <AgentCommFeed messages={displayMessages} isStreaming={isStreaming || hasRun} />
         </div>
 
         <section className="grid min-h-0 grid-rows-[auto_1fr] gap-6">
