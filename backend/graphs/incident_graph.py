@@ -4,8 +4,8 @@ Full autonomous flow:
   GitHub issue → analyze → find owners → consult agents → read code → fix → push PR
 
 Models:
-  Orchestrator nodes: Claude Sonnet (analysis, fix gen, PR body)
-  Agent queries:      Claude Haiku  (fast per-agent constitution look-up)
+  Orchestrator nodes: GPT-5.5   (analysis, fix gen, PR body)
+  Agent queries:      Claude Haiku (fast per-agent constitution look-up)
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ from typing import Any
 
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, END
 from langgraph.types import Send
 
@@ -29,8 +30,13 @@ logger = logging.getLogger(__name__)
 # Models
 # ---------------------------------------------------------------------------
 
-sonnet = ChatAnthropic(model="claude-sonnet-4-5-20251001")
-haiku  = ChatAnthropic(model="claude-haiku-20240307")
+gpt55 = ChatOpenAI(
+    model="gpt-5.5",
+    base_url="https://us.api.openai.com/v1",
+    streaming=False,
+    use_responses_api=True,
+)
+haiku = ChatAnthropic(model="claude-haiku-20240307")
 
 AGENTS_URL  = os.getenv("AGENTS_SERVICE_URL",    "http://localhost:8000")
 KNOWLEDGE_URL = os.getenv("KNOWLEDGE_SERVICE_URL", "http://localhost:8002")
@@ -166,15 +172,16 @@ def route_to_agents(state: AUBIIssueState):
 
 
 async def query_single_agent(state: AUBIIssueState) -> dict[str, Any]:
-    """Query one agent's constitution and return its context + agent messages."""
+    """Query one agent's constitution and return its context + agent messages + routing evidence."""
     import httpx
 
     agent_id = state.get("_query_agent_id", "")
+    affected_files = state.get("affected_files") or []
     issue_summary = (
         f"Issue: {state.get('issue_title', '')}\n"
         f"Service: {state.get('affected_service')}, "
         f"Error: {state.get('error_type')}, "
-        f"Files: {state.get('affected_files')}"
+        f"Files: {affected_files}"
     )
 
     orchestrator_msg: AgentMessage = {
@@ -184,15 +191,36 @@ async def query_single_agent(state: AUBIIssueState) -> dict[str, Any]:
         "timestamp": time.time(),
     }
 
+    agent_data: dict = {}
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.get(f"{AGENTS_URL}/agents/{agent_id}")
             if resp.status_code != 200:
-                return {"agent_messages": [orchestrator_msg], "agent_contexts": [], "stream_log": []}
+                return {"agent_messages": [orchestrator_msg], "agent_contexts": [], "routing_evidence": [], "stream_log": []}
 
             agent_data = resp.json()
             agent_name = agent_data.get("name", agent_id)
-            constitution = json.dumps(agent_data.get("constitution_facts", [])[:20], indent=2)
+            all_facts = agent_data.get("constitution_facts", [])
+            constitution = json.dumps(all_facts[:20], indent=2)
+
+            # Build routing evidence from facts that explain why this agent was chosen
+            evidence_facts = []
+            for fact in all_facts:
+                pred = fact.get("predicate", "")
+                obj  = fact.get("object", "")
+                cat  = fact.get("category", "")
+                # Include ownership facts that match affected files, and known_issues facts
+                if cat == "code_ownership" and any(
+                    f.split("/")[0] in obj or obj in f
+                    for f in affected_files
+                ):
+                    evidence_facts.append(fact)
+                elif cat == "known_issues":
+                    evidence_facts.append(fact)
+                elif cat == "current_focus" and any(
+                    kw in obj.lower() for kw in ["auth", "token", "security", "retry"]
+                ):
+                    evidence_facts.append(fact)
 
             response = await haiku.ainvoke([
                 SystemMessage(content=(
@@ -209,7 +237,8 @@ async def query_single_agent(state: AUBIIssueState) -> dict[str, Any]:
 
     except Exception as e:
         agent_reply = f"(Could not query agent: {e})"
-        agent_name = agent_id
+        agent_name = agent_data.get("name", agent_id) if agent_data else agent_id
+        evidence_facts = []
 
     agent_msg: AgentMessage = {
         "sender": f"{agent_name}_aubi",
@@ -218,16 +247,28 @@ async def query_single_agent(state: AUBIIssueState) -> dict[str, Any]:
         "timestamp": time.time(),
     }
 
+    routing_evidence = {
+        "agent_id":   agent_id,
+        "agent_name": agent_name,
+        "matched_files": [
+            f for f in affected_files
+            if any(f.split("/")[0] in ef.get("object", "") for ef in evidence_facts if ef.get("category") == "code_ownership")
+        ] or affected_files,
+        "evidence_facts": evidence_facts[:4],  # top 4 matching facts
+    }
+
     return {
         "agent_messages": [orchestrator_msg, agent_msg],
         "agent_contexts": [{
             "agent_id": agent_id,
             "agent_name": agent_name,
             "context": agent_reply,
-            "communication_pref": agent_data.get("constitution", {})
-                .get("collaboration", {}).get("communication_pref", "")
-                if "agent_data" in dir() else "",
+            "communication_pref": (
+                next((f.get("object", "") for f in agent_data.get("constitution_facts", [])
+                      if f.get("category") == "collaboration"), "")
+            ),
         }],
+        "routing_evidence": [routing_evidence],
         "stream_log": [f"🤖 {agent_name}: {agent_reply[:100]}..."],
     }
 
@@ -313,7 +354,7 @@ async def fix_generator(state: AUBIIssueState) -> dict[str, Any]:
         f"SOURCE FILES:\n{file_context}"
     )
 
-    response = await sonnet.ainvoke([
+    response = await gpt55.ainvoke([
         SystemMessage(content=FIX_SYSTEM),
         HumanMessage(content=prompt),
     ])
@@ -334,11 +375,11 @@ async def fix_generator(state: AUBIIssueState) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 PR_BODY_SYSTEM = """\
-Write a GitHub PR description in the communication style of the developer below.
+Write a GitHub PR description. The PR body should follow {agent_name}'s preferred communication style.
 
-Style: {comm_style}
+Preferred style: {comm_style}
 
-Fill this template:
+Fill this template exactly:
 ## What changed
 {fix_explanation}
 
@@ -347,11 +388,12 @@ Fixes #{issue_number}: {issue_title}
 
 ## Testing
 - [ ] Unit tests pass
-- [ ] Manually verified fix resolves the 401 errors
+- [ ] Manually verified fix resolves the reported errors
 
 Closes #{issue_number}
 
-Keep it concise and match the developer's writing style exactly.
+Note: PR body follows {agent_name}'s preferred communication style.
+Keep it concise. Do not impersonate the developer — write as their AI representative.
 """
 
 async def pr_pusher(state: AUBIIssueState) -> dict[str, Any]:
@@ -372,8 +414,10 @@ async def pr_pusher(state: AUBIIssueState) -> dict[str, Any]:
     primary   = contexts[0] if contexts else {}
     comm_style = primary.get("communication_pref", "professional and direct")
 
+    agent_name = primary.get("agent_name", "the code owner")
     pr_body_response = await haiku.ainvoke([
         SystemMessage(content=PR_BODY_SYSTEM.format(
+            agent_name=agent_name,
             comm_style=comm_style,
             fix_explanation=state.get("fix_explanation", ""),
             issue_number=issue_number,
@@ -398,28 +442,37 @@ async def pr_pusher(state: AUBIIssueState) -> dict[str, Any]:
         pr_url = None
         log = [f"⚠️ PR push failed: {e}"]
 
-    # Update agent constitutions (self-learning)
-    import httpx
-    for ctx in (state.get("agent_contexts") or []):
-        agent_id = ctx.get("agent_id")
-        if agent_id:
-            try:
-                async with httpx.AsyncClient(timeout=5.0) as client:
-                    await client.patch(f"{AGENTS_URL}/constitution/{agent_id}", json={
-                        "fact": {
-                            "subject": agent_id,
-                            "predicate": "resolved_issue",
-                            "object": f"Issue #{issue_number}: {state.get('issue_title', '')}",
-                            "category": "episodes",
-                            "confidence": 0.9,
-                        }
-                    })
-            except Exception:
-                pass
+    # Self-learning: store episode in Qdrant for each involved agent
+    from constitution.store import ConstitutionStore
+    learned_facts: list[dict] = []
+    try:
+        store = ConstitutionStore()
+        for ctx in (state.get("agent_contexts") or []):
+            agent_id   = ctx.get("agent_id", "")
+            agent_name_ctx = ctx.get("agent_name", agent_id)
+            if not agent_id:
+                continue
+            episode = {
+                "subject":    agent_id,
+                "predicate":  "resolved_issue",
+                "object":     f"Issue #{issue_number}: {state.get('issue_title', '')} — fixed with {state.get('fix_explanation', '')[:80]}",
+                "category":   "episodes",
+                "confidence": 0.9,
+            }
+            store.add_episode(agent_id, "hackathon", episode)
+            learned_facts.append({
+                "agent_id":   agent_id,
+                "agent_name": agent_name_ctx,
+                "update":     f"Issue #{issue_number} resolved — {state.get('fix_explanation', '')[:80]}",
+                "episode":    episode["object"],
+            })
+    except Exception as e:
+        logger.warning("Could not store episode: %s", e)
 
     return {
-        "pr_url": pr_url,
-        "stream_log": log,
+        "pr_url":       pr_url,
+        "learned_facts": learned_facts,
+        "stream_log":   log,
     }
 
 
