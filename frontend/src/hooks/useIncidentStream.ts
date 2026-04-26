@@ -24,8 +24,8 @@ const GRAPH_NODES = new Set<SSENode>([
   "error",
 ]);
 
-function asNode(value: string | undefined, fallback: SSENode): SSENode {
-  return value && GRAPH_NODES.has(value as SSENode) ? (value as SSENode) : fallback;
+function asNode(value: string | undefined, defaultNode: SSENode): SSENode {
+  return value && GRAPH_NODES.has(value as SSENode) ? (value as SSENode) : defaultNode;
 }
 
 function asOutput(value: BackendEvent["data"]): Record<string, unknown> | null {

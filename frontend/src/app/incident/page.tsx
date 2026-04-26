@@ -13,9 +13,7 @@ export default function IncidentPage() {
   const { events, isStreaming, result, error, start, approve, reset } = useIncidentStream();
   const { agents } = useAgents();
 
-  // Find which agent is being queried right now
-  const queryingEvent = events.find((e) => e.node === "query_single_agent" && e.status === "running");
-  const pulsingAgentId: string | null = null; // TODO: map agent name to id if needed
+  const pulsingAgentId: string | null = null;
 
   const primaryOwner = result?.owners?.[0]
     ? agents.find((a) => a.id === result.owners[0])
