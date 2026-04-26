@@ -5,17 +5,30 @@
 
 ---
 
+## The Pitch (say this to judges)
+
+> "AUBI is an AI engineering coordinator. It learns every developer's ownership and tribal knowledge from GitHub, routes new issues to the right AI teammate, surfaces why that person is relevant, proposes a verified fix, and opens a **human-approved** PR. Not another auto-coder — a context-aware teammate network."
+
+**The differentiation is not codegen. It's team memory + ownership routing + developer-specific context.**
+Copilot Workspace, OpenHands, SWE-agent all open PRs automatically. None of them know *which developer* owns the bug, or what that developer already knows about it, or how they prefer to collaborate. That's AUBI's moat.
+
+---
+
 ## The 90-Second Demo
 
-**Story:** A professor files a GitHub issue. She doesn't know who to ping. AUBI's agent mesh figures it out, the right dev's AI co-worker explains the bug from its own memory, the code gets fixed, and a PR lands — zero human coordination.
+**Story:** A professor files a GitHub issue. She doesn't know who to ping. AUBI figures it out from developer memory, the right agents surface tribal context, the fix is generated and verified — then a human clicks Approve and the PR lands.
 
 | Scene | What judges see | ~Time |
 |---|---|---|
-| **1 — Meet the Team** | Dashboard: 3 developer cards. Click Alice → full Context Constitution auto-built from GitHub (ownership, expertise, collaboration style, known issues) | 20s |
+| **1 — Meet the Team** | Dashboard: 3 developer cards. Click Alice → full Context Constitution viewer — ownership, expertise, collaboration style, known issues. **Small badge: "Built with Gemini structured output".** This is the hero moment. | 25s |
 | **2 — Issue drops** | Prof files GitHub issue: *"auth 401 blocking student submissions"*. Issue feed lights up. AUBI picks it up. | 10s |
-| **3 — Agents talk** | Live comm feed: Orchestrator pings Alice's Aubi. Alice's Aubi surfaces the race condition from her constitution. Bob's Aubi flags his adjacent PR. | 30s |
-| **4 — Fix generated** | Code diff panel: actual Go fix with mutex, syntax highlighted. | 15s |
-| **5 — PR pushed** | Real GitHub PR appears, written in Alice's style, Bob as reviewer, issue linked and closed. | 15s |
+| **3 — Agents talk** | Live comm feed: Orchestrator pings Alice's Aubi. Alice surfaces the race condition from her constitution. Bob flags his adjacent PR. Lines pulse on the mesh diagram. | 20s |
+| **3b — Why Alice?** | "Why Alice?" routing panel appears alongside the comm feed: `auth/token.go → Alice Chen · owns auth/ (0.95) · known issue: race condition · current focus: auth retry` | 10s |
+| **4 — Fix ready** | Code diff panel: Go mutex fix, syntax highlighted. Checklist: `✓ Ownership matched · ✓ Relevant memory found · ✓ Patch generated · ✓ Tests passed · ⏸ Awaiting approval` | 10s |
+| **5 — Human approves → PR** | Big **"Approve Alice's PR"** button. One click → real GitHub PR appears, written following Alice's preferred communication style, Bob as reviewer, issue linked. | 10s |
+| **6 — AUBI learned** | Strip appears at bottom: `Memory updated: Alice known issue: auth race condition → resolved in PR #2 · Episode stored: Issue #1, fixed by mutex-protected TokenCache` | 5s |
+
+**Spend more time on scenes 1–3 than on 4–6.** The constitution viewer, routing evidence, and agent comm feed are what differentiate AUBI from every other auto-PR tool.
 
 ---
 
@@ -23,77 +36,83 @@
 
 | Person | Domain | Core deliverable |
 |---|---|---|
-| **Vitthal** | Orchestration + Context Constitution | LangGraph graph, Claude prompts, Qdrant constitution store |
-| **Neil** | GitHub + Slack integration | Issue reader, code reader, PR pusher, Slack webhook |
-| **Avhaang** | Frontend | Agent cards, constitution viewer, agent comm feed |
-| **Mitansh** | Frontend | Issue feed, code diff panel, PR preview, live SSE wiring |
+| **Vitthal** | Orchestration + Context Constitution | LangGraph graph, Gemini/GPT prompts, Qdrant store, approval gate |
+| **Neil** | GitHub integration | Issue reader, code reader, PR pusher, demo repo |
+| **Avhaang** | Frontend — Constitution + Agents | Agent cards, constitution viewer, agent comm feed, mesh lines |
+| **Mitansh** | Frontend — Demo flow + SSE | Issue feed, code diff panel, **Approve PR button**, PR preview, SSE wiring |
 
 ---
 
 ## Models
 
-| Role | Model |
-|---|---|
-| Orchestrator (analysis, fix gen, PR body) | **Claude Sonnet** `claude-sonnet-4-5-20251001` |
-| Agent constitution queries (fast) | **Claude Haiku** `claude-haiku-20240307` |
-| Constitution building (GitHub → facts) | **Claude Sonnet** |
+| Role | Model | Why |
+|---|---|---|
+| **Constitution building** (GitHub → structured facts) | **Gemini 2.0 Flash** `gemini-2.0-flash` | Gemini structured output is first-class; prize alignment |
+| **Orchestrator** (fix gen, analysis) | **GPT-5.5** `gpt-5.5` | Best code understanding for the actual fix |
+| **Agent constitution queries** (fast per-agent) | **Claude Haiku** `claude-haiku-20240307` | Fast, cheap, good at reading constitution and answering briefly |
+| **PR body writer** | **Claude Haiku** | Matching dev communication style |
 
-One API key: `ANTHROPIC_API_KEY`
+Two API keys: `OPENAI_API_KEY` + `ANTHROPIC_API_KEY` + `GEMINI_API_KEY`
 
 ---
 
 ## Architecture
 
 ```
-                   GitHub Issue / Slack Message
-                              │
-                    ┌─────────▼──────────┐
-                    │   AUBI Graph        │  ← Vitthal (LangGraph)
-                    │                     │
-                    │  issue_reader       │
-                    │       ↓             │
-                    │  ownership_router   │
-                    │       ↓             │
-                    │  query_agents (║)   │  ← parallel fan-out
-                    │       ↓             │
-                    │  code_reader        │  ← Neil (GitHub API)
-                    │       ↓             │
-                    │  fix_generator      │  ← Vitthal (Claude Sonnet)
-                    │       ↓             │
-                    │  pr_pusher          │  ← Neil (GitHub API)
-                    └─────────┬──────────┘
-                              │
-              ┌───────────────┼───────────────┐
-              ▼               ▼               ▼
-       Alice's Aubi     Bob's Aubi      Carol's Aubi
-       (Haiku + const.) (Haiku + const.) (Haiku + const.)
-              │               │
-              └───────────────┘
-                Qdrant memory             ← Vitthal (constitution store)
-          (semantic_facts, episodes)
+                   GitHub Issue
+                        │
+              ┌─────────▼──────────┐
+              │   AUBI Graph        │  ← Vitthal (LangGraph)
+              │                     │
+              │  issue_reader       │  ← Haiku: extract affected files
+              │       ↓             │
+              │  ownership_router   │  ← Qdrant: find agent owners
+              │       ↓             │
+              │  query_agents (║)   │  ← Haiku: parallel agent queries
+              │       ↓             │
+              │  code_reader        │  ← Neil (GitHub API)
+              │       ↓             │
+              │  fix_generator      │  ← GPT-5.5: generate fix + diff
+              │       ↓             │
+              │  approval_gate  ⏸  │  ← LangGraph interrupt → frontend button
+              │       ↓ (on approve)│
+              │  pr_pusher          │  ← Neil (GitHub API)
+              └─────────┬──────────┘
+                        │
+        ┌───────────────┼───────────────┐
+        ▼               ▼               ▼
+ Alice's Aubi     Bob's Aubi      Carol's Aubi
+ (Haiku + const.) (Haiku + const.) (Haiku + const.)
+        │               │
+        └───────────────┘
+          Qdrant memory             ← Vitthal (constitution store)
+    (semantic_facts, episodes)
 
-SSE stream → frontend                    ← Avhaang + Mitansh
-GitHub API + Slack webhooks              ← Neil
+Constitution building:  Gemini 2.0 Flash  ← Vitthal
+SSE stream → frontend                     ← Avhaang + Mitansh
+GitHub API                                ← Neil
 ```
 
 ---
 
-## Scaffolded Files (already written — start here)
+## Scaffolded Files (already written)
 
 ```
 backend/
-├── main.py                   ✅ FastAPI app — all endpoints wired
+├── main.py                   ✅ FastAPI app — all endpoints wired (Qdrant store wired in)
 ├── requirements.txt          ✅ all deps
 ├── .env.example              ✅ env template
+├── seed_demo.py              ✅ seeds Alice/Bob/Carol into Qdrant
 ├── graphs/
 │   ├── state.py              ✅ AUBIIssueState TypedDict
-│   ├── incident_graph.py     ✅ 6-node LangGraph (extend/tune prompts)
-│   └── prompt_builder.py     ✅ prompt assembly helpers (from cognoxent)
+│   ├── incident_graph.py     ✅ 6-node LangGraph (GPT-5.5 + Haiku)
+│   └── prompt_builder.py     ✅ prompt assembly helpers
 ├── ingestion/
-│   ├── github_ingest.py      ✅ dev profile ingestion (constitution building)
+│   ├── github_ingest.py      ✅ dev profile ingestion
 │   └── github_issue.py       ✅ read_issue, read_repo_files, create_fix_pr, poll
 └── constitution/
-    └── builder.py            ✅ GitHub data → Claude → constitution facts
+    ├── builder.py            ✅ GitHub → Gemini → constitution facts (UPDATE: switch to Gemini)
+    └── store.py              ✅ Qdrant read/write/search (ConstitutionStore class)
 ```
 
 ```
@@ -107,149 +126,153 @@ frontend base:
 
 ### What you own
 - The 6-node LangGraph graph (`backend/graphs/incident_graph.py`)
-- Claude prompts inside each node
-- Qdrant constitution store (reading + writing facts)
-- The `POST /agents` flow (GitHub → facts → Qdrant)
+- Approval gate node (LangGraph interrupt pattern)
+- Qdrant constitution store (already written — test and tune)
+- Gemini integration in `constitution/builder.py`
 
 ### Files to work in
 ```
 backend/
 ├── graphs/
-│   ├── incident_graph.py     ← tune all node prompts, fix parallel fan-out
-│   └── state.py              ← extend if needed
+│   ├── incident_graph.py     ← add approval_gate node with interrupt
+│   └── state.py              ← add approval_status field if needed
 └── constitution/
-    ├── builder.py            ← add actual Qdrant writes (currently scaffolded)
-    └── store.py              ← NEW: create this for Qdrant read/write/search
+    └── builder.py            ← switch from GPT-5.5 to Gemini 2.0 Flash
 ```
 
 ### Tasks
 
 **Morning (9:00–12:00)**
 
-- [ ] **Qdrant setup** — start docker, create collections:
+- [ ] **Qdrant setup**:
   ```bash
   docker run -d -p 6333:6333 qdrant/qdrant
-  ```
-  Collections needed: `semantic_facts`, `episodes`
-  Use `constitution/qdrant_client_reference.py` + `constitution/embeddings_reference.py` as the pattern
-
-- [ ] **`constitution/store.py`** — write these 4 functions:
-  ```python
-  def store_facts(facts: list[dict], user_id: str, tenant_id: str) -> int
-      # embed each fact with sentence-transformers → upsert to semantic_facts
-      # return count stored
-
-  def get_facts(user_id: str) -> dict[str, list]
-      # search Qdrant for all facts with scope_id=user_id
-      # return grouped by category: {code_ownership: [...], expertise: [...], ...}
-
-  def search_ownership(filepath: str) -> tuple[str | None, float]
-      # semantic search semantic_facts where predicate="owns"
-      # match against filepath → return (owner_agent_id, confidence)
-
-  def add_episode(user_id: str, summary: str) -> None
-      # embed summary → upsert to episodes collection
+  cd backend && python seed_demo.py
+  # verify: curl http://localhost:6333/collections
   ```
 
-- [ ] **Wire store into `main.py`** — update these endpoints to use real Qdrant:
-  - `POST /agents` → after `build_constitution_from_github()`, call `store.store_facts()`
-  - `GET /constitution/{id}` → call `store.get_facts()`
-  - `PATCH /constitution/{id}` → call `store.add_episode()`
-  - `GET /ownership` → call `store.search_ownership(filepath)`
-
-- [ ] **Pre-seed 3 demo agents** — hardcode constitutions for Alice, Bob, Carol so demo works even if GitHub API is slow:
+- [ ] **Switch `builder.py` to Gemini** — replace the GPT-5.5 call:
   ```python
-  # backend/seed_demo.py — run once at 9am
-  DEMO_AGENTS = [
-      {
-          "id": "alice", "name": "Alice Chen", "github_username": "alicechen",
-          "facts": [
-              {"subject": "alice", "predicate": "owns", "object": "auth/", "category": "code_ownership", "confidence": 0.95},
-              {"subject": "alice", "predicate": "owns", "object": "billing/", "category": "code_ownership", "confidence": 0.9},
-              {"subject": "alice", "predicate": "expertise_in", "object": "Go, Kafka, distributed systems", "category": "expertise", "confidence": 0.9},
-              {"subject": "alice", "predicate": "prefers", "object": "async communication, needs full context before meetings", "category": "collaboration", "confidence": 0.85},
-              {"subject": "alice", "predicate": "currently_working_on", "object": "payment retry logic refactor", "category": "current_focus", "confidence": 0.85},
-              {"subject": "alice", "predicate": "is_aware_of_issue", "object": "auth token race condition under concurrent load in auth/token.go", "category": "known_issues", "confidence": 0.92},
-          ]
-      },
-      {
-          "id": "bob", "name": "Bob Park", "github_username": "bobpark",
-          "facts": [
-              {"subject": "bob", "predicate": "owns", "object": "api/users/", "category": "code_ownership", "confidence": 0.9},
-              {"subject": "bob", "predicate": "owns", "object": "frontend/", "category": "code_ownership", "confidence": 0.85},
-              {"subject": "bob", "predicate": "expertise_in", "object": "TypeScript, React, REST APIs", "category": "expertise", "confidence": 0.88},
-              {"subject": "bob", "predicate": "prefers", "object": "short messages, quick syncs over long docs", "category": "collaboration", "confidence": 0.8},
-              {"subject": "bob", "predicate": "currently_working_on", "object": "user profile redesign, changed auth middleware in PR #44", "category": "current_focus", "confidence": 0.88},
-          ]
-      },
-      {
-          "id": "carol", "name": "Carol Zhang", "github_username": "carolzhang",
-          "facts": [
-              {"subject": "carol", "predicate": "owns", "object": "infra/", "category": "code_ownership", "confidence": 0.92},
-              {"subject": "carol", "predicate": "owns", "object": "deploy/", "category": "code_ownership", "confidence": 0.9},
-              {"subject": "carol", "predicate": "expertise_in", "object": "Kubernetes, Terraform, CI/CD", "category": "expertise", "confidence": 0.9},
-              {"subject": "carol", "predicate": "prefers", "object": "formal runbooks, async Slack updates", "category": "collaboration", "confidence": 0.82},
-          ]
-      }
-  ]
+  import google.generativeai as genai
+  genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+  model = genai.GenerativeModel(
+      "gemini-2.0-flash",
+      generation_config={"response_mime_type": "application/json"},
+  )
+  # Use model.generate_content(prompt) instead of gpt55.ainvoke(...)
+  # Gemini's response_mime_type=application/json gives you structured output directly
+  ```
+  Install: `pip install google-generativeai`
+
+- [ ] **Test constitution building end-to-end**:
+  ```bash
+  python3 -c "
+  import asyncio
+  from ingestion.github_ingest import ingest_developer
+  from constitution.builder import build_constitution_from_github
+  data = ingest_developer('torvalds')  # any real username
+  facts = asyncio.run(build_constitution_from_github(data))
+  print(facts[:3])
+  "
+  ```
+
+- [ ] **Verify Qdrant store**:
+  ```bash
+  python3 -c "
+  from constitution.store import ConstitutionStore
+  s = ConstitutionStore()
+  print(s.get_by_user('alice01', 'hackathon'))
+  print(s.search('alice01', 'hackathon', 'race condition in auth'))
+  "
+  ```
+  Confirm Alice's known_issues fact surfaces for the query "race condition in auth".
+
+- [ ] **Confirm ownership routing**:
+  ```bash
+  curl "http://localhost:8000/ownership?filepath=auth/token.go"
+  # should return: {"owner_agent_id": "alice01", "confidence": ...}
+  ```
+
+**Midday (11:30–1:00)**
+
+- [ ] **Add `approval_gate` node** to `incident_graph.py`:
+  ```python
+  from langgraph.types import interrupt
+
+  async def approval_gate(state: AUBIIssueState) -> dict:
+      """Pause execution and wait for human approval."""
+      # Emit SSE event so frontend shows the Approve button
+      decision = interrupt({
+          "patch_diff":      state.get("patch_diff"),
+          "fix_explanation": state.get("fix_explanation"),
+          "fixed_file_path": state.get("fixed_file_path"),
+      })
+      # decision comes back as {"approved": True} from frontend
+      return {"approval_status": decision.get("approved", False)}
+  ```
+  Wire: `fix_generator → approval_gate → pr_pusher`
+  Use `MemorySaver` checkpointer so state persists during the pause:
+  ```python
+  from langgraph.checkpoint.memory import MemorySaver
+  aubi_graph = builder.compile(checkpointer=MemorySaver(), interrupt_before=["pr_pusher"])
+  ```
+
+- [ ] **Add `POST /incidents/approve`** endpoint in `main.py`:
+  ```python
+  @app.post("/incidents/approve")
+  async def approve_incident(thread_id: str):
+      """Resume a paused graph after human approval."""
+      result = await aubi_graph.ainvoke(
+          Command(resume={"approved": True}),
+          config={"configurable": {"thread_id": thread_id}},
+      )
+      return {"pr_url": result.get("pr_url")}
   ```
 
 **Afternoon (1:30–3:30)**
 
-- [ ] **Tune node prompts** in `incident_graph.py` — run the graph end-to-end with the demo bug and iterate until:
-  - `issue_reader` correctly identifies `auth/token.go` as the affected file
-  - `query_single_agent` returns Alice's race condition context in the response
-  - `fix_generator` produces a valid Go mutex fix (not pseudocode)
-  - Output is clean enough to show judges
-
-- [ ] **`fix_generator` prompt** — hardcode the demo bug pattern so the fix is deterministic:
-  ```
-  The developer's constitution mentions a race condition in auth/token.go.
-  If the source file shows a cache access without mutex locking, apply
-  sync.Mutex locking around the cache read and write.
-  ```
-
-- [ ] **Test the full graph**: `curl -X POST http://localhost:8000/incidents/run -d '{"issue_url": "DEMO_REPO#1"}'`
+- [ ] Run full graph end-to-end with demo repo issue URL
+- [ ] Tune `fix_generator` prompt until it produces valid Go mutex fix (not pseudocode)
+- [ ] Confirm approval gate pauses, frontend button appears, PR pushes on approve
+- [ ] Run demo × 3 with full team
 
 ### Key patterns from reference files
 ```python
-# constitution/qdrant_client_reference.py → use get_qdrant_client()
-# constitution/embeddings_reference.py → use embed_text(str) → list[float]
-# constitution/post_session_reference.py → pattern for storing episodes
-# constitution/context_builder_reference.py → pattern for searching + filtering by scope
+# constitution/qdrant_client_reference.py → Qdrant client patterns
+# constitution/embeddings_reference.py   → embed_text() pattern
+# constitution/post_session_reference.py → episode storage pattern
+# graphs/prompt_builder.py               → system prompt assembly
 ```
 
 ---
 
-## Neil — GitHub + Slack Integration
+## Neil — GitHub Integration
 
 ### What you own
 - GitHub: read issues, read repo files, push PRs, poll for new issues
-- Slack: receive messages as incident triggers, post resolution back
 - The demo repo with the planted bug
+
+**Slack is now a stretch goal — do not block on it.**
 
 ### Files to work in
 ```
 backend/
 ├── ingestion/
-│   ├── github_issue.py       ← already written, test + fix edge cases
-│   └── slack_integration.py  ← NEW: Slack webhook receiver + message poster
-└── main.py                   ← add /slack/webhook endpoint
+│   └── github_issue.py       ← already written, test + fix edge cases
+└── main.py                   ← no Slack work needed in core path
 ```
 
 ### Tasks
 
 **First thing at 9:00 AM — Demo Repo Setup (do this before anything else)**
 
-- [ ] Create a public GitHub repo called `AUBI-Demo` (or fork an existing one)
-- [ ] Add this file as `auth/token.go` with the planted bug:
+- [ ] Create a public GitHub repo called `AUBI-Demo`
+- [ ] Add `auth/token.go` with the planted race condition:
   ```go
   package auth
 
-  import "sync"
-
   // TokenCache caches user tokens in memory.
-  // BUG: cache map has no mutex protection — race condition under concurrent load.
+  // BUG: no mutex — race condition under concurrent load.
   type TokenCache struct {
       cache map[string]string
       // mu sync.Mutex  ← intentionally missing
@@ -261,24 +284,23 @@ backend/
 
   func (c *TokenCache) GetOrRefresh(userID string) (string, error) {
       if cached := c.cache[userID]; cached != "" {
-          return cached, nil  // concurrent reads/writes here = race condition
+          return cached, nil  // BUG: concurrent reads here
       }
       token, err := refreshFromDB(userID)
       if err != nil {
           return "", err
       }
-      c.cache[userID] = token  // concurrent write here
+      c.cache[userID] = token  // BUG: concurrent write here
       return token, nil
   }
 
   func refreshFromDB(userID string) (string, error) {
-      // simulated DB call
       return "token_" + userID, nil
   }
   ```
-- [ ] Open **Issue #1** on the repo: *"Authentication endpoint returning 401 for valid tokens after latest deployment — blocking student assignment submissions"* (author: your prof account or a test account)
+- [ ] Open **Issue #1**: *"Authentication endpoint returning 401 for valid tokens after latest deployment — blocking student assignment submissions"*
 - [ ] Set `DEMO_REPO=your-username/AUBI-Demo` in `.env`
-- [ ] Give your `GITHUB_TOKEN` write access to this repo (it needs to push branches + create PRs)
+- [ ] Confirm `GITHUB_TOKEN` has write access to this repo
 
 **Morning (9:00–12:00)**
 
@@ -290,54 +312,33 @@ backend/
   print(read_repo_files('your-username/AUBI-Demo', ['auth/token.go']))
   "
   ```
-- [ ] **Fix any edge cases** in `create_fix_pr()` — test with a dummy fix first to confirm PR creation works
-- [ ] **`slack_integration.py`** — two functions:
-  ```python
-  async def receive_slack_event(payload: dict) -> dict | None:
-      """Parse a Slack event webhook payload.
-      Returns {text, channel, user, ts} if it's a relevant message, else None.
-      For demo: watch for messages containing 'auth', '401', or '500'.
-      """
-
-  async def post_slack_message(channel: str, text: str) -> bool:
-      """Post a message to a Slack channel via Bot Token.
-      Returns True on success.
-      """
+- [ ] **Test `create_fix_pr()`** with dummy content to confirm PR creation works before the demo depends on it:
+  ```bash
+  python3 -c "
+  from ingestion.github_issue import create_fix_pr
+  url = create_fix_pr(
+      repo_name='your-username/AUBI-Demo',
+      issue_number=1,
+      issue_title='test fix',
+      file_path='auth/token.go',
+      new_file_content='package auth\n// fixed\n',
+      pr_body='test PR',
+  )
+  print('PR created:', url)
+  "
   ```
-- [ ] **`POST /slack/webhook`** in `main.py`:
-  ```python
-  @app.post("/slack/webhook")
-  async def slack_webhook(request: Request):
-      payload = await request.json()
-      # Slack URL verification challenge
-      if payload.get("type") == "url_verification":
-          return {"challenge": payload["challenge"]}
-      event = await receive_slack_event(payload)
-      if event:
-          # Trigger the AUBI graph as a background task
-          asyncio.create_task(run_graph_for_slack(event))
-      return {"ok": True}
-  ```
-- [ ] **Slack bot setup** (if time allows, else skip and use GitHub issue only):
-  - Create a Slack app at api.slack.com
-  - Enable Event Subscriptions → point to `ngrok` tunnel during demo
-  - Subscribe to `message.channels` events
-  - Add bot to a channel
-  - Add `SLACK_BOT_TOKEN` and `SLACK_SIGNING_SECRET` to `.env`
+- [ ] Fix any edge cases (branch already exists, file not on main, etc.)
 
 **Afternoon (1:30–3:30)**
 
-- [ ] **Full end-to-end test**: trigger via GitHub issue URL → confirm PR is created with correct file content
-- [ ] **PR body quality** — confirm it reads like something Alice would actually write (not robotic)
-- [ ] If Slack integration is working: test posting the fix summary back to the channel after PR is pushed
-- [ ] **`GET /github/poll`** — confirm this endpoint returns the demo repo's open issue for Person 4's frontend poller
+- [ ] Full end-to-end test: trigger via issue URL → confirm PR is created with actual mutex fix
+- [ ] Confirm PR body reads like something Alice would write (not robotic)
+- [ ] **Stretch only if done before 2:30**: `slack_integration.py` + `/slack/webhook` endpoint
 
 ### Environment variables you need
 ```bash
-GITHUB_TOKEN=ghp_...          # needs repo write access
+GITHUB_TOKEN=ghp_...           # needs repo write access
 DEMO_REPO=your-username/AUBI-Demo
-SLACK_BOT_TOKEN=xoxb-...      # optional
-SLACK_SIGNING_SECRET=...      # optional
 ```
 
 ---
@@ -345,9 +346,9 @@ SLACK_SIGNING_SECRET=...      # optional
 ## Avhaang — Frontend: Agent Cards + Constitution Viewer + Comm Feed
 
 ### What you own
-- `/team` page — the 3 developer cards + constitution panel
-- Agent communication feed (the centrepiece of the demo)
-- SSE connection from backend
+- `/team` page — 3 developer cards + constitution panel
+- Agent communication feed (centrepiece of the demo — spend most time here)
+- SSE connection for agent messages + mesh line animations
 
 ### Base
 ```
@@ -363,9 +364,10 @@ apps/aubi-web/src/
 │   └── demo/page.tsx              ← main demo view (shared with Mitansh)
 └── components/aubi/
     ├── AgentCard.tsx              ← developer card
-    ├── ConstitutionPanel.tsx      ← expandable fact viewer
+    ├── ConstitutionPanel.tsx      ← expandable fact viewer + Gemini badge
     ├── AgentMeshLines.tsx         ← animated SVG connections between cards
-    └── AgentCommFeed.tsx          ← the live agent-to-agent chat feed
+    ├── AgentCommFeed.tsx          ← live agent-to-agent chat feed
+    └── RoutingEvidencePanel.tsx   ← "Why Alice?" ownership routing explanation
 ```
 
 ### Tasks
@@ -373,73 +375,92 @@ apps/aubi-web/src/
 **Morning (9:00–12:00)**
 
 - [ ] **`/team` page + `AgentCard.tsx`**:
-  - Fetch `GET http://localhost:8000/agents` on load
+  - Fetch `GET /agents` on load
   - 3 cards in a grid, each showing:
     - GitHub avatar (`https://github.com/{username}.png`)
-    - Name + role tag (e.g. "Senior Backend Engineer")
-    - Expertise pills: `[Go] [Kafka] [PostgreSQL]` — pull from `constitution.expertise`
-    - Code ownership badges: `auth/` `billing/` — from `constitution.code_ownership`
-    - Collaboration style: 1-line blurb from `constitution.collaboration`
-    - "Memory v3 · 2 min ago" footer badge
+    - Name + role tag
+    - Expertise pills: `[Go] [Kafka] [PostgreSQL]`
+    - Code ownership badges: `auth/` `billing/`
+    - Collaboration style: 1-line blurb
+    - "Memory v3 · live" footer badge
     - Pulsing green dot ("online")
-  - Click card → open `ConstitutionPanel` slide-over/drawer
+  - Click card → open `ConstitutionPanel` slide-over
 
 - [ ] **`ConstitutionPanel.tsx`**:
   - Pull `GET /agents/{id}` for full constitution
-  - Section per category, each with:
-    - Category name (Code Ownership / Expertise / Collaboration / Current Focus / Known Issues)
-    - Each fact as a row: predicate + object + confidence bar
+  - Section per category: Code Ownership / Expertise / Collaboration / Current Focus / Known Issues
+  - Each fact as a row: predicate + object + confidence bar
+  - **Known Issues section highlighted in amber** — this is what the judge should notice
+  - Small badge at top of panel: `⚡ Built with Gemini structured output` (violet/indigo color)
   - Animate in from right on card click
 
 - [ ] **`AgentMeshLines.tsx`**:
   - SVG lines drawn between the 3 agent cards
-  - Lines are dim by default
-  - When an `agent_message` SSE event fires: animate the line between sender and recipient (pulse, glow)
-  - Use `framer-motion` or plain CSS animation
+  - Dim by default, pulse/glow on `agent_message` SSE event between that pair
+  - Use framer-motion or plain CSS animation
 
 **Afternoon (1:30–3:30)**
 
-- [ ] **`AgentCommFeed.tsx`** (the centrepiece):
-  - Receives `agent_message` events from the SSE stream (Mitansh wires the SSE, you consume the events via a shared context/hook)
-  - Each message renders as a chat bubble:
+- [ ] **`AgentCommFeed.tsx`** (the centrepiece — spend most time here):
+  - Receives `agent_message` events from Mitansh's SSE hook via shared context
+  - Chat bubbles:
     ```
-    [Orchestrator]    ──→   "New issue: auth 401. Is this yours?"
-             [Alice's Aubi]  ←──  "Yes — matches the race condition in auth/token.go"
-    [Orchestrator]    ──→   "Bob, did your PR #44 touch auth middleware?"
-             [Bob's Aubi]    ←──  "Yes — changed header passing in api/users/auth_middleware.go"
+    [Orchestrator]   ──→  "New issue: auth 401. Is this yours, Alice?"
+         [Alice's Aubi]  ←──  "Yes — matches the race condition I noted in auth/token.go"
+    [Orchestrator]   ──→  "Bob, did PR #44 touch auth middleware?"
+         [Bob's Aubi]    ←──  "Yes — I changed header passing in api/users/auth_middleware.go"
     ```
-  - Color per agent: Orchestrator = indigo, Alice = emerald, Bob = amber, Carol = rose
-  - Sender on left → right-facing bubble, recipient on right → left-facing bubble
-  - Animated "..." before each bubble appears (typing indicator)
-  - Auto-scroll to latest message
+  - Colors: Orchestrator = indigo, Alice = emerald, Bob = amber, Carol = rose
+  - Typing indicator ("...") before each bubble appears
+  - Auto-scroll to latest
 
-- [ ] **Wire `AgentMeshLines` to the SSE events** — when a `agent_message` event fires with `sender: "alice_aubi"`, animate the Alice↔Orchestrator line
+- [ ] **`RoutingEvidencePanel.tsx`** — the "Why Alice?" panel (appears when `routing_evidence` SSE event fires):
+  ```
+  ┌─────────────────────────────────────────────────┐
+  │  Owner match                                    │
+  │  auth/token.go → Alice Chen                     │
+  │                                                 │
+  │  Evidence                                       │
+  │  ✓ owns auth/ with 0.95 confidence              │
+  │  ✓ known issue: auth token race condition       │
+  │  ✓ current focus: payment/auth retry refactor   │
+  └─────────────────────────────────────────────────┘
+  ```
+  - Data comes from the `routing_evidence` SSE event: `{agent_name, matched_files, evidence_facts[]}`
+  - Each evidence fact shows as a green checkmark row: `predicate + object`
+  - Animate in from the left, below or beside the comm feed
+  - This replaces a chat bubble — it's structured, scannable, impressive
 
-### Design principles (from existing cognoxent app)
-- Dark background, light text — already there
-- Subtle animations, no bounce
-- Flat, airy feel — not enterprise
-- Use existing shadcn components where possible (Card, Badge, ScrollArea, Sheet for panel)
+- [ ] Wire `AgentMeshLines` to SSE `agent_message` events
+
+### Design principles
+- Dark background, light text — already in base app
+- Subtle animations only — no bounce, no flash
+- Use existing shadcn components: Card, Badge, ScrollArea, Sheet
 
 ---
 
-## Mitansh — Frontend: Issue Feed + Code Diff + PR Preview + SSE
+## Mitansh — Frontend: Issue Feed + Code Diff + Approve Button + PR Preview + SSE
 
 ### What you own
-- `/demo` page layout and SSE wiring (shared page with Avhaang's components)
+- `/demo` page layout and state management
+- SSE wiring (the central `useAUBIStream` hook that all components consume)
 - Issue feed panel (live GitHub poller)
-- Code diff panel (shows the fix)
-- PR preview panel (shows the push result)
-- The overall demo page layout and state management
+- Code diff panel
+- **Approve PR button** (the key new piece)
+- PR preview panel
 
 ### New files to create
 ```
 apps/aubi-web/src/
 ├── app/demo/page.tsx              ← main demo view layout + SSE state
+├── hooks/useAUBIStream.ts         ← central SSE hook
 └── components/aubi/
     ├── IssueFeed.tsx              ← live issue poller
     ├── CodeDiffPanel.tsx          ← syntax-highlighted diff
-    └── PRPreviewPanel.tsx         ← PR mockup + real link
+    ├── ApprovalGate.tsx           ← checklist + "Approve Alice's PR" button
+    ├── PRPreviewPanel.tsx         ← PR mockup + real link
+    └── AUBILearnedStrip.tsx       ← memory update strip after PR push
 ```
 
 ### Tasks
@@ -449,66 +470,106 @@ apps/aubi-web/src/
 - [ ] **`/demo` page layout**:
   - 3-column layout:
     - Left: `AgentCommFeed` (Avhaang's component)
-    - Center: `CodeDiffPanel` (yours)
+    - Center: `CodeDiffPanel` + `ApproveButton` (yours)
     - Right: `PRPreviewPanel` (yours)
-  - `IssueFeed` as a top banner that slides down when a new issue arrives
-  - Top nav: "AUBI Demo" + a live status pill ("Watching repo..." / "Incident active" / "Fixed ✓")
+  - `IssueFeed` as top banner that slides down on new issue
+  - Top nav: "AUBI Demo" + live status pill ("Watching..." / "Incident active" / "Awaiting approval" / "Fixed ✓")
+  - Graph step indicator: `Issue Read → Ownership Found → Agents Consulted → Code Read → Fix Generated → ⏸ Awaiting Approval → PR Pushed`
 
-- [ ] **SSE hook** — central SSE connection that feeds all components:
+- [ ] **`useAUBIStream.ts`** — central SSE hook:
   ```typescript
-  // hooks/useAUBIStream.ts
-  export function useAUBIStream(issueUrl: string | null) {
-    const [events, setEvents] = useState<AUBIEvent[]>([])
+  export function useAUBIStream(issueUrl: string | null, threadId: string) {
     const [agentMessages, setAgentMessages] = useState<AgentMessage[]>([])
+    const [routingEvidence, setRoutingEvidence] = useState<RoutingEvidence | null>(null)
     const [diff, setDiff] = useState<string | null>(null)
+    const [fixExplanation, setFixExplanation] = useState<string | null>(null)
     const [prUrl, setPrUrl] = useState<string | null>(null)
+    const [learnedFacts, setLearnedFacts] = useState<LearnedFact[]>([])
     const [nodeStatuses, setNodeStatuses] = useState<Record<string, 'idle'|'running'|'done'>>({})
+    const [awaitingApproval, setAwaitingApproval] = useState(false)
 
     useEffect(() => {
       if (!issueUrl) return
-      const es = new EventSource(`/api/incidents/stream?issue_url=${encodeURIComponent(issueUrl)}`)
+      const es = new EventSource(`/api/incidents/stream?issue_url=${encodeURIComponent(issueUrl)}&thread_id=${threadId}`)
       es.onmessage = (e) => {
         const event = JSON.parse(e.data)
-        if (event.event === 'agent_message')  setAgentMessages(m => [...m, event.data])
-        if (event.event === 'node_start')     setNodeStatuses(s => ({...s, [event.node]: 'running'}))
+        if (event.event === 'agent_message')   setAgentMessages(m => [...m, event.data])
+        if (event.event === 'routing_evidence') setRoutingEvidence(event.data)  // "Why Alice?"
+        if (event.event === 'aubi_learned')    setLearnedFacts(f => [...f, event.data])
+        if (event.event === 'node_start')      setNodeStatuses(s => ({...s, [event.node]: 'running'}))
         if (event.event === 'node_done') {
           setNodeStatuses(s => ({...s, [event.node]: 'done'}))
-          if (event.node === 'fix_generator') setDiff(event.data?.patch_diff)
-          if (event.node === 'pr_pusher')     setPrUrl(event.data?.pr_url)
+          if (event.node === 'fix_generator') {
+            setDiff(event.data?.patch_diff)
+            setFixExplanation(event.data?.fix_explanation)
+          }
+          if (event.node === 'pr_pusher') setPrUrl(event.data?.pr_url)
         }
+        if (event.event === 'awaiting_approval') setAwaitingApproval(true)
+        if (event.event === 'complete')          es.close()
       }
       return () => es.close()
     }, [issueUrl])
 
-    return { agentMessages, diff, prUrl, nodeStatuses }
+    return { agentMessages, routingEvidence, diff, fixExplanation, prUrl, learnedFacts, nodeStatuses, awaitingApproval }
   }
   ```
 
 - [ ] **`IssueFeed.tsx`**:
-  - Polls `GET /api/github/poll` every 5 seconds
-  - When a new issue is returned: slide-in banner at top:
+  - Poll `GET /api/github/poll` every 5 seconds
+  - Slide-in banner when issue arrives:
     ```
     🔴  Issue #1 by prof-chen  ·  "Authentication endpoint 401 blocking submissions"
         [Trigger AUBI →]
     ```
-  - Clicking "Trigger AUBI" sets `issueUrl` in page state → starts SSE stream
-  - Banner stays visible while graph is running, changes to green "✓ Fixed" when `pr_pusher` completes
+  - "Trigger AUBI" sets `issueUrl` in page state → starts SSE stream
+  - Banner turns green "✓ Fixed" when `pr_pusher` completes
 
 - [ ] **`CodeDiffPanel.tsx`**:
-  - Hidden until `fix_generator` node completes
-  - Slide-in animation when diff appears
-  - Use `react-syntax-highlighter` (already available or install):
+  - Hidden until `fix_generator` completes
+  - `react-syntax-highlighter` for syntax highlighting:
     ```bash
     npm i react-syntax-highlighter @types/react-syntax-highlighter
     ```
-  - Show unified diff: removed lines in red background, added lines in green
+  - Unified diff: removed lines red, added lines green
   - File path header: `auth/token.go`
-  - Fix explanation text below the diff (from `event.data.fix_explanation`)
+  - Fix explanation text below the diff
+
+- [ ] **`ApprovalGate.tsx`** (key new piece — appears when `awaitingApproval === true`):
+  - Checklist above the button (always all checked for demo):
+    ```
+    ✓ Ownership matched
+    ✓ Relevant memory found
+    ✓ Patch generated
+    ✓ Tests passed
+    ⏸ Awaiting human approval
+    ```
+  - Each item animates in sequentially (150ms stagger) as the graph progresses through nodes
+    - `ownership_router` node_done → "Ownership matched" checks
+    - `query_single_agent` node_done → "Relevant memory found" checks
+    - `fix_generator` node_done → "Patch generated" + "Tests passed" check
+    - `awaiting_approval` event → "Awaiting human approval" pulses
+  - Button below checklist: **`✅ Approve Alice's PR`** (use agent name from `routing_evidence`)
+  - On click: `POST /api/incidents/approve?thread_id={threadId}`
+  - Button → loading spinner → disappears when `pr_pusher` node_done fires
+
+- [ ] **`AUBILearnedStrip.tsx`** — appears after `pr_pusher` completes, data from `aubi_learned` SSE events:
+  ```
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  🧠 AUBI learned                                                 │
+  │  Alice known issue: auth token race condition → resolved in PR #2 │
+  │  Episode stored: Issue #1, auth 401, fixed by mutex-protected     │
+  │  TokenCache                                                       │
+  └──────────────────────────────────────────────────────────────────┘
+  ```
+  - Subtle green background, bottom of the demo page
+  - Slide up from bottom with a soft animation
+  - Multiple `aubi_learned` events append to the strip (one per involved agent)
+  - This closes the memory loop: constitution → action → memory update
 
 - [ ] **`PRPreviewPanel.tsx`**:
-  - Hidden until `pr_pusher` node completes
-  - Slides in from right when PR URL appears
-  - Mockup GitHub PR card:
+  - Hidden until `pr_pusher` completes
+  - GitHub PR card mockup:
     ```
     ┌─────────────────────────────────────────┐
     │  fix: resolve auth token race condition  │
@@ -520,52 +581,38 @@ apps/aubi-web/src/
     │  [Open on GitHub ↗]                    │
     └─────────────────────────────────────────┘
     ```
-  - "Open on GitHub" button → links to real PR URL
-  - Subtle confetti animation when PR appears (use `canvas-confetti`):
+  - Confetti on appear:
     ```bash
     npm i canvas-confetti @types/canvas-confetti
     ```
 
 **Afternoon (1:30–3:30)**
 
-- [ ] **Graph progress tracker** (optional but nice):
-  - Small horizontal step indicator at top of demo page:
-    `Issue Read → Ownership Found → Agents Consulted → Code Read → Fix Generated → PR Pushed`
-  - Each step lights up as its node completes (use `nodeStatuses` from the hook)
-
-- [ ] **Full demo rehearsal** with Avhaang — run the complete flow end-to-end:
-  - Open the issue in GitHub
-  - Watch `/github/poll` pick it up
-  - Click "Trigger AUBI"
-  - All 3 panels populate in sequence
-  - Confirm the PR link is real and opens correctly
-
-- [ ] **API proxy** — add Next.js API routes so frontend calls go to `/api/*` and proxy to `localhost:8000`:
+- [ ] Full demo rehearsal with Avhaang
+- [ ] API proxy (catch-all Next.js route to avoid CORS):
   ```typescript
-  // app/api/[...path]/route.ts  — catch-all proxy to backend
+  // app/api/[...path]/route.ts
   ```
-  This avoids CORS issues in the demo.
+- [ ] Polish transitions, confirm `ApproveButton` → PR flow is smooth
 
 ---
 
 ## API Contracts (locked)
 
 ```
-# Backend — localhost:8000
-
 GET  /agents                     → [{id, name, role, github_username, constitution_facts[]}]
 GET  /agents/{id}                → {id, name, constitution: {code_ownership:[], expertise:[], ...}}
-POST /agents                     → body: {github_username, name, role} → creates agent + constitution
-POST /agents/{id}/query          → body: {incident_text} → {context: str}
+POST /agents                     → {github_username, name, role} → creates agent + constitution
+POST /agents/{id}/query          → {incident_text} → {context: str}
 
 GET  /constitution/{id}          → facts grouped by category
-PATCH /constitution/{id}         → body: {fact: {...}} → appends episode
+PATCH /constitution/{id}         → {fact: {...}} → appends episode
 
-GET  /ownership                  → ?filepath=auth/  → {owner_agent_id, confidence}
+GET  /ownership                  → ?filepath=auth/ → {owner_agent_id, confidence}
 
-POST /incidents/run              → body: {issue_url} → {pr_url, patch_diff, fix_explanation, ...}
-GET  /incidents/stream           → ?issue_url=...   → SSE stream
-POST /slack/webhook              → Slack event payload → triggers graph
+POST /incidents/run              → {issue_url} → {pr_url, patch_diff, fix_explanation, ...}
+GET  /incidents/stream           → ?issue_url=...&thread_id=... → SSE stream
+POST /incidents/approve          → ?thread_id=... → resumes paused graph → {pr_url}
 
 GET  /github/poll                → {issue: {title, body, url, issue_number} | null}
 GET  /health
@@ -574,16 +621,17 @@ GET  /health
 ```
 # SSE events (backend → frontend)
 
-{"event": "node_start",    "node": "issue_reader",       "data": null}
-{"event": "node_done",     "node": "issue_reader",       "data": {"issue_title": "...", "affected_files": [...]}}
-{"event": "node_start",    "node": "ownership_router",   "data": null}
-{"event": "node_done",     "node": "ownership_router",   "data": {"owner_ids": ["alice", "bob"]}}
-{"event": "agent_message", "data": {"sender": "orchestrator", "recipient": "alice_aubi", "message": "...", "timestamp": 0}}
-{"event": "agent_message", "data": {"sender": "alice_aubi",   "recipient": "orchestrator","message": "...", "timestamp": 0}}
-{"event": "node_done",     "node": "code_reader",        "data": {"files": {"auth/token.go": "..."}}}
-{"event": "node_done",     "node": "fix_generator",      "data": {"patch_diff": "...", "fix_explanation": "..."}}
-{"event": "node_done",     "node": "pr_pusher",          "data": {"pr_url": "https://github.com/..."}}
-{"event": "complete",      "data": null}
+{"event": "node_start",        "node": "issue_reader",     "data": null}
+{"event": "node_done",         "node": "issue_reader",     "data": {"issue_title": "...", "affected_files": [...]}}
+{"event": "node_done",         "node": "ownership_router", "data": {"owner_ids": ["alice01"]}}
+{"event": "agent_message",     "data": {"sender": "orchestrator", "recipient": "alice01_aubi", "message": "...", "timestamp": 0}}
+{"event": "agent_message",     "data": {"sender": "alice01_aubi", "recipient": "orchestrator", "message": "...", "timestamp": 0}}
+{"event": "routing_evidence",  "data": {"agent_id": "alice01", "agent_name": "Alice Chen", "matched_files": ["auth/token.go"], "evidence_facts": [{"predicate": "owns", "object": "auth/", "confidence": 0.95, "category": "code_ownership"}, ...]}}
+{"event": "node_done",         "node": "fix_generator",    "data": {"patch_diff": "...", "fix_explanation": "..."}}
+{"event": "awaiting_approval", "data": {"patch_diff": "...", "fix_explanation": "..."}}
+{"event": "node_done",         "node": "pr_pusher",        "data": {"pr_url": "https://github.com/..."}}
+{"event": "aubi_learned",      "data": {"agent_id": "alice01", "agent_name": "Alice Chen", "update": "Issue #1 resolved — fixed race condition with sync.Mutex", "episode": "Issue #1: auth 401 — fixed by mutex-protected TokenCache"}}
+{"event": "complete",          "data": null}
 ```
 
 ---
@@ -592,15 +640,15 @@ GET  /health
 
 | Time | Vitthal | Neil | Avhaang | Mitansh |
 |---|---|---|---|---|
-| **9:00–9:30** | Set up Qdrant docker. Read reference files. | **Create demo repo + plant bug. Open Issue #1.** Test GitHub token has write access. | Open `aubi-web` in browser, understand existing structure. | Same — explore existing app. |
-| **9:30–11:00** | Write `constitution/store.py`. Get Qdrant reads/writes working. | Test `github_issue.py`. Fix edge cases in PR creation. Set up Slack app (or skip). | Build `AgentCard.tsx` + `/team` page. Wire `GET /agents`. | Build `/demo` page layout. Write `useAUBIStream` SSE hook. |
-| **11:00–11:30** | **Checkpoint**: seed demo agents into Qdrant. Confirm `GET /ownership?filepath=auth/` returns Alice. | **Checkpoint**: confirm `read_issue()` + `read_repo_files()` work against demo repo. | **Checkpoint**: agent cards show on screen with real data. | **Checkpoint**: SSE hook connects, receives test events. |
-| **11:30–1:00** | Wire Qdrant store into `main.py`. Test `POST /agents` end-to-end. | Test `create_fix_pr()` with dummy content. Confirm PR appears in GitHub. | Build `ConstitutionPanel.tsx` + `AgentMeshLines.tsx`. | Build `IssueFeed.tsx` with poll. Build `CodeDiffPanel.tsx`. |
+| **9:00–9:30** | Qdrant docker up. `python seed_demo.py`. Verify Alice's constitution in Qdrant. | **Create demo repo. Plant bug. Open Issue #1.** Confirm GitHub token write access. | Open `aubi-web`. Understand existing component structure. | Same — explore existing app. |
+| **9:30–11:00** | Switch `builder.py` to Gemini. Test constitution building with a real GitHub user. | Test `read_issue()` + `read_repo_files()`. Fix edge cases in `create_fix_pr()`. | Build `AgentCard.tsx` + `/team` page. Wire `GET /agents`. | Build `/demo` layout. Write `useAUBIStream` SSE hook. |
+| **11:00–11:30** | **Checkpoint**: `GET /ownership?filepath=auth/token.go` returns Alice. Constitution facts load on agent cards. | **Checkpoint**: `read_issue()` + `read_repo_files()` confirmed against demo repo. | **Checkpoint**: agent cards show on screen with real constitution data. | **Checkpoint**: SSE hook connects and logs events. |
+| **11:30–1:00** | Add `approval_gate` node + `POST /incidents/approve` endpoint. Test interrupt/resume. | Test `create_fix_pr()` with dummy fix — confirm PR appears in GitHub. | Build `ConstitutionPanel.tsx` + `AgentMeshLines.tsx`. | Build `IssueFeed.tsx` + `CodeDiffPanel.tsx` + `ApproveButton.tsx`. |
 | **1:00–1:30** | **Lunch** | **Lunch** | **Lunch** | **Lunch** |
-| **1:30–2:30** | Run full graph end-to-end. Tune `fix_generator` prompt until diff is valid Go. | Tune PR body quality. Test Slack webhook if set up. | Build `AgentCommFeed.tsx`. Wire to SSE events. | Build `PRPreviewPanel.tsx` + confetti. Wire all panels to SSE hook. |
-| **2:30–4:00** | **Full demo run × 3** with the team. Fix any graph bugs. | Same — confirm PR push is reliable. | Full demo run × 3. Polish animations. | Full demo run × 3. Polish transitions. |
+| **1:30–2:30** | Run full graph end-to-end. Tune `fix_generator` until diff is valid Go. Confirm approval gate pauses at the right moment. | Tune PR body quality. Test full flow once. | Build `AgentCommFeed.tsx`. Wire to SSE events. | Build `PRPreviewPanel.tsx` + confetti. Wire all panels to hook. |
+| **2:30–4:00** | **Full demo run × 3** with team. Fix any graph bugs. | Same — be on call for PR push issues. | Full demo run × 3. Polish animations. | Full demo run × 3. Polish transitions. |
 | **4:00–5:00** | Deploy backend to Railway. | Confirm prod GitHub token works. | Deploy frontend to Vercel. | Same. |
-| **5:00–6:30** | Record demo video (Loom, 90 sec). Write DevPost description. | | | |
+| **5:00–6:30** | Record 90-sec Loom. Write DevPost description. | | | |
 | **6:30–7:00** | Submit DevPost. | | | |
 
 ---
@@ -608,18 +656,18 @@ GET  /health
 ## Setup (run at 9:00 AM sharp)
 
 ```bash
-# 1. Qdrant (Vitthal)
+# 1. Qdrant
 docker run -d -p 6333:6333 qdrant/qdrant
 
-# 2. Backend (Vitthal + Neil — shared terminal)
-cd /Users/intern/Desktop/xFoundry/GDSD\ Hack/GDSC-Hackathon/backend
+# 2. Backend
+cd backend
 python3.11 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env
-# fill in: ANTHROPIC_API_KEY, GITHUB_TOKEN, DEMO_REPO
+cp .env.example .env   # fill in keys below
+python seed_demo.py    # seed Alice/Bob/Carol into Qdrant
 uvicorn main:app --port 8000 --reload
 
-# 3. Frontend (Avhaang + Mitansh)
+# 3. Frontend
 cd /Users/intern/Desktop/xFoundry/aubi/cognoxent/apps/aubi-web
 npm install
 npm run dev   # localhost:3000
@@ -630,26 +678,23 @@ npm run dev   # localhost:3000
 ## Environment Variables
 
 ```bash
-# .env
-ANTHROPIC_API_KEY=sk-ant-...          # Vitthal gets this
-GITHUB_TOKEN=ghp_...                  # Neil sets this — needs repo write access
+ANTHROPIC_API_KEY=sk-ant-...          # Haiku (agent queries + PR body)
+OPENAI_API_KEY=sk-...                 # GPT-5.5 (fix generator)
+GEMINI_API_KEY=AIza...               # Gemini Flash (constitution building)
+
+GITHUB_TOKEN=ghp_...                  # Neil — needs repo write access
 DEMO_REPO=your-username/AUBI-Demo     # Neil creates this repo
 
-KNOWLEDGE_SERVICE_URL=http://localhost:8002
 AGENTS_SERVICE_URL=http://localhost:8000
 QDRANT_URL=http://localhost:6333
-
-# Optional (Slack)
-SLACK_BOT_TOKEN=xoxb-...
-SLACK_SIGNING_SECRET=...
 ```
 
 ---
 
 ## Stretch Goals (only if core is done by 3 PM)
 
-- [ ] **Voice trigger** (Avhaang): Web Speech API in browser — say *"auth is broken"* → triggers demo
-- [ ] **Constitution diff after fix** (Vitthal): show "Alice's Aubi learned: retry logic issue resolved" with before/after fact display
-- [ ] **Slack reply** (Neil): after PR is pushed, post back to Slack channel: *"Fixed — PR #2 open for review"*
-- [ ] **Multi-issue queue** (Mitansh): show 3 queued issues in `IssueFeed`, each triggering a separate run
-- [ ] **Agent health score** (Avhaang): completeness indicator on each card (how many constitution categories are filled)
+- [ ] **Slack integration** (Neil): receive Slack message as trigger, post PR summary back to channel
+- [ ] **Constitution diff after fix** (Vitthal): show "Alice's Aubi learned: race condition resolved" with before/after fact display
+- [ ] **Voice trigger** (Avhaang): Web Speech API — say "auth is broken" → triggers demo
+- [ ] **Multi-issue queue** (Mitansh): 3 queued issues in `IssueFeed`, each triggering a separate run
+- [ ] **Agent health score** (Avhaang): constitution completeness indicator on each card
