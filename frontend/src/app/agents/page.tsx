@@ -6,7 +6,6 @@ import { useAgents } from "@/hooks/useAgents";
 import { DossierPanel } from "@/components/DossierPanel";
 import { api } from "@/lib/api";
 import { coworkerName } from "@/lib/agents";
-import { PerspectiveGrid } from "@/components/PerspectiveGrid";
 import { ShimmerButton } from "@/components/ui/shimmer-button";
 import { BorderBeam } from "@/components/ui/border-beam";
 import type { Agent } from "@/lib/types";
@@ -577,8 +576,17 @@ export default function AgentsPage() {
         className="flex-1 relative overflow-hidden"
         onClick={() => { setConnCard(null); }}
       >
-        {/* Interactive 3D perspective grid */}
-        <PerspectiveGrid />
+        {/* Static background grid */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 opacity-25"
+          style={{
+            backgroundImage:
+              "linear-gradient(rgba(57,255,20,0.32) 1px, transparent 1px), linear-gradient(90deg, rgba(57,255,20,0.32) 1px, transparent 1px)",
+            backgroundSize: "64px 64px",
+          }}
+        />
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,transparent_35%,#080808_82%)]" />
 
         {/* Top-left header */}
         <div className="absolute top-6 left-6 z-10 pointer-events-none">
