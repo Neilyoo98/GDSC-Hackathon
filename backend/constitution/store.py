@@ -263,6 +263,36 @@ class ConstitutionStore:
             grouped.setdefault(cat, []).append(point.payload)
         return grouped
 
+    def list_user_facts(
+        self,
+        tenant_id: str,
+        limit: int = 1000,
+    ) -> dict[str, list[dict[str, Any]]]:
+        """Fetch facts for all users in a tenant grouped by user_id."""
+        from qdrant_client.models import FieldCondition, Filter, MatchValue
+
+        grouped: dict[str, list[dict[str, Any]]] = {}
+        offset = None
+        while True:
+            results, offset = _get_client().scroll(
+                collection_name=COLLECTION_FACTS,
+                scroll_filter=Filter(must=[
+                    FieldCondition(key="tenant_id", match=MatchValue(value=tenant_id)),
+                ]),
+                limit=limit,
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+            for point in results:
+                payload = dict(point.payload or {})
+                user_id = str(payload.get("user_id") or "")
+                if user_id:
+                    grouped.setdefault(user_id, []).append(payload)
+            if offset is None:
+                break
+        return grouped
+
     def search_ownership(
         self,
         filepath: str,
