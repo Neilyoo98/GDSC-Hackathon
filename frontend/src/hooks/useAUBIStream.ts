@@ -31,14 +31,21 @@ export function useAUBIStream(issueUrl: string | null) {
       try {
         const event = JSON.parse(message.data) as AUBIEvent;
         setEvents((current) => [...current, event]);
+
         if (event.event === "node_start") {
           setNodeStatuses((current) => ({ ...current, [event.node]: "running" }));
         }
         if (event.event === "node_done") {
-          setNodeStatuses((current) => ({ ...current, [event.node]: "done" }));
+          const statusNode = event.node === "query_single_agent" ? "query_agents" : event.node;
+          setNodeStatuses((current) => ({ ...current, [statusNode]: "done" }));
         }
         if (event.event === "agent_message") {
           setAgentMessages((current) => [...current, event.data]);
+        }
+        if (event.event === "awaiting_approval") {
+          setNodeStatuses((current) => ({ ...current, approval_gate: "done" }));
+          source.close();
+          setIsStreaming(false);
         }
         if (event.event === "complete") {
           source.close();
