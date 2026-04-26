@@ -14,7 +14,7 @@ export function Nav() {
         className="flex min-w-0 flex-col justify-self-start leading-none transition-opacity hover:opacity-80 focus:outline-none focus-visible:ring-1 focus-visible:ring-[#39ff14]"
       >
         <span className="font-syne text-[34px] font-normal tracking-[5px] text-[#39ff14]">AUBI</span>
-        <span className="mt-1 font-mono text-[8px] uppercase tracking-[2px] text-[#e8e4dc99]">
+        <span className="mt-1 font-mono text-[9px] uppercase tracking-[2px] text-[#e8e4dcc7]">
           Autonomous Understanding and Behaviour Inference
         </span>
       </Link>
@@ -32,10 +32,10 @@ export function Nav() {
               key={href}
               href={href}
               className={[
-                "border-b font-mono text-xs uppercase tracking-[3px] transition-colors",
+                "border-b font-mono text-[13px] uppercase tracking-[3px] transition-colors",
                 active
                   ? "border-[#39ff14] text-[#39ff14]"
-                  : "border-transparent text-[#e8e4dc99] hover:text-[#e8e4dc]"
+                  : "border-transparent text-[#e8e4dcc7] hover:text-[#e8e4dc]"
               ].join(" ")}
             >
               {label}
@@ -46,7 +46,7 @@ export function Nav() {
 
       <div className="flex items-center gap-2 justify-self-end">
         <span className="h-2 w-2 animate-pulse rounded-full bg-[#39ff14]" />
-        <span className="font-mono text-[9px] uppercase tracking-[3px] text-[#39ff14]">
+        <span className="font-mono text-[10px] uppercase tracking-[3px] text-[#39ff14]">
           System Online
         </span>
       </div>

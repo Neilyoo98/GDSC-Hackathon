@@ -166,7 +166,7 @@ function PrIcon() {
 function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) {
   return (
     <>
-      <p className="typography-rise mono-animate font-mono text-[8px] uppercase tracking-[4px] text-[#39ff14]">{eyebrow}</p>
+      <p className="typography-rise mono-animate font-mono text-[10px] uppercase tracking-[4px] text-[#39ff14] md:text-[11px]">{eyebrow}</p>
       <h2 className="typography-rise typography-scan font-syne mt-4 text-[42px] font-normal leading-[1.12] text-[#e8e4dc] md:text-[52px]">
         {title}
       </h2>
@@ -230,7 +230,7 @@ export default function Home() {
           "--spotlight-opacity": 0,
           background: "var(--bg)",
           color: "var(--text)",
-          minHeight: "calc(100vh - 52px)",
+          minHeight: "calc(100vh - 64px)",
         } as CSSProperties
       }
     >
@@ -294,7 +294,7 @@ export default function Home() {
       <section className="relative z-10 px-6 pb-24 pt-24 text-center md:px-10">
         <div className="hero-chip landing-fade mx-auto inline-flex items-center gap-3 border border-[#e8e4dc33] bg-[#080808aa] px-4 py-2" style={{ animationDelay: "0s" }}>
           <span className="h-[5px] w-[5px] rounded-full bg-[#39ff14]" style={{ animation: "breathe 2s ease-in-out infinite" }} />
-          <span className="font-mono text-[10px] uppercase tracking-[3px] text-[#e8e4dccc]">Live at GDSC Hackathon · UMD · April 26</span>
+          <span className="font-mono text-[11px] uppercase tracking-[3px] text-[#e8e4dc]">Live at GDSC Hackathon · UMD · April 26</span>
         </div>
 
         <h1 className="hero-title typography-scan font-syne mx-auto mt-8 max-w-[860px] text-[56px] font-normal leading-[1.18] tracking-[4px] text-[#e8e4dc] md:text-[84px]">
@@ -313,18 +313,18 @@ export default function Home() {
           Autonomous Understanding &amp; Behaviour Inference
         </p>
 
-        <p className="typography-rise mx-auto mt-6 max-w-[580px] text-center text-[16px] leading-[1.85] text-[#e8e4dc99]" style={{ animationDelay: ".75s" }}>
+        <p className="typography-rise mx-auto mt-6 max-w-[620px] text-center text-[17px] leading-[1.85] text-[#e8e4dccf] md:text-[18px]" style={{ animationDelay: ".75s" }}>
           AUBI reads your team&apos;s GitHub history and builds a persistent AI coworker for each developer. These coworkers know who owns what, share context with each other, and step in when something breaks — without anyone having to ask.
         </p>
 
         <div className="mt-8 flex flex-wrap justify-center gap-3">
-          <Link href="/incident" className="aubi-button aubi-button-primary px-6 py-3 text-[13px] font-medium">
+          <Link href="/incident" className="aubi-button aubi-button-primary px-6 py-3 text-[14px] font-medium">
             See it fix a bug
           </Link>
-          <Link href="/team" className="aubi-button aubi-button-secondary px-6 py-3 text-[13px] font-medium">
+          <Link href="/team" className="aubi-button aubi-button-secondary px-6 py-3 text-[14px] font-medium">
             Meet the coworkers
           </Link>
-          <Link href="/demo" className="aubi-button aubi-button-secondary px-6 py-3 text-[13px] font-medium">
+          <Link href="/demo" className="aubi-button aubi-button-secondary px-6 py-3 text-[14px] font-medium">
             Watch the mesh
           </Link>
         </div>
@@ -335,7 +335,7 @@ export default function Home() {
       <section className="relative z-10 px-6 py-20 text-center md:px-10">
         <div className="mx-auto max-w-[1180px]">
           <SectionHeading eyebrow="The coworker mesh" title="Your team — as a living memory." />
-          <p className="mx-auto mt-4 max-w-[560px] text-[14px] leading-[1.85] text-[#e8e4dc66]">
+          <p className="mx-auto mt-4 max-w-[620px] text-[15px] leading-[1.85] text-[#e8e4dcb8]">
             Each developer&apos;s GitHub history is turned into a Context Constitution — a structured memory of what they own, what they know, and how they work. These constitutions power the mesh.
           </p>
           <div className="mx-auto mt-10 grid max-w-[1040px] gap-4 text-left md:grid-cols-2 lg:grid-cols-4">
@@ -351,26 +351,26 @@ export default function Home() {
                   </div>
                   <div>
                     <p className="text-[14px] font-medium text-[#e8e4dc]">{cw.name}</p>
-                    <p className="font-mono text-[9px] uppercase tracking-[2px] text-[#e8e4dc55]">{cw.role}</p>
+                    <p className="font-mono text-[10px] uppercase tracking-[2px] text-[#e8e4dcaa]">{cw.role}</p>
                   </div>
                 </div>
                 <div className="space-y-2">
                   {cw.owns.slice(0, 2).map((o) => (
                     <div key={o} className="flex items-start gap-2">
-                      <span className="font-mono mt-0.5 text-[8px] uppercase tracking-[2px] text-[#39ff1466]">owns</span>
-                      <span className="text-[11px] text-[#e8e4dc88]">{o}</span>
+                      <span className="font-mono mt-0.5 text-[9px] uppercase tracking-[2px] text-[#39ff14cc]">owns</span>
+                      <span className="text-[12px] text-[#e8e4dcd6]">{o}</span>
                     </div>
                   ))}
                   <div className="flex items-start gap-2 pt-1 border-t border-[#1f1f1f]">
-                    <span className="font-mono mt-0.5 text-[8px] uppercase tracking-[2px] text-[#e8e4dc33]">knows</span>
-                    <span className="text-[10px] leading-relaxed text-[#e8e4dc55]">{cw.known}</span>
+                    <span className="font-mono mt-0.5 text-[9px] uppercase tracking-[2px] text-[#e8e4dc99]">knows</span>
+                    <span className="text-[12px] leading-relaxed text-[#e8e4dcc7]">{cw.known}</span>
                   </div>
                 </div>
               </div>
             ))}
           </div>
           <div className="mt-6 flex justify-center">
-            <Link href="/team" className="aubi-button aubi-button-secondary font-mono px-4 py-2 text-[10px] uppercase tracking-[2px]">
+            <Link href="/team" className="aubi-button aubi-button-secondary font-mono px-4 py-2 text-[11px] uppercase tracking-[2px]">
               Inspect full constitutions →
             </Link>
           </div>
@@ -380,7 +380,7 @@ export default function Home() {
       {/* ── USE CASE PIPELINE ── */}
       <section className="relative z-10 mx-6 mb-16 overflow-hidden border border-[#e8e4dc33] bg-[#080808dd] md:mx-10">
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#39ff14] to-transparent opacity-70" />
-        <div className="font-mono flex items-center justify-between border-b border-[#1f1f1f] px-6 py-4 text-[10px] uppercase tracking-[3px] text-[#e8e4dc66]">
+        <div className="font-mono flex items-center justify-between border-b border-[#1f1f1f] px-6 py-4 text-[11px] uppercase tracking-[3px] text-[#e8e4dcb8]">
           <span>Use case · Live incident</span>
           <span className="signal-rise text-[#39ff14]">Running</span>
         </div>
@@ -389,10 +389,10 @@ export default function Home() {
             <span className="h-2 w-2 rounded-full bg-[#39ff14]" style={{ animation: "breathe 2s ease-in-out infinite" }} />
             <div>
               <p className="text-[14px] font-medium text-[#e8e4dc]">Latest configured issue routed through AUBI memory</p>
-              <p className="font-mono mt-1 text-[9px] uppercase tracking-[2px] text-[#e8e4dc66]">repo: configured target · AUBI routing through live memory</p>
+              <p className="font-mono mt-1 text-[10px] uppercase tracking-[2px] text-[#e8e4dcb8]">repo: configured target · AUBI routing through live memory</p>
             </div>
           </div>
-          <Link href="/incident" className="aubi-button font-mono border-[#39ff14] px-3 py-2 text-[9px] uppercase tracking-[2px] text-[#39ff14]">
+          <Link href="/incident" className="aubi-button font-mono border-[#39ff14] px-3 py-2 text-[10px] uppercase tracking-[2px] text-[#39ff14]">
             Open war room
           </Link>
         </div>
@@ -402,12 +402,12 @@ export default function Home() {
               <div className="relative flex min-w-[96px] flex-col items-center text-center">
                 <div
                   className={["relative flex h-12 w-12 items-center justify-center border transition-transform duration-300 hover:-translate-y-1", node.state === "active" ? "active-pipeline-node" : ""].join(" ")}
-                  style={{ borderColor: node.state === "idle" ? "#1f1f1f" : "#39ff14", background: node.state === "active" ? "#39ff1414" : "transparent", color: node.state === "idle" ? "#e8e4dc66" : "#39ff14" }}
+                  style={{ borderColor: node.state === "idle" ? "#1f1f1f" : "#39ff14", background: node.state === "active" ? "#39ff1414" : "transparent", color: node.state === "idle" ? "#e8e4dcb8" : "#39ff14" }}
                 >
                   {node.icon}
                   {node.state === "done" && <span className="absolute -right-px -top-px flex h-4 w-4 items-center justify-center bg-[#39ff14] text-[10px] text-[#080808]">✓</span>}
                 </div>
-                <p className="font-mono mt-3 text-[9px] uppercase tracking-[2px] text-[#e8e4dc99]">{node.label}</p>
+                <p className="font-mono mt-3 text-[10px] uppercase tracking-[2px] text-[#e8e4dcd6]">{node.label}</p>
               </div>
               {index < pipelineNodes.length - 1 && (
                 <div className="landing-connector relative mx-4 hidden h-px flex-1 overflow-hidden bg-[#1f1f1f] md:block" />
@@ -427,7 +427,7 @@ export default function Home() {
         ].map(([number, description], index) => (
           <div key={number} className={`${index > 0 ? "md:border-l md:border-[#1f1f1f]" : ""} metric-tile landing-fade px-6 py-4`} style={{ animationDelay: `${index * 0.08}s` }}>
             <div className="font-syne text-[52px] font-normal leading-none tracking-[4px] text-[#e8e4dc] transition-colors duration-300 hover:text-[#39ff14]">{number}</div>
-            <p className="mt-2 text-[13px] leading-[1.6] text-[#e8e4dc66]">{description}</p>
+            <p className="mt-2 text-[14px] leading-[1.6] text-[#e8e4dcb8]">{description}</p>
           </div>
         ))}
       </section>
@@ -441,14 +441,14 @@ export default function Home() {
       {/* ── CONTEXT CONSTITUTION ── */}
       <section className="relative z-10 px-6 py-20 md:px-10">
         <SectionHeading eyebrow="Context Constitution" title="What each coworker remembers." />
-        <p className="mt-4 max-w-[560px] text-[14px] leading-[1.85] text-[#e8e4dc66]">
+        <p className="mt-4 max-w-[620px] text-[15px] leading-[1.85] text-[#e8e4dcb8]">
           Built from real GitHub activity. Updated after every incident. No fake data, no self-reported profiles.
         </p>
         <div className="mt-10 grid gap-px border border-[#1f1f1f] md:grid-cols-2 lg:grid-cols-4">
           {constitutionSignals.map((signal, index) => (
             <div key={signal.label} className="interactive-surface landing-fade border-[#1f1f1f] bg-[#080808] p-6 md:border-l" style={{ animationDelay: `${index * 0.07}s` }}>
-              <p className="font-mono text-[9px] uppercase tracking-[3px] text-[#39ff14]">{signal.label}</p>
-              <p className="mt-3 text-[12px] leading-[1.85] text-[#e8e4dc66]">{signal.description}</p>
+              <p className="font-mono text-[10px] uppercase tracking-[3px] text-[#39ff14]">{signal.label}</p>
+              <p className="mt-3 text-[14px] leading-[1.75] text-[#e8e4dcbd]">{signal.description}</p>
             </div>
           ))}
         </div>
@@ -456,11 +456,11 @@ export default function Home() {
 
       {/* ── FOOTER ── */}
       <footer className="relative z-10 grid grid-cols-1 items-center gap-4 border-t border-[#1f1f1f] px-6 py-7 md:grid-cols-3 md:px-10">
-        <div className="font-syne text-[20px] font-normal tracking-[4px] text-[#e8e4dc66]">AUBI</div>
-        <div className="font-mono text-center text-[9px] uppercase tracking-[2px] text-[#e8e4dc66]">GDSC Hackathon 2026 · University of Maryland</div>
+        <div className="font-syne text-[22px] font-normal tracking-[4px] text-[#e8e4dcb8]">AUBI</div>
+        <div className="font-mono text-center text-[10px] uppercase tracking-[2px] text-[#e8e4dcb8]">GDSC Hackathon 2026 · University of Maryland</div>
         <div className="flex justify-start gap-2 md:justify-end">
           {["Dev Tool", "Most Creative"].map((badge) => (
-            <span key={badge} className="font-mono border border-[#1f1f1f] px-2 py-1 text-[8px] uppercase tracking-[2px] text-[#e8e4dc66]">
+            <span key={badge} className="font-mono border border-[#1f1f1f] px-2 py-1 text-[9px] uppercase tracking-[2px] text-[#e8e4dcb8]">
               {badge}
             </span>
           ))}

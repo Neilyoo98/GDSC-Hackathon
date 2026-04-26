@@ -93,7 +93,7 @@ function Card({
         {/* Tag + number row */}
         <div className="flex items-center justify-between mb-6">
           <div
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 font-mono text-[9px] uppercase tracking-[2px]"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[2px]"
             style={{
               background: `${pal.glow}`,
               border: `1px solid ${pal.border}`,
@@ -109,8 +109,8 @@ function Card({
             {step.tag}
           </div>
           <span
-            className="font-syne font-bold text-[11px] tracking-[3px]"
-            style={{ color: pal.accent, opacity: 0.7 }}
+            className="font-syne font-bold text-[12px] tracking-[3px]"
+            style={{ color: pal.accent, opacity: 0.9 }}
           >
             {step.number}
           </span>
@@ -125,7 +125,7 @@ function Card({
 
         {/* Description */}
         <p
-          className={`leading-relaxed text-[#e8e4dc88] ${featured ? "text-[14px] max-w-2xl" : "text-[13px]"}`}
+          className={`leading-relaxed text-[#e8e4dcc7] ${featured ? "text-[15px] max-w-2xl" : "text-[14px]"}`}
         >
           {step.description}
         </p>
@@ -145,7 +145,7 @@ function Card({
             />
           ))}
           <span
-            className="font-mono text-[9px] tracking-widest ml-1 transition-colors duration-300 group-hover:opacity-100 opacity-40"
+            className="font-mono text-[10px] tracking-widest ml-1 transition-colors duration-300 group-hover:opacity-100 opacity-70"
             style={{ color: pal.accent }}
           >
             ◉
