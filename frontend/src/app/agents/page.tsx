@@ -138,39 +138,22 @@ function arcPath(cx: number, cy: number, r: number, startDeg: number, endDeg: nu
   return `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`;
 }
 
-// ── Feature 2: Particles ──────────────────────────────────────────────────
-function ConnectionParticles({ ax, ay, bx, by, color, connIdx }: {
-  ax: number; ay: number; bx: number; by: number; color: string; connIdx: number;
+// ── Feature 2: Particles (subtle, single-color) ───────────────────────────
+function ConnectionParticles({ ax, ay, bx, by, connIdx }: {
+  ax: number; ay: number; bx: number; by: number; connIdx: number;
 }) {
   return (
     <>
-      {[0, 1, 2].map((p) => (
-        <motion.circle
-          key={p}
-          r={2.5}
-          fill={color}
-          style={{ filter: `drop-shadow(0 0 5px ${color})` }}
-          animate={{ cx: [ax, bx], cy: [ay, by], opacity: [0, 0.9, 0.9, 0] }}
-          transition={{
-            duration: 2.2 + connIdx * 0.3,
-            repeat: Infinity,
-            delay: connIdx * 0.25 + p * 0.75,
-            ease: "linear",
-            times: [0, 0.08, 0.92, 1],
-          }}
-        />
-      ))}
       {[0, 1].map((p) => (
         <motion.circle
-          key={`r${p}`}
-          r={1.8}
-          fill={color}
-          opacity={0.5}
-          animate={{ cx: [bx, ax], cy: [by, ay], opacity: [0, 0.6, 0.6, 0] }}
+          key={p}
+          r={1.5}
+          fill="#e8e4dc"
+          animate={{ cx: [ax, bx], cy: [ay, by], opacity: [0, 0.28, 0.28, 0] }}
           transition={{
-            duration: 3.1 + connIdx * 0.2,
+            duration: 3.0 + connIdx * 0.4,
             repeat: Infinity,
-            delay: connIdx * 0.4 + p * 1.2,
+            delay: connIdx * 0.3 + p * 1.4,
             ease: "linear",
             times: [0, 0.08, 0.92, 1],
           }}
@@ -217,9 +200,6 @@ function MeshGraph({
     return { x: CX + RADIUS * Math.cos(angle), y: CY + RADIUS * Math.sin(angle) };
   });
 
-  const CATS = Object.keys(CAT_COLORS);
-  const SEG  = 360 / CATS.length;
-
   return (
     <svg
       ref={svgRef}
@@ -245,20 +225,18 @@ function MeshGraph({
       {/* Orbit ring */}
       <motion.circle
         cx={CX} cy={CY} r={RADIUS}
-        fill="none" stroke="#39ff14" strokeWidth={0.5} strokeOpacity={0.2} strokeDasharray="4 12"
+        fill="none" stroke="#e8e4dc" strokeWidth={0.4} strokeOpacity={0.06} strokeDasharray="4 14"
         initial={{ opacity: 0 }} animate={{ opacity: entered ? 1 : 0 }}
         transition={{ duration: 0.8, delay: 0.2 }}
       />
 
-      {/* ── Feature 3: Connection entrance + Feature 2: Particles ── */}
+      {/* ── Connections ── */}
       {connections.map((conn, ci) => {
         const a = positions[conn.a]; const b = positions[conn.b];
         if (!a || !b) return null;
         const isActive = selectedId === agents[conn.a]?.id || selectedId === agents[conn.b]?.id;
-        const color = CAT_COLORS[conn.category] ?? "#39ff14";
         const mx = (a.x + b.x) / 2; const my = (a.y + b.y) / 2;
 
-        // Dim when search is active and neither agent matches
         const aMatched = !searchActive || matchedIds.has(agents[conn.a]?.id ?? "");
         const bMatched = !searchActive || matchedIds.has(agents[conn.b]?.id ?? "");
         const connVisible = aMatched || bMatched;
@@ -267,34 +245,30 @@ function MeshGraph({
           <motion.g
             key={`${agents[conn.a]?.id}-${agents[conn.b]?.id}`}
             initial={{ opacity: 0 }}
-            animate={{ opacity: entered ? (connVisible ? 1 : 0.08) : 0 }}
-            transition={{ duration: 0.6, delay: 0.5 + ci * 0.12 }}
+            animate={{ opacity: entered ? (connVisible ? 1 : 0.05) : 0 }}
+            transition={{ duration: 0.7, delay: 0.5 + ci * 0.1 }}
             style={{ cursor: "pointer" }}
             onClick={(e) => { e.stopPropagation(); onConnectionClick(conn, mx, my); }}
           >
-            {/* Glow halo */}
+            {/* Line */}
             <line x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-              stroke={color} strokeWidth={isActive ? 6 : 3} strokeOpacity={isActive ? 0.2 : 0.07} />
-            {/* Animated dash */}
-            <line x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-              stroke={color} strokeWidth={isActive ? 1.5 : 0.9}
-              strokeOpacity={isActive ? 0.9 : 0.35}
-              strokeDasharray="6 14" strokeDashoffset={-dash} />
-            {/* Transparent wide hit area */}
-            <line x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-              stroke="transparent" strokeWidth={18} />
-            {/* Midpoint label */}
-            <g opacity={isActive || !selectedId ? 0.9 : 0.3}>
-              <rect x={mx - 34} y={my - 9} width={68} height={18} rx={2}
-                fill="#080808" stroke={color} strokeOpacity={0.2} />
-              <text x={mx} y={my + 3.5} textAnchor="middle" fill={color}
+              stroke="#e8e4dc"
+              strokeWidth={isActive ? 1.2 : 0.7}
+              strokeOpacity={isActive ? 0.5 : 0.12}
+              strokeDasharray={isActive ? "none" : "5 12"}
+              strokeDashoffset={-dash} />
+            {/* Wide hit area */}
+            <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="transparent" strokeWidth={18} />
+            {/* Midpoint label — only when active */}
+            {isActive && (
+              <text x={mx} y={my - 6} textAnchor="middle" fill="#e8e4dc"
                 fontSize={7} fontFamily="'Space Mono', monospace" letterSpacing="0.08em"
-                style={{ textTransform: "uppercase", userSelect: "none" }}>
-                {conn.label.slice(0, 12)}
+                opacity={0.5} style={{ textTransform: "uppercase", userSelect: "none" }}>
+                {conn.label.slice(0, 14)}
               </text>
-            </g>
-            {/* Feature 2: Particles */}
-            <ConnectionParticles ax={a.x} ay={a.y} bx={b.x} by={b.y} color={color} connIdx={ci} />
+            )}
+            {/* Subtle particles */}
+            <ConnectionParticles ax={a.x} ay={a.y} bx={b.x} by={b.y} connIdx={ci} />
           </motion.g>
         );
       })}
@@ -306,9 +280,9 @@ function MeshGraph({
           <motion.line
             key={agents[i].id}
             x1={CX} y1={CY} x2={p.x} y2={p.y}
-            stroke="#39ff14" strokeWidth={isActive ? 1 : 0.5}
-            strokeOpacity={isActive ? 0.5 : 0.12}
-            strokeDasharray="3 10" strokeDashoffset={-dash * 0.5}
+            stroke="#e8e4dc" strokeWidth={0.5}
+            strokeOpacity={isActive ? 0.2 : 0.06}
+            strokeDasharray="3 12" strokeDashoffset={-dash * 0.5}
             initial={{ opacity: 0 }}
             animate={{ opacity: entered ? 1 : 0 }}
             transition={{ duration: 0.6, delay: 0.4 + i * 0.08 }}
@@ -351,29 +325,24 @@ function MeshGraph({
               />
             )}
 
-            {/* Constitution arcs */}
-            {CATS.map((cat, ci) => {
-              const count  = facts.filter((f) => f.category === cat).length;
-              const filled = Math.min(count / 3, 1);
-              if (!filled) return null;
-              const start = ci * SEG - 88;
-              const end   = start + SEG * filled * 0.85;
+            {/* Constitution progress ring — single clean arc */}
+            {facts.length > 0 && (() => {
+              const fill = Math.min(facts.length / 12, 1);
+              const deg  = fill * 330;
               return (
                 <motion.path
-                  key={cat}
-                  d={arcPath(x, y, ARC_R, start, end)}
+                  d={arcPath(x, y, ARC_R, -100, -100 + deg)}
                   fill="none"
-                  stroke={CAT_COLORS[cat]}
-                  strokeWidth={3}
+                  stroke={isSelected ? "#39ff14" : "#e8e4dc"}
+                  strokeWidth={1.5}
                   strokeLinecap="round"
-                  strokeOpacity={isSelected ? 1 : 0.7}
-                  style={{ filter: `drop-shadow(0 0 4px ${CAT_COLORS[cat]}88)` }}
+                  strokeOpacity={isSelected ? 0.7 : 0.2}
                   initial={{ pathLength: 0 }}
                   animate={{ pathLength: 1 }}
-                  transition={{ duration: 0.6, delay: 0.8 + i * 0.1 + ci * 0.05 }}
+                  transition={{ duration: 0.8, delay: 0.7 + i * 0.1, ease: "easeOut" }}
                 />
               );
-            })}
+            })()}
 
             {/* Avatar */}
             <circle cx={x} cy={y} r={NODE_R} fill="#0d0d0d"
@@ -451,7 +420,6 @@ function ConnectionCard({
 }) {
   const left  = agents[connection.a];
   const right = agents[connection.b];
-  const color = CAT_COLORS[connection.category] ?? "#39ff14";
   const label: Record<string, string> = {
     code_ownership: "Shared code area",
     current_focus:  "Related focus",
@@ -479,12 +447,9 @@ function ConnectionCard({
       <div className="border border-[#1f1f1f] bg-[#080808]/95 backdrop-blur-sm">
         {/* Header */}
         <div className="flex items-center justify-between px-3 py-2 border-b border-[#1f1f1f]">
-          <div className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-            <span className="font-mono text-[9px] uppercase tracking-[2px]" style={{ color }}>
-              {label[connection.category] ?? "Connection"}
-            </span>
-          </div>
+          <span className="font-mono text-[9px] uppercase tracking-[2px] text-[#e8e4dc55]">
+            {label[connection.category] ?? "Connection"}
+          </span>
           <button onClick={onClose} className="text-[#e8e4dc33] hover:text-[#e8e4dc] text-sm leading-none ml-2">×</button>
         </div>
 
@@ -493,7 +458,7 @@ function ConnectionCard({
           <img src={`https://github.com/${left?.github_username || left?.name || "ghost"}.png?size=48`}
             className="w-6 h-6 rounded-full border border-[#2a2a2a]" alt="" />
           <span className="font-mono text-[9px] text-[#e8e4dc]">{left?.github_username ?? "?"}</span>
-          <span className="font-mono text-[9px] text-[#e8e4dc44]">↔</span>
+          <span className="font-mono text-[9px] text-[#e8e4dc33]">↔</span>
           <img src={`https://github.com/${right?.github_username || right?.name || "ghost"}.png?size=48`}
             className="w-6 h-6 rounded-full border border-[#2a2a2a]" alt="" />
           <span className="font-mono text-[9px] text-[#e8e4dc]">{right?.github_username ?? "?"}</span>
@@ -503,8 +468,8 @@ function ConnectionCard({
         <div className="px-3 py-2.5 space-y-1.5">
           {connection.evidence.map((e, i) => (
             <div key={i} className="flex items-start gap-2">
-              <span className="font-mono text-[9px] mt-0.5" style={{ color }}>›</span>
-              <p className="font-mono text-[10px] leading-relaxed text-[#e8e4dc88]">{e}</p>
+              <span className="font-mono text-[9px] mt-0.5 text-[#39ff1488]">›</span>
+              <p className="font-mono text-[10px] leading-relaxed text-[#e8e4dc66]">{e}</p>
             </div>
           ))}
         </div>
@@ -512,13 +477,12 @@ function ConnectionCard({
         {/* Score bar */}
         <div className="px-3 pb-2.5">
           <div className="flex items-center justify-between mb-1">
-            <span className="font-mono text-[8px] uppercase tracking-[2px] text-[#e8e4dc44]">Connection strength</span>
-            <span className="font-mono text-[8px]" style={{ color }}>{Math.round(Math.min(connection.score / 20, 1) * 100)}%</span>
+            <span className="font-mono text-[8px] uppercase tracking-[2px] text-[#e8e4dc33]">Strength</span>
+            <span className="font-mono text-[8px] text-[#39ff1488]">{Math.round(Math.min(connection.score / 20, 1) * 100)}%</span>
           </div>
-          <div className="h-0.5 bg-[#1f1f1f] rounded-full overflow-hidden">
+          <div className="h-px bg-[#1f1f1f] overflow-hidden">
             <motion.div
-              className="h-full rounded-full"
-              style={{ backgroundColor: color }}
+              className="h-full bg-[#39ff1455]"
               initial={{ width: 0 }}
               animate={{ width: `${Math.min(connection.score / 20, 1) * 100}%` }}
               transition={{ duration: 0.4, delay: 0.1 }}
@@ -730,18 +694,16 @@ export default function AgentsPage() {
           </div>
         )}
 
-        {/* Constitution legend */}
-        <div className="absolute bottom-6 right-6 z-10 border border-[#1f1f1f] bg-[#080808] px-3 py-2.5">
-          <p className="font-mono text-[8px] uppercase tracking-[3px] text-[#e8e4dc44] mb-2">{"// constitution"}</p>
-          <div className="flex flex-col gap-1.5">
-            {Object.entries(CAT_COLORS).map(([key, color]) => (
-              <div key={key} className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color, boxShadow: `0 0 4px ${color}88` }} />
-                <span className="font-mono text-[9px] uppercase tracking-[1px] text-[#e8e4dc66]">{key.replace(/_/g, " ")}</span>
-              </div>
-            ))}
+        {/* Mesh stats */}
+        {!isLoading && agentList.length > 0 && (
+          <div className="absolute bottom-6 right-6 z-10 pointer-events-none">
+            <div className="flex flex-col gap-1 text-right">
+              <span className="font-mono text-[8px] uppercase tracking-[3px] text-[#e8e4dc22]">// mesh</span>
+              <span className="font-mono text-[9px] text-[#e8e4dc33]">{connections.length} connections</span>
+              <span className="font-mono text-[9px] text-[#e8e4dc33]">{totalFacts} facts</span>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Hint strip */}
         {!isLoading && agentList.length > 0 && (
