@@ -67,7 +67,7 @@ export function PerspectiveGrid({ color = "0,240,255" }: { color?: string }) {
         for (let s = 0; s <= SAMPLES; s++) {
           const gy = (s / SAMPLES) * H;
           const p  = distort(gx, gy);
-          const alpha = 0.13 + p.t * 0.18;
+          const alpha = 0.20 + p.t * 0.18;
           ctx.strokeStyle = `rgba(${color},${alpha.toFixed(3)})`;
           if (first) { ctx.moveTo(p.x, p.y); first = false; }
           else        { ctx.lineTo(p.x, p.y); }
@@ -82,7 +82,7 @@ export function PerspectiveGrid({ color = "0,240,255" }: { color?: string }) {
         for (let s = 0; s <= SAMPLES; s++) {
           const gx = (s / SAMPLES) * W;
           const p  = distort(gx, gy);
-          const alpha = 0.13 + p.t * 0.18;
+          const alpha = 0.20 + p.t * 0.18;
           ctx.strokeStyle = `rgba(${color},${alpha.toFixed(3)})`;
           if (first) { ctx.moveTo(p.x, p.y); first = false; }
           else        { ctx.lineTo(p.x, p.y); }
