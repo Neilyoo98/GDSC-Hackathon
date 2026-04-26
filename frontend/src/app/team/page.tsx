@@ -6,6 +6,7 @@ import { useAgents } from "@/hooks/useAgents";
 import { AgentCard } from "@/components/aubi/AgentCard";
 import { ConstitutionPanel } from "@/components/aubi/ConstitutionPanel";
 import { InteractiveBackground } from "@/components/InteractiveBackground";
+import { BorderBeam } from "@/components/ui/border-beam";
 
 export default function TeamPage() {
   const { agents, isLoading, error } = useAgents();
@@ -24,7 +25,8 @@ export default function TeamPage() {
             Persistent AUBI coworkers, each backed by a Context Constitution of ownership, expertise, collaboration style, and known issues.
           </p>
         </div>
-        <div className="border border-[#e8e4dc33] px-4 py-2 font-mono text-[10px] uppercase tracking-[2px] text-[#39ff14]">
+        <div className="relative border border-[#e8e4dc33] px-4 py-2 font-mono text-[10px] uppercase tracking-[2px] text-[#39ff14] overflow-hidden">
+          <BorderBeam size={80} duration={6} colorFrom="#39ff14" colorTo="#00f0ff" borderWidth={1} />
           <span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-[#39ff14]" />
           Mesh Online
         </div>
