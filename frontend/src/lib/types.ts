@@ -30,8 +30,8 @@ export interface Agent {
 }
 
 export interface AgentMessage {
-  sender: "orchestrator" | "alice_aubi" | "bob_aubi" | "carol_aubi" | string;
-  recipient: "orchestrator" | "alice_aubi" | "bob_aubi" | "carol_aubi" | string;
+  sender: string;
+  recipient: string;
   message: string;
   timestamp?: number;
 }

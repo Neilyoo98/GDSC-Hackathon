@@ -30,13 +30,17 @@ export default function TeamPage() {
 
       {error && (
         <div className="mb-4 border border-[#e8e4dc33] p-4 font-mono text-[11px] uppercase tracking-[2px] text-[#e8e4dc99]">
-          Backend unavailable. Showing demo agent memory.
+          Backend unavailable. Live coworker memory could not be loaded.
         </div>
       )}
 
       {isLoading ? (
         <div className="flex h-[424px] items-center justify-center font-mono text-sm uppercase tracking-[3px] text-[#e8e4dc66]">
           Loading Coworker Mesh...
+        </div>
+      ) : visibleAgents.length === 0 ? (
+        <div className="flex h-[424px] items-center justify-center border border-[#e8e4dc33] font-mono text-sm uppercase tracking-[3px] text-[#e8e4dc66]">
+          No live coworker constitutions found.
         </div>
       ) : (
         <div className="grid gap-6 lg:grid-cols-4">

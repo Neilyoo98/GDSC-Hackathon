@@ -54,7 +54,9 @@ def embed(text: str) -> list[float]:
 @lru_cache(maxsize=1)
 def _get_client():
     from qdrant_client import QdrantClient
-    url     = os.getenv("QDRANT_URL", "http://localhost:6333")
+    url = os.getenv("QDRANT_URL")
+    if not url:
+        raise RuntimeError("QDRANT_URL is not set")
     api_key = os.getenv("QDRANT_API_KEY")
     return QdrantClient(url=url, api_key=api_key)
 
@@ -528,7 +530,7 @@ class ConstitutionStore:
     def search_ownership(
         self,
         filepath: str,
-        tenant_id: str = "hackathon",
+        tenant_id: str,
         top_k: int = 8,
     ) -> tuple[str | None, float, list[dict[str, Any]]]:
         """Find the most likely owner for a filepath from code_ownership facts.

@@ -4,20 +4,27 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import type { AgentMessage } from "@/lib/types";
 
-const AGENT_META: Record<string, { label: string; align: "left" | "right" }> = {
-  orchestrator: { label: "Orchestrator", align: "left" },
-  alice_aubi: { label: "Alice's Aubi", align: "right" },
-  bob_aubi: { label: "Bob's Aubi", align: "right" },
-  carol_aubi: { label: "Carol's Aubi", align: "right" }
-};
-
 function keyFor(value: string) {
-  const lower = value.toLowerCase();
-  if (lower.includes("alice")) return "alice_aubi";
-  if (lower.includes("bob")) return "bob_aubi";
-  if (lower.includes("carol")) return "carol_aubi";
-  if (lower.includes("orchestrator")) return "orchestrator";
-  return lower;
+  return value.toLowerCase().trim();
+}
+
+function labelFor(value: string) {
+  const key = keyFor(value);
+  if (key === "orchestrator") return "Orchestrator";
+
+  const cleaned = value
+    .replace(/[_-]?aubi$/i, "")
+    .replace(/[_-]+/g, " ")
+    .trim();
+  if (!cleaned) return "AUBI";
+
+  const base = cleaned.split(/\s+/).find(Boolean) ?? cleaned;
+  const name = base.charAt(0).toUpperCase() + base.slice(1);
+  return `${name}${name.toLowerCase().endsWith("s") ? "'" : "'s"} AUBI`;
+}
+
+function alignFor(value: string): "left" | "right" {
+  return keyFor(value) === "orchestrator" ? "left" : "right";
 }
 
 export function AgentCommFeed({
@@ -64,8 +71,7 @@ export function AgentCommFeed({
 
         <AnimatePresence initial={false}>
           {visibleMessages.map((message, index) => {
-            const meta = AGENT_META[keyFor(message.sender)] ?? { label: message.sender, align: "left" as const };
-            const fromLeft = meta.align === "left";
+            const fromLeft = alignFor(message.sender) === "left";
             return (
               <motion.div
                 key={`${message.sender}-${message.recipient}-${index}`}
@@ -77,8 +83,8 @@ export function AgentCommFeed({
                 <div className="max-w-[82%]">
                   <div className={`mb-2 flex items-center gap-2 ${fromLeft ? "" : "justify-end"}`}>
                     <span className={`h-2 w-2 rounded-full ${isStreaming ? "bg-[#39ff14]" : "bg-[#e8e4dc]"}`} />
-                    <span className="font-mono text-[10px] uppercase tracking-[2px] text-[#e8e4dc99]">{meta.label}</span>
-                    <span className="font-mono text-[10px] uppercase tracking-[2px] text-[#e8e4dc66]">→ {AGENT_META[keyFor(message.recipient)]?.label ?? message.recipient}</span>
+                    <span className="font-mono text-[10px] uppercase tracking-[2px] text-[#e8e4dc99]">{labelFor(message.sender)}</span>
+                    <span className="font-mono text-[10px] uppercase tracking-[2px] text-[#e8e4dc66]">→ {labelFor(message.recipient)}</span>
                   </div>
                   <div className={`border px-4 py-3 text-[13px] leading-relaxed text-[#e8e4dc] ${isStreaming ? "border-[#39ff14]" : "border-[#e8e4dc33]"}`}>
                     {message.message}
@@ -90,9 +96,9 @@ export function AgentCommFeed({
         </AnimatePresence>
 
         {pending && (
-          <div className={`flex ${AGENT_META[keyFor(pending.sender)]?.align === "right" ? "justify-end" : "justify-start"}`}>
+          <div className={`flex ${alignFor(pending.sender) === "right" ? "justify-end" : "justify-start"}`}>
             <div className="border border-[#e8e4dc33] bg-[#080808] px-4 py-3 font-mono text-[12px] uppercase tracking-[2px] text-[#e8e4dc99]">
-              <span className="mr-2">{AGENT_META[keyFor(pending.sender)]?.label ?? pending.sender}</span>
+              <span className="mr-2">{labelFor(pending.sender)}</span>
               <span>typing...</span>
             </div>
           </div>

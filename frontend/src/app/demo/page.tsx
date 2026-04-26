@@ -49,7 +49,7 @@ export default function DemoPage() {
 
       <div className="grid min-h-0 flex-1 grid-cols-[360px_1fr] gap-6 p-6">
         <div className="flex min-h-0 flex-col gap-6">
-          <AgentMeshLines activeMessage={activeMessage} />
+          <AgentMeshLines messages={agentMessages} activeMessage={activeMessage} />
           <AgentCommFeed messages={agentMessages} isStreaming={isStreaming} />
         </div>
 
@@ -85,10 +85,10 @@ export default function DemoPage() {
 
           <div className="grid min-h-0 gap-6 xl:grid-cols-2">
             <div className="flex items-center justify-center border border-[#e8e4dc33] bg-[#080808] p-6 font-mono text-sm uppercase tracking-[3px] text-[#e8e4dc66]">
-              CodeDiffPanel slot · Mitansh
+              Code diff streams from the incident result
             </div>
             <div className="flex items-center justify-center border border-[#e8e4dc33] bg-[#080808] p-6 font-mono text-sm uppercase tracking-[3px] text-[#e8e4dc66]">
-              PRPreviewPanel slot · Mitansh
+              PR preview appears after approval
             </div>
           </div>
         </section>

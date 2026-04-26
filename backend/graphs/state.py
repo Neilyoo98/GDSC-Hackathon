@@ -41,7 +41,7 @@ class AUBIIssueState(TypedDict):
     agent_messages: Annotated[list[AgentMessage], operator.add]
     agent_contexts: Annotated[list[dict[str, Any]], operator.add]
 
-    # Routing evidence — why this agent was chosen (shown in "Why Alice?" panel)
+    # Routing evidence showing why a coworker was chosen.
     routing_evidence: Annotated[list[dict[str, Any]], operator.add]
 
     # Coworker mesh output — owner agents exchange context with related agents
