@@ -21,13 +21,13 @@ import os
 from typing import Any
 from uuid import uuid4
 
-import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from graphs.incident_graph import aubi_graph
+from constitution.store import ConstitutionStore
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -41,7 +41,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-KNOWLEDGE_URL = os.getenv("KNOWLEDGE_SERVICE_URL", "http://localhost:8002")
+_store: ConstitutionStore | None = None
+
+def get_store() -> ConstitutionStore:
+    global _store
+    if _store is None:
+        _store = ConstitutionStore()
+    return _store
 
 # ---------------------------------------------------------------------------
 # In-memory agent registry (demo — swap for Firestore/Postgres in prod)
@@ -77,13 +83,10 @@ class ConstitutionFactRequest(BaseModel):
 # Helpers
 # ---------------------------------------------------------------------------
 
-async def _get_constitution_from_knowledge(user_id: str) -> dict[str, Any]:
-    """Fetch constitution facts from knowledge service grouped by category."""
+def _get_constitution_from_store(user_id: str) -> dict[str, Any]:
+    """Fetch constitution facts from Qdrant grouped by category."""
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(f"{KNOWLEDGE_URL}/constitution/{user_id}")
-            if resp.status_code == 200:
-                return resp.json()
+        return get_store().get_by_user(user_id, "hackathon")
     except Exception as e:
         logger.warning("Could not fetch constitution for %s: %s", user_id, e)
     return {}
@@ -110,16 +113,11 @@ async def create_agent(req: CreateAgentRequest):
     # 2. Build constitution facts via GPT-5.5
     facts = await build_constitution_from_github(github_data)
 
-    # 3. Post facts to knowledge service (Qdrant)
+    # 3. Store facts in Qdrant
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            await client.post(f"{KNOWLEDGE_URL}/constitution/store", json={
-                "user_id": agent_id,
-                "tenant_id": "hackathon",
-                "facts": facts,
-            })
+        get_store().upsert_facts(agent_id, "hackathon", facts)
     except Exception as e:
-        logger.warning("Could not store constitution in knowledge service: %s", e)
+        logger.warning("Could not store constitution in Qdrant: %s", e)
 
     # 4. Register agent in-memory
     agent_record = {
@@ -156,8 +154,8 @@ async def get_agent(agent_id: str):
     if agent_id not in _agents:
         raise HTTPException(status_code=404, detail="Agent not found")
     agent = _agents[agent_id].copy()
-    # Enrich with live constitution from knowledge service
-    live_constitution = await _get_constitution_from_knowledge(agent_id)
+    # Enrich with live constitution from Qdrant
+    live_constitution = _get_constitution_from_store(agent_id)
     if live_constitution:
         agent["constitution"] = live_constitution
     else:
@@ -206,14 +204,9 @@ async def patch_constitution(agent_id: str, req: ConstitutionFactRequest):
     if agent_id in _agents:
         _agents[agent_id].setdefault("constitution_facts", []).append(req.fact)
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            await client.post(f"{KNOWLEDGE_URL}/constitution/store", json={
-                "user_id": agent_id,
-                "tenant_id": "hackathon",
-                "facts": [req.fact],
-            })
+        get_store().upsert_facts(agent_id, "hackathon", [req.fact])
     except Exception as e:
-        logger.warning("Could not patch constitution in knowledge service: %s", e)
+        logger.warning("Could not patch constitution in Qdrant: %s", e)
     return {"status": "ok", "agent_id": agent_id}
 
 
@@ -259,14 +252,16 @@ async def run_incident(req: IssueRequest):
 
     result = await aubi_graph.ainvoke(state_input)
     return {
-        "pr_url":          result.get("pr_url"),
-        "patch_diff":      result.get("patch_diff"),
-        "fix_explanation": result.get("fix_explanation"),
-        "slack_message":   result.get("slack_message"),
-        "postmortem":      result.get("postmortem"),
-        "owners":          result.get("owner_ids"),
-        "agent_messages":  result.get("agent_messages", []),
-        "stream_log":      result.get("stream_log", []),
+        "pr_url":           result.get("pr_url"),
+        "patch_diff":       result.get("patch_diff"),
+        "fix_explanation":  result.get("fix_explanation"),
+        "slack_message":    result.get("slack_message"),
+        "postmortem":       result.get("postmortem"),
+        "owners":           result.get("owner_ids"),
+        "agent_messages":   result.get("agent_messages", []),
+        "routing_evidence": result.get("routing_evidence", []),
+        "learned_facts":    result.get("learned_facts", []),
+        "stream_log":       result.get("stream_log", []),
     }
 
 
@@ -292,9 +287,19 @@ async def stream_incident(issue_url: str | None = None, incident_text: str | Non
 
                 elif kind == "on_chain_end" and name in GRAPH_NODES:
                     output = data.get("output", {})
-                    # Emit agent messages as separate events for the frontend comm feed
+
+                    # Agent comm feed messages
                     for msg in (output.get("agent_messages") or []):
                         yield f"data: {json.dumps({'event': 'agent_message', 'data': msg})}\n\n"
+
+                    # Routing evidence — "Why Alice?" panel
+                    for ev in (output.get("routing_evidence") or []):
+                        yield f"data: {json.dumps({'event': 'routing_evidence', 'data': ev})}\n\n"
+
+                    # "AUBI learned" strip — fires after pr_pusher
+                    for lf in (output.get("learned_facts") or []):
+                        yield f"data: {json.dumps({'event': 'aubi_learned', 'data': lf})}\n\n"
+
                     yield f"data: {json.dumps({'event': 'node_done', 'node': name, 'data': output})}\n\n"
 
         except Exception as e:
