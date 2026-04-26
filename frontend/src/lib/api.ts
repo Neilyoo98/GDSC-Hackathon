@@ -1,4 +1,4 @@
-import type { Agent, ApprovalResult, IncidentResult, StreamLike } from "./types";
+import type { Agent, ApprovalResult, GitHubPollResult, IncidentResult, StreamLike } from "./types";
 
 const BASE = "/api";
 
@@ -27,6 +27,10 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
+  },
+
+  async pollGitHub(): Promise<GitHubPollResult> {
+    return fetchJson<GitHubPollResult>(`${BASE}/github/poll`);
   },
 
   async runIncident(issueUrl: string): Promise<IncidentResult> {

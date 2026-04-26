@@ -1,15 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useIncidentStream } from "@/hooks/useIncidentStream";
 import { useAgents } from "@/hooks/useAgents";
 import { IncidentTerminal } from "@/components/IncidentTerminal";
 import { NeuralTrace } from "@/components/NeuralTrace";
 import { HexGrid } from "@/components/HexGrid";
+import { api } from "@/lib/api";
+import type { GitHubIssue } from "@/lib/types";
 
 export default function IncidentPage() {
   const [issueUrl, setIssueUrl] = useState("");
+  const [latestIssue, setLatestIssue] = useState<GitHubIssue | null>(null);
+  const [isLoadingIssue, setIsLoadingIssue] = useState(false);
+  const [issueError, setIssueError] = useState<string | null>(null);
   const { events, isStreaming, result, error, start, approve, reset } = useIncidentStream();
   const { agents } = useAgents();
 
@@ -24,10 +29,32 @@ export default function IncidentPage() {
     start(issueUrl.trim());
   }
 
+  async function loadLatestIssue() {
+    setIsLoadingIssue(true);
+    setIssueError(null);
+    try {
+      const data = await api.pollGitHub();
+      setLatestIssue(data.issue);
+      if (data.issue?.url && !issueUrl.trim()) {
+        setIssueUrl(data.issue.url);
+      }
+    } catch (err) {
+      setIssueError(err instanceof Error ? err.message : "Failed to load GitHub issue");
+    } finally {
+      setIsLoadingIssue(false);
+    }
+  }
+
   function handleReset() {
     reset();
-    setIssueUrl("");
+    setIssueUrl(latestIssue?.url ?? "");
   }
+
+  useEffect(() => {
+    void loadLatestIssue();
+    // Run once on page load; manual refresh uses the button below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const hasResult = !!result;
   const hasEvents = events.length > 0;
@@ -42,15 +69,37 @@ export default function IncidentPage() {
             <p className="font-syne text-xl text-white">Incident</p>
             <p className="font-mono text-[10px] text-[#4a6080] mt-0.5">War room · GitHub issue to PR</p>
           </div>
-          {hasEvents && (
+          <div className="flex items-center gap-2">
             <button
-              onClick={handleReset}
-              className="font-mono text-[10px] text-[#4a6080] border border-[#1e2d45] px-3 py-1.5 rounded hover:text-[#e2e8f0] hover:border-[#2a3f5f] transition-colors"
+              onClick={() => void loadLatestIssue()}
+              disabled={isLoadingIssue || isStreaming}
+              className="font-mono text-[10px] text-[#4a6080] border border-[#1e2d45] px-3 py-1.5 rounded hover:text-[#e2e8f0] hover:border-[#2a3f5f] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
-              RESET
+              {isLoadingIssue ? "SYNCING" : "LIVE ISSUE"}
             </button>
-          )}
+            {hasEvents && (
+              <button
+                onClick={handleReset}
+                className="font-mono text-[10px] text-[#4a6080] border border-[#1e2d45] px-3 py-1.5 rounded hover:text-[#e2e8f0] hover:border-[#2a3f5f] transition-colors"
+              >
+                RESET
+              </button>
+            )}
+          </div>
         </div>
+
+        {latestIssue && (
+          <div className="border border-[#1e2d45] bg-[#0a0e1a] px-3 py-2 rounded">
+            <p className="font-mono text-[9px] text-[#4a6080] tracking-widest">{"// LIVE GITHUB ISSUE"}</p>
+            <p className="mt-1 truncate text-xs text-[#c8d6e8]">{latestIssue.repo_name}#{latestIssue.issue_number} · {latestIssue.title}</p>
+          </div>
+        )}
+
+        {issueError && (
+          <div className="border border-amber-500/30 bg-amber-500/10 px-3 py-2 font-mono text-[11px] text-amber-300">
+            {issueError}
+          </div>
+        )}
 
         {/* Terminal input */}
         <IncidentTerminal

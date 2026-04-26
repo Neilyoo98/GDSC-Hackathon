@@ -1,5 +1,9 @@
 /** @type {import('next').NextConfig} */
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const DEFAULT_BACKEND_URL = "https://gdsc-hackathon-production.up.railway.app";
+const BACKEND_URL =
+  process.env.BACKEND_URL ||
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  DEFAULT_BACKEND_URL;
 
 const nextConfig = {
   reactStrictMode: true,

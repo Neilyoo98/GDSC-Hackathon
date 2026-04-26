@@ -36,6 +36,19 @@ export interface AgentMessage {
   timestamp?: number;
 }
 
+export interface GitHubIssue {
+  repo_name: string;
+  issue_number: number;
+  title: string;
+  body: string;
+  author?: string;
+  url: string;
+}
+
+export interface GitHubPollResult {
+  issue: GitHubIssue | null;
+}
+
 export type AUBIEvent =
   | { event: "thread"; data: Record<string, unknown> | null }
   | { event: "node_start"; node: string; data: null }
