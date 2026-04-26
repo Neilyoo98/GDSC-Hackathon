@@ -1,15 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useIncidentStream } from "@/hooks/useIncidentStream";
 import { useAgents } from "@/hooks/useAgents";
 import { IncidentTerminal } from "@/components/IncidentTerminal";
 import { NeuralTrace } from "@/components/NeuralTrace";
 import { HexGrid } from "@/components/HexGrid";
+import { api } from "@/lib/api";
+import type { GitHubIssue } from "@/lib/types";
 
 export default function IncidentPage() {
   const [issueUrl, setIssueUrl] = useState("");
+  const [latestIssue, setLatestIssue] = useState<GitHubIssue | null>(null);
+  const [isLoadingIssue, setIsLoadingIssue] = useState(false);
+  const [issueError, setIssueError] = useState<string | null>(null);
+  const [approvalAction, setApprovalAction] = useState<"approve" | "reject" | null>(null);
+  const [approvalError, setApprovalError] = useState<string | null>(null);
   const { events, isStreaming, result, error, start, approve, reset } = useIncidentStream();
   const { agents } = useAgents();
 
@@ -24,10 +31,46 @@ export default function IncidentPage() {
     start(issueUrl.trim());
   }
 
+  async function loadLatestIssue() {
+    setIsLoadingIssue(true);
+    setIssueError(null);
+    try {
+      const data = await api.pollGitHub();
+      setLatestIssue(data.issue);
+      if (data.issue?.url && !issueUrl.trim()) {
+        setIssueUrl(data.issue.url);
+      }
+    } catch (err) {
+      setIssueError(err instanceof Error ? err.message : "Failed to load GitHub issue");
+    } finally {
+      setIsLoadingIssue(false);
+    }
+  }
+
   function handleReset() {
     reset();
-    setIssueUrl("");
+    setApprovalAction(null);
+    setApprovalError(null);
+    setIssueUrl(latestIssue?.url ?? "");
   }
+
+  async function handleApproval(approved: boolean) {
+    setApprovalAction(approved ? "approve" : "reject");
+    setApprovalError(null);
+    try {
+      await approve(approved);
+    } catch (err) {
+      setApprovalError(err instanceof Error ? err.message : "Approval request failed");
+    } finally {
+      setApprovalAction(null);
+    }
+  }
+
+  useEffect(() => {
+    void loadLatestIssue();
+    // Run once on page load; manual refresh uses the button below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const hasResult = !!result;
   const hasEvents = events.length > 0;
@@ -42,15 +85,37 @@ export default function IncidentPage() {
             <p className="font-syne text-xl text-white">Incident</p>
             <p className="font-mono text-[10px] text-[#4a6080] mt-0.5">War room · GitHub issue to PR</p>
           </div>
-          {hasEvents && (
+          <div className="flex items-center gap-2">
             <button
-              onClick={handleReset}
-              className="font-mono text-[10px] text-[#4a6080] border border-[#1e2d45] px-3 py-1.5 rounded hover:text-[#e2e8f0] hover:border-[#2a3f5f] transition-colors"
+              onClick={() => void loadLatestIssue()}
+              disabled={isLoadingIssue || isStreaming}
+              className="font-mono text-[10px] text-[#4a6080] border border-[#1e2d45] px-3 py-1.5 rounded hover:text-[#e2e8f0] hover:border-[#2a3f5f] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
-              RESET
+              {isLoadingIssue ? "SYNCING" : "LIVE ISSUE"}
             </button>
-          )}
+            {hasEvents && (
+              <button
+                onClick={handleReset}
+                className="font-mono text-[10px] text-[#4a6080] border border-[#1e2d45] px-3 py-1.5 rounded hover:text-[#e2e8f0] hover:border-[#2a3f5f] transition-colors"
+              >
+                RESET
+              </button>
+            )}
+          </div>
         </div>
+
+        {latestIssue && (
+          <div className="border border-[#1e2d45] bg-[#0a0e1a] px-3 py-2 rounded">
+            <p className="font-mono text-[9px] text-[#4a6080] tracking-widest">{"// LIVE GITHUB ISSUE"}</p>
+            <p className="mt-1 truncate text-xs text-[#c8d6e8]">{latestIssue.repo_name}#{latestIssue.issue_number} · {latestIssue.title}</p>
+          </div>
+        )}
+
+        {issueError && (
+          <div className="border border-amber-500/30 bg-amber-500/10 px-3 py-2 font-mono text-[11px] text-amber-300">
+            {issueError}
+          </div>
+        )}
 
         {/* Terminal input */}
         <IncidentTerminal
@@ -106,16 +171,36 @@ export default function IncidentPage() {
               {/* Response header */}
               <div className="flex items-center justify-between px-5 py-2.5 border-b border-[#1e2d45] flex-shrink-0">
                 <span className="font-mono text-[9px] text-[#4a6080] tracking-widest">{"// FIX REVIEW"}</span>
-                <button
-                  onClick={() => navigator.clipboard.writeText(result.patch_diff ?? "")}
-                  className="font-mono text-[9px] text-[#4a6080] border border-[#1e2d45] px-2 py-1 rounded hover:text-[#00f0ff] hover:border-[#00f0ff33] transition-colors"
-                >
-                  COPY DIFF
-                </button>
+                <div className="flex items-center gap-2">
+                  {result.awaiting_approval && (
+                    <>
+                      <button
+                        onClick={() => void handleApproval(false)}
+                        disabled={approvalAction !== null}
+                        className="font-mono text-[9px] text-rose-300 border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 rounded disabled:cursor-not-allowed disabled:opacity-40 transition-colors hover:border-rose-400"
+                      >
+                        {approvalAction === "reject" ? "REJECTING..." : "REJECT"}
+                      </button>
+                      <button
+                        onClick={() => void handleApproval(true)}
+                        disabled={!result.tests_passed || approvalAction !== null}
+                        className="font-mono text-[9px] text-[#04130d] border border-emerald-400 bg-emerald-400 px-3 py-1.5 rounded disabled:cursor-not-allowed disabled:opacity-40 transition-colors hover:bg-emerald-300"
+                      >
+                        {approvalAction === "approve" ? "PUSHING..." : "APPROVE PR PUSH"}
+                      </button>
+                    </>
+                  )}
+                  <button
+                    onClick={() => navigator.clipboard.writeText(result.patch_diff ?? "")}
+                    className="font-mono text-[9px] text-[#4a6080] border border-[#1e2d45] px-2 py-1 rounded hover:text-[#00f0ff] hover:border-[#00f0ff33] transition-colors"
+                  >
+                    COPY DIFF
+                  </button>
+                </div>
               </div>
 
               <div className="flex-1 grid grid-cols-2 gap-4 p-5 overflow-hidden min-h-0">
-                <div className="min-w-0 flex flex-col gap-3 overflow-hidden">
+                <div className="aubi-scrollbar min-w-0 flex flex-col gap-3 overflow-y-auto pr-1">
                   <div className="border border-[#1e2d45] bg-[#0a0e1a] rounded p-4">
                     <p className="font-mono text-[9px] text-[#4a6080] tracking-widest mb-2">{"// OWNER"}</p>
                     <p className="font-syne text-lg text-white">{primaryOwner?.name ?? result.owners[0] ?? "Unassigned"}</p>
@@ -143,12 +228,18 @@ export default function IncidentPage() {
 
                   {result.awaiting_approval && (
                     <button
-                      onClick={() => void approve(true)}
-                      disabled={!result.tests_passed}
+                      onClick={() => void handleApproval(true)}
+                      disabled={!result.tests_passed || approvalAction !== null}
                       className="h-11 rounded border border-emerald-500 bg-emerald-500 text-sm font-mono font-bold tracking-widest text-[#04130d] disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      APPROVE PR PUSH
+                      {approvalAction === "approve" ? "PUSHING PR..." : "APPROVE PR PUSH"}
                     </button>
+                  )}
+
+                  {approvalError && (
+                    <div className="border border-red-500/30 bg-red-500/10 px-3 py-2 font-mono text-[11px] text-red-300">
+                      {approvalError}
+                    </div>
                   )}
 
                   {result.pr_url && (

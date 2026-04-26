@@ -25,6 +25,30 @@ function hexPoints(size: number): string {
   }).join(" ");
 }
 
+function compactLabel(value: string, maxLength: number): string {
+  return value.length > maxLength ? `${value.slice(0, maxLength - 3)}...` : value;
+}
+
+function roleParts(agent: Agent): string[] {
+  const languageParts = agent.github_data_summary.languages;
+  if (languageParts.length > 0) return languageParts;
+
+  return agent.role
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function roleSummary(agent: Agent): string {
+  const parts = roleParts(agent);
+  if (parts.length === 0) return "Profile indexing";
+  if (parts.length === 1) return compactLabel(parts[0], 28);
+
+  const visible = parts.slice(0, 3);
+  const suffix = parts.length > visible.length ? ` +${parts.length - visible.length}` : "";
+  return compactLabel(`${visible.join(" / ")}${suffix}`, 34);
+}
+
 interface Props {
   agent: Agent;
   cx: number;
@@ -49,6 +73,8 @@ export function HexNode({
   const avatarSize = compact ? 18 : 38;
 
   const categories = Object.keys(CATEGORY_META).slice(0, 5) as ConstitutionCategory[];
+  const displayName = compactLabel(agent.name.split(" ")[0], 18);
+  const displayRole = roleSummary(agent);
 
   return (
     <g
@@ -161,14 +187,14 @@ export function HexNode({
               fontFamily="JetBrains Mono, monospace"
               fontWeight={500}
             >
-              {agent.name.split(" ")[0]}
+              {displayName}
             </text>
             <text
               textAnchor="middle" y={hexSize + 26}
               fontSize={9} fill="#4a6080"
               fontFamily="JetBrains Mono, monospace"
             >
-              {agent.role}
+              {displayRole}
             </text>
           </>
         )}
