@@ -28,7 +28,6 @@ logger = logging.getLogger(__name__)
 
 COLLECTION_FACTS    = "semantic_facts"
 COLLECTION_EPISODES = "episodes"
-DEFAULT_TEAM_ID     = "default"
 EMBEDDING_DIM       = 384   # all-MiniLM-L6-v2
 FILTER_INDEX_FIELDS = ("user_id", "tenant_id", "scope", "scope_id", "category", "predicate")
 
@@ -128,7 +127,7 @@ def jsonish(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
 
 
-def _team_scope_id(tenant_id: str, team_id: str = DEFAULT_TEAM_ID) -> str:
+def _team_scope_id(tenant_id: str, team_id: str) -> str:
     return f"{tenant_id}:team:{team_id}"
 
 
@@ -245,7 +244,7 @@ class ConstitutionStore:
         tenant_id: str,
         facts: list[dict[str, Any]],
         *,
-        team_id: str = DEFAULT_TEAM_ID,
+        team_id: str,
         source_agent_id: str | None = None,
     ) -> int:
         """Store shared team facts into semantic_facts under scope=team."""
@@ -297,7 +296,7 @@ class ConstitutionStore:
         tenant_id: str,
         episode: dict[str, Any],
         *,
-        team_id: str = DEFAULT_TEAM_ID,
+        team_id: str,
     ) -> str:
         """Record a team-scoped incident episode in shared memory."""
         from qdrant_client.models import PointStruct
@@ -397,7 +396,7 @@ class ConstitutionStore:
         tenant_id: str,
         query: str,
         *,
-        team_id: str = DEFAULT_TEAM_ID,
+        team_id: str,
         top_k: int = 8,
         collections: tuple[str, ...] = (COLLECTION_FACTS, COLLECTION_EPISODES),
     ) -> list[dict[str, Any]]:
@@ -426,7 +425,7 @@ class ConstitutionStore:
         self,
         tenant_id: str,
         *,
-        team_id: str = DEFAULT_TEAM_ID,
+        team_id: str,
         limit: int = 100,
         collection: str | None = None,
     ) -> dict[str, list[dict[str, Any]]]:

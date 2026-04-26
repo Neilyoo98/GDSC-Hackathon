@@ -4,7 +4,7 @@ Full autonomous flow:
   GitHub issue → analyze → find owners → consult agents → read code → fix
   → verify → human approval → push PR
 
-Models: GPT-5.5 for everything. Gemini 2.0 Flash used in constitution/builder.py only.
+Models are configured through environment variables.
 """
 
 from __future__ import annotations
@@ -41,13 +41,19 @@ _gpt55: ChatOpenAI | None = None
 def _get_gpt55() -> ChatOpenAI:
     global _gpt55
     if _gpt55 is None:
-        _gpt55 = ChatOpenAI(
-            model=os.getenv("OPENAI_MODEL", "gpt-5.5"),
-            api_key=os.getenv("OPENAI_API_KEY"),
-            base_url=os.getenv("OPENAI_BASE_URL", "https://us.api.openai.com/v1"),
-            streaming=False,
-            use_responses_api=True,
-        )
+        model = os.getenv("OPENAI_MODEL")
+        if not model:
+            raise RuntimeError("OPENAI_MODEL is not set")
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "api_key": os.getenv("OPENAI_API_KEY"),
+            "streaming": False,
+            "use_responses_api": True,
+        }
+        base_url = os.getenv("OPENAI_BASE_URL")
+        if base_url:
+            kwargs["base_url"] = base_url
+        _gpt55 = ChatOpenAI(**kwargs)
     return _gpt55
 
 
@@ -89,11 +95,17 @@ def _flatten_constitution(grouped: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _tenant_id() -> str:
-    return os.getenv("AUBI_TENANT_ID", "hackathon")
+    tenant_id = os.getenv("AUBI_TENANT_ID")
+    if not tenant_id:
+        raise RuntimeError("AUBI_TENANT_ID is not set")
+    return tenant_id
 
 
 def _team_id() -> str:
-    return os.getenv("AUBI_TEAM_ID", "default")
+    team_id = os.getenv("AUBI_TEAM_ID")
+    if not team_id:
+        raise RuntimeError("AUBI_TEAM_ID is not set")
+    return team_id
 
 
 def _issue_query(state: AUBIIssueState) -> str:

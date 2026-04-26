@@ -39,6 +39,9 @@ from constitution.store import ConstitutionStore
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+PROFILE_SUMMARY_CATEGORY = "profile_metadata"
+PROFILE_SUMMARY_PREDICATE = "github_data_summary"
+
 app = FastAPI(title="AUBI Backend", version="1.0.0")
 
 app.add_middleware(
@@ -86,7 +89,7 @@ class ConstitutionFactRequest(BaseModel):
 class TeamMemoryWriteRequest(BaseModel):
     fact: dict[str, Any] | None = None
     episode: dict[str, Any] | None = None
-    team_id: str = "default"
+    team_id: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -94,11 +97,26 @@ class TeamMemoryWriteRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 def _tenant_id() -> str:
-    return os.getenv("AUBI_TENANT_ID", "hackathon")
+    tenant_id = os.getenv("AUBI_TENANT_ID")
+    if not tenant_id:
+        raise RuntimeError("AUBI_TENANT_ID is not set")
+    return tenant_id
 
 
-def _team_id(default: str = "default") -> str:
-    return os.getenv("AUBI_TEAM_ID", default)
+def _team_id(override: str | None = None) -> str:
+    if override and override.strip():
+        return override.strip()
+    team_id = os.getenv("AUBI_TEAM_ID")
+    if not team_id:
+        raise RuntimeError("AUBI_TEAM_ID is not set")
+    return team_id
+
+
+def _openai_model() -> str:
+    model = os.getenv("OPENAI_MODEL")
+    if not model:
+        raise RuntimeError("OPENAI_MODEL is not set")
+    return model
 
 
 def _get_constitution_from_store(user_id: str) -> dict[str, Any]:
@@ -119,6 +137,78 @@ def _group_facts_by_category(facts: list[dict[str, Any]]) -> dict[str, list[dict
     for fact in facts:
         grouped.setdefault(str(fact.get("category", "general")), []).append(fact)
     return grouped
+
+
+def _is_profile_summary_fact(fact: dict[str, Any]) -> bool:
+    return (
+        fact.get("category") == PROFILE_SUMMARY_CATEGORY and
+        fact.get("predicate") == PROFILE_SUMMARY_PREDICATE
+    )
+
+
+def _public_constitution_facts(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [fact for fact in facts if not _is_profile_summary_fact(fact)]
+
+
+def _public_constitution(grouped: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    return _group_facts_by_category(_public_constitution_facts(_flatten_constitution(grouped)))
+
+
+def _github_summary_defaults() -> dict[str, Any]:
+    return {
+        "commit_count": 0,
+        "pr_count": 0,
+        "top_files": [],
+        "languages": [],
+        "repos_considered": [],
+        "target_repos": [],
+    }
+
+
+def _github_summary_from_data(github_data: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "commit_count": int(github_data.get("commit_count") or 0),
+        "pr_count": int(github_data.get("pr_count") or 0),
+        "top_files": _string_list(github_data.get("top_files"))[:5],
+        "languages": _string_list(github_data.get("languages"))[:5],
+        "repos_considered": _string_list(github_data.get("repos_considered")),
+        "target_repos": _string_list(github_data.get("target_repos")),
+    }
+
+
+def _profile_summary_fact(github_username: str, summary: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "subject": github_username,
+        "predicate": PROFILE_SUMMARY_PREDICATE,
+        "object": json.dumps(summary, sort_keys=True),
+        "confidence": 1.0,
+        "category": PROFILE_SUMMARY_CATEGORY,
+    }
+
+
+def _github_summary_from_facts(facts: list[dict[str, Any]]) -> dict[str, Any]:
+    for fact in facts:
+        if not _is_profile_summary_fact(fact):
+            continue
+        raw = fact.get("object")
+        try:
+            parsed = json.loads(raw) if isinstance(raw, str) else raw
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, dict):
+            return _merge_github_summaries(_github_summary_defaults(), parsed)
+    return _github_summary_defaults()
+
+
+def _merge_github_summaries(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "commit_count": max(int(left.get("commit_count") or 0), int(right.get("commit_count") or 0)),
+        "pr_count": max(int(left.get("pr_count") or 0), int(right.get("pr_count") or 0)),
+        "top_files": list(dict.fromkeys(_string_list(left.get("top_files")) + _string_list(right.get("top_files")))),
+        "languages": list(dict.fromkeys(_string_list(left.get("languages")) + _string_list(right.get("languages")))),
+        "repos_considered": list(dict.fromkeys(_string_list(left.get("repos_considered")) + _string_list(right.get("repos_considered")))),
+        "target_repos": list(dict.fromkeys(_string_list(left.get("target_repos")) + _string_list(right.get("target_repos")))),
+    }
 
 
 def _identity_key(value: Any) -> str:
@@ -177,12 +267,7 @@ def _merge_agent_records(left: dict[str, Any], right: dict[str, Any]) -> dict[st
         "github_username": primary.get("github_username") or secondary.get("github_username"),
         "name": primary.get("name") or secondary.get("name"),
         "role": primary.get("role") or secondary.get("role"),
-        "github_data_summary": {
-            "commit_count": max(int(primary_summary.get("commit_count") or 0), int(secondary_summary.get("commit_count") or 0)),
-            "pr_count": max(int(primary_summary.get("pr_count") or 0), int(secondary_summary.get("pr_count") or 0)),
-            "top_files": list(dict.fromkeys(_string_list(primary_summary.get("top_files")) + _string_list(secondary_summary.get("top_files")))),
-            "languages": list(dict.fromkeys(_string_list(primary_summary.get("languages")) + _string_list(secondary_summary.get("languages")))),
-        },
+        "github_data_summary": _merge_github_summaries(primary_summary, secondary_summary),
         "constitution_facts": facts,
         "constitution": _group_facts_by_category(facts),
     }
@@ -230,16 +315,18 @@ def _public_memory_record(record: dict[str, Any]) -> dict[str, Any]:
 
 
 def _agent_record_from_facts(agent_id: str, facts: list[dict[str, Any]]) -> dict[str, Any]:
-    username = str(next((fact.get("subject") for fact in facts if fact.get("subject")), agent_id))
-    expertise = next((fact.get("object") for fact in facts if fact.get("category") == "expertise"), "")
+    summary = _github_summary_from_facts(facts)
+    public_facts = _public_constitution_facts(facts)
+    username = str(next((fact.get("subject") for fact in public_facts if fact.get("subject")), agent_id))
+    expertise = next((fact.get("object") for fact in public_facts if fact.get("category") == "expertise"), "")
     return {
         "id": agent_id,
         "github_username": username,
         "name": username,
         "role": str(expertise or "Software Engineer"),
-        "github_data_summary": {},
-        "constitution_facts": facts,
-        "constitution": _group_facts_by_category(facts),
+        "github_data_summary": summary,
+        "constitution_facts": public_facts,
+        "constitution": _group_facts_by_category(public_facts),
     }
 
 
@@ -292,13 +379,16 @@ def get_gpt55():
         if not api_key:
             raise RuntimeError("OPENAI_API_KEY is not set")
         from langchain_openai import ChatOpenAI
-        _gpt55 = ChatOpenAI(
-            model=os.getenv("OPENAI_MODEL", "gpt-5.5"),
-            api_key=api_key,
-            base_url=os.getenv("OPENAI_BASE_URL", "https://us.api.openai.com/v1"),
-            streaming=False,
-            use_responses_api=True,
-        )
+        kwargs: dict[str, Any] = {
+            "model": _openai_model(),
+            "api_key": api_key,
+            "streaming": False,
+            "use_responses_api": True,
+        }
+        base_url = os.getenv("OPENAI_BASE_URL")
+        if base_url:
+            kwargs["base_url"] = base_url
+        _gpt55 = ChatOpenAI(**kwargs)
     return _gpt55
 
 
@@ -322,13 +412,15 @@ async def create_agent(req: CreateAgentRequest):
 
     # 2. Build constitution facts via Gemini structured output
     facts = await build_constitution_from_github(github_data)
+    github_summary = _github_summary_from_data(github_data)
+    facts_to_store = facts + [_profile_summary_fact(req.github_username, github_summary)]
 
     # 3. Store facts in Qdrant. This is a required part of agent creation.
-    stored_count = get_store().upsert_facts(agent_id, _tenant_id(), facts)
-    if stored_count != len(facts):
+    stored_count = get_store().upsert_facts(agent_id, _tenant_id(), facts_to_store)
+    if stored_count != len(facts_to_store):
         raise HTTPException(
             status_code=500,
-            detail=f"Stored {stored_count} of {len(facts)} constitution facts",
+            detail=f"Stored {stored_count} of {len(facts_to_store)} constitution facts",
         )
 
     # 4. Register agent in-memory
@@ -338,12 +430,7 @@ async def create_agent(req: CreateAgentRequest):
         name=req.name or github_data.get("name", req.github_username),
         role=req.role or "Software Engineer",
         facts=facts,
-        github_data_summary={
-            "commit_count": github_data.get("commit_count", 0),
-            "pr_count": github_data.get("pr_count", 0),
-            "top_files": github_data.get("top_files", [])[:5],
-            "languages": github_data.get("languages", [])[:5],
-        },
+        github_data_summary=github_summary,
     )
 
     return {**agent_record, "facts_stored": len(facts)}
@@ -356,8 +443,11 @@ async def list_agents():
         if agent_id not in records:
             records[agent_id] = _agent_record_from_facts(agent_id, facts)
         else:
-            records[agent_id]["constitution_facts"] = facts
-            records[agent_id]["constitution"] = _group_facts_by_category(facts)
+            public_facts = _public_constitution_facts(facts)
+            records[agent_id]["constitution_facts"] = public_facts
+            records[agent_id]["constitution"] = _group_facts_by_category(public_facts)
+            summary = records[agent_id].get("github_data_summary") if isinstance(records[agent_id].get("github_data_summary"), dict) else {}
+            records[agent_id]["github_data_summary"] = _merge_github_summaries(summary, _github_summary_from_facts(facts))
     return _dedupe_agent_records(list(records.values()))
 
 
@@ -370,8 +460,12 @@ async def get_agent(agent_id: str):
         agent = _agents[agent_id].copy()
     else:
         agent = _agent_record_from_facts(agent_id, _flatten_constitution(live_constitution))
-    agent["constitution"] = live_constitution
-    agent["constitution_facts"] = _flatten_constitution(live_constitution)
+    all_facts = _flatten_constitution(live_constitution)
+    public_facts = _public_constitution_facts(all_facts)
+    agent["constitution"] = _group_facts_by_category(public_facts)
+    agent["constitution_facts"] = public_facts
+    summary = agent.get("github_data_summary") if isinstance(agent.get("github_data_summary"), dict) else {}
+    agent["github_data_summary"] = _merge_github_summaries(summary, _github_summary_from_facts(all_facts))
     return agent
 
 
@@ -390,7 +484,7 @@ async def delete_agent(agent_id: str):
 @app.post("/agents/{agent_id}/query")
 async def query_agent(agent_id: str, req: QueryAgentRequest):
     """Ask an agent what context it has relevant to an incident."""
-    facts = _flatten_constitution(_get_constitution_from_store(agent_id))
+    facts = _public_constitution_facts(_flatten_constitution(_get_constitution_from_store(agent_id)))
     if not facts:
         raise HTTPException(status_code=404, detail=f"No constitution facts found for agent {agent_id}")
     agent = _agents.get(agent_id) or _agent_record_from_facts(agent_id, facts)
@@ -418,7 +512,7 @@ async def query_agent(agent_id: str, req: QueryAgentRequest):
 @app.get("/constitution/team")
 async def get_team_constitution(
     query: str | None = None,
-    team_id: str = "default",
+    team_id: str | None = None,
     top_k: int = 10,
     limit: int = 100,
 ):
@@ -509,7 +603,7 @@ async def get_constitution(agent_id: str):
     """Return an agent's constitution facts grouped by category."""
     live_constitution = _get_constitution_from_store(agent_id)
     if live_constitution:
-        return live_constitution
+        return _public_constitution(live_constitution)
     raise HTTPException(status_code=404, detail=f"No constitution facts found for agent {agent_id}")
 
 
@@ -773,6 +867,9 @@ async def ready():
         "openai_api_key": bool(os.getenv("OPENAI_API_KEY")),
         "github_token": bool(os.getenv("GITHUB_TOKEN")),
         "target_repo": bool(_target_repo()),
+        "openai_model": bool(os.getenv("OPENAI_MODEL")),
+        "tenant_id": bool(os.getenv("AUBI_TENANT_ID")),
+        "team_id": bool(os.getenv("AUBI_TEAM_ID")),
         "go_toolchain": bool(shutil.which("go")),
     }
     try:
@@ -786,6 +883,9 @@ async def ready():
         "openai_api_key",
         "github_token",
         "target_repo",
+        "openai_model",
+        "tenant_id",
+        "team_id",
         "go_toolchain",
         "qdrant",
     ]

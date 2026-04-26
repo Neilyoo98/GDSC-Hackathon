@@ -11,7 +11,15 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from dotenv import load_dotenv
 from github import Github, GithubException
+
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
+
+
+def _configured_target_repos() -> list[str]:
+    raw = os.getenv("TARGET_REPOS") or os.getenv("TARGET_REPO") or os.getenv("GITHUB_REPO") or ""
+    return [item.strip() for item in raw.split(",") if item.strip()]
 
 
 def ingest_developer(
@@ -19,6 +27,7 @@ def ingest_developer(
     *,
     token: str | None = None,
     days: int = 90,
+    target_repos: list[str] | None = None,
 ) -> dict[str, Any]:
     """Pull GitHub data for a developer and return structured dict.
 
@@ -26,6 +35,7 @@ def ingest_developer(
         github_username: GitHub handle (e.g. "alicechen")
         token: GitHub PAT. Falls back to GITHUB_TOKEN env var.
         days: How many days of history to pull.
+        target_repos: Full repo names to inspect first, such as "owner/repo".
 
     Returns:
         Structured dict with commits, prs, files_touched, languages, review_comments.
@@ -44,11 +54,26 @@ def ingest_developer(
     languages: set[str] = set()
     review_comments_sample: list[str] = []
 
-    # Repos the user has contributed to (public only)
-    try:
-        repos = list(user.get_repos(type="all", sort="pushed"))[:20]
-    except GithubException:
-        repos = []
+    # Target repos are the demo/source-of-truth repos. Inspect them first even
+    # when the coworker does not own the repository.
+    target_repo_names = target_repos if target_repos is not None else _configured_target_repos()
+    repos_by_name: dict[str, Any] = {}
+    for repo_name in target_repo_names:
+        try:
+            repo = g.get_repo(repo_name)
+            repos_by_name[repo.full_name.lower()] = repo
+        except GithubException:
+            continue
+
+    # If no target repo is configured, fall back to repos owned by the user.
+    if not repos_by_name:
+        try:
+            for repo in list(user.get_repos(type="all", sort="pushed"))[:20]:
+                repos_by_name.setdefault(repo.full_name.lower(), repo)
+        except GithubException:
+            pass
+
+    repos = list(repos_by_name.values())
 
     for repo in repos:
         # Languages
@@ -127,6 +152,8 @@ def ingest_developer(
         "review_comments_sample": review_comments_sample[:10],
         "commit_count": len(commits_data),
         "pr_count": len(prs_data),
+        "repos_considered": [repo.full_name for repo in repos],
+        "target_repos": target_repo_names,
     }
 
 

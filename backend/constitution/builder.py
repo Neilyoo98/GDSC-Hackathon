@@ -1,10 +1,7 @@
 """Context Constitution builder.
 
-Takes structured GitHub data → gpt-5.4-mini (JSON mode) → list of ConstitutionFacts
-→ stored as Qdrant semantic_facts points.
-
-gpt-5.4-mini is used here because structured JSON extraction is exactly what it excels
-at — fast, cheap, and schema-faithful. GPT-5.5 handles all reasoning-heavy nodes.
+Takes structured GitHub data -> a configured JSON-capable model -> list of
+ConstitutionFacts -> stored as Qdrant semantic_facts points.
 """
 
 from __future__ import annotations
@@ -39,11 +36,19 @@ def _get_client() -> AsyncOpenAI:
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             raise RuntimeError("OPENAI_API_KEY is not set")
-        _client = AsyncOpenAI(
-            api_key=api_key,
-            base_url=os.getenv("OPENAI_BASE_URL", "https://us.api.openai.com/v1"),
-        )
+        kwargs: dict[str, Any] = {"api_key": api_key}
+        base_url = os.getenv("OPENAI_BASE_URL")
+        if base_url:
+            kwargs["base_url"] = base_url
+        _client = AsyncOpenAI(**kwargs)
     return _client
+
+
+def _constitution_model() -> str:
+    model = os.getenv("OPENAI_CONSTITUTION_MODEL") or os.getenv("OPENAI_MODEL")
+    if not model:
+        raise RuntimeError("OPENAI_CONSTITUTION_MODEL or OPENAI_MODEL is not set")
+    return model
 
 CONSTITUTION_SYSTEM = """\
 You are a developer profiling system. Analyze GitHub activity data and extract structured facts about a developer.
@@ -70,10 +75,10 @@ Return ONLY valid JSON. No markdown. No explanation.
 Example output:
 {
   "facts": [
-    {"subject": "alicechen", "predicate": "owns", "object": "auth/ directory (78% of commits there)", "confidence": 0.95, "category": "code_ownership"},
-    {"subject": "alicechen", "predicate": "expertise_in", "object": "Go, PostgreSQL, distributed systems", "confidence": 0.9, "category": "expertise"},
-    {"subject": "alicechen", "predicate": "prefers", "object": "async communication - review comments show she writes detailed, standalone explanations", "confidence": 0.8, "category": "collaboration"},
-    {"subject": "alicechen", "predicate": "currently_working_on", "object": "payment retry logic based on recent PR titles", "confidence": 0.85, "category": "current_focus"}
+    {"subject": "<github_username>", "predicate": "owns", "object": "auth/ directory (78% of commits there)", "confidence": 0.95, "category": "code_ownership"},
+    {"subject": "<github_username>", "predicate": "expertise_in", "object": "Go, PostgreSQL, distributed systems", "confidence": 0.9, "category": "expertise"},
+    {"subject": "<github_username>", "predicate": "prefers", "object": "async communication - review comments show detailed, standalone explanations", "confidence": 0.8, "category": "collaboration"},
+    {"subject": "<github_username>", "predicate": "currently_working_on", "object": "payment retry logic based on recent PR titles", "confidence": 0.85, "category": "current_focus"}
   ]
 }
 """
@@ -164,8 +169,9 @@ async def build_constitution_from_github(
         review_comments=review_comments or "(no review comments found)",
     )
 
+    model = _constitution_model()
     response = await _get_client().chat.completions.create(
-        model="gpt-5.4-mini",
+        model=model,
         messages=[
             {"role": "system", "content": CONSTITUTION_SYSTEM},
             {"role": "user", "content": prompt},
@@ -177,12 +183,12 @@ async def build_constitution_from_github(
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError as e:
-        raise ValueError(f"gpt-5.4-mini did not return valid JSON: {raw[:500]}") from e
+        raise ValueError(f"{model} did not return valid JSON: {raw[:500]}") from e
 
     raw_facts = parsed.get("facts") if isinstance(parsed, dict) else parsed
     facts = _normalize_facts(raw_facts, username)
     if not facts:
-        raise ValueError(f"gpt-5.4-mini returned no usable constitution facts for {username}")
+        raise ValueError(f"{model} returned no usable constitution facts for {username}")
 
     return facts
 
