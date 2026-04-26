@@ -336,7 +336,23 @@ export default function IncidentPage() {
           <div className="grid gap-4 xl:grid-cols-[minmax(320px,0.85fr)_minmax(0,1.15fr)]">
             <div className="flex min-h-0 flex-col gap-4">
               <CoworkerMeshPanel result={result} agents={agents} events={events} />
+            </div>
 
+            <div className="flex min-h-0 flex-col gap-4">
+              {coworkerExchanges.length > 0 ? (
+                <ConsiderationsPanel
+                  exchanges={coworkerExchanges}
+                  agents={agents}
+                  result={result}
+                />
+              ) : (
+                <section className="border border-[#1e2d45] bg-[#0a0e1a] p-4">
+                  <p className="font-mono text-[9px] uppercase tracking-[3px] text-[#4a6080]">{"// CONTEXT NOTES"}</p>
+                  <p className="mt-3 text-xs leading-relaxed text-[#8aa0c0]">
+                    Coworker considerations will appear after the mesh shares context for the selected issue.
+                  </p>
+                </section>
+              )}
               {agents.length > 0 && (
                 <section className="min-h-[230px] overflow-hidden border border-[#1e2d45] bg-[#0a0e1a]">
                   <div className="flex h-10 items-center justify-between border-b border-[#1e2d45] px-4">
@@ -358,21 +374,6 @@ export default function IncidentPage() {
                 </section>
               )}
             </div>
-
-              {coworkerExchanges.length > 0 ? (
-                <ConsiderationsPanel
-                  exchanges={coworkerExchanges}
-                  agents={agents}
-                  result={result}
-                />
-              ) : (
-                <section className="border border-[#1e2d45] bg-[#0a0e1a] p-4">
-                  <p className="font-mono text-[9px] uppercase tracking-[3px] text-[#4a6080]">{"// CONTEXT NOTES"}</p>
-                  <p className="mt-3 text-xs leading-relaxed text-[#8aa0c0]">
-                    Coworker considerations will appear after the mesh shares context for the selected issue.
-                  </p>
-                </section>
-              )}
           </div>
 
           <section className="min-h-[300px] overflow-hidden border border-[#1e2d45] bg-[#0a0e1a]">
