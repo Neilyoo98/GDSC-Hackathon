@@ -365,7 +365,7 @@ export default function DemoPage() {
 
         {/* ── Left column ─────────────────────────────────────────────── */}
         <aside className="flex min-h-0 flex-col border-r border-[#1f1f1f]">
-          <AgentMeshLines messages={displayMessages} activeMessage={activeMessage} />
+          <AgentMeshLines messages={displayMessages} activeMessage={activeMessage} events={events} />
           <div className="min-h-0 flex-1">
             <AgentCommFeed messages={displayMessages} isStreaming={isStreaming} />
           </div>
