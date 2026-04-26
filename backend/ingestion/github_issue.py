@@ -156,7 +156,13 @@ def get_latest_open_issue(repo_name: str) -> dict[str, Any] | None:
     issues = list(repo.get_issues(state="open", sort="created", direction="desc"))
     if not issues:
         return None
-    issue = issues[0]
+
+    issue = next(
+        (candidate for candidate in issues if getattr(candidate, "pull_request", None) is None),
+        None,
+    )
+    if issue is None:
+        return None
     return {
         "repo_name": repo_name,
         "issue_number": issue.number,
