@@ -1,0 +1,104 @@
+@import url("https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700&family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-bg: #0a0e1a;
+  --color-surface: #0d1224;
+  --color-surface-2: #111827;
+  --color-border: #1e2d45;
+  --color-cyan: #00f0ff;
+  --color-amber: #ffaa00;
+  --color-red: #ff3366;
+  --color-violet: #8b5cf6;
+  --color-emerald: #10b981;
+  --color-text: #e2e8f0;
+  --color-muted: #4a6080;
+  --color-dim: #2a3f5f;
+  --font-syne: "Syne";
+  --font-mono: "JetBrains Mono";
+  --font-inter: "Inter";
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+body {
+  margin: 0;
+  overflow-x: hidden;
+  background-image:
+    linear-gradient(#ffffff08 1px, transparent 1px),
+    linear-gradient(90deg, #ffffff08 1px, transparent 1px);
+  background-size: 40px 40px;
+  font-family: var(--font-inter), Inter, sans-serif;
+}
+
+button,
+textarea,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+::selection {
+  background: #00f0ff33;
+  color: #ffffff;
+}
+
+.font-syne {
+  font-family: var(--font-syne), Syne, sans-serif;
+}
+
+.font-mono {
+  font-family: var(--font-mono), "JetBrains Mono", monospace;
+}
+
+.terminal-container::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 29px 0 29px;
+  background: repeating-linear-gradient(
+    transparent 0,
+    transparent 1px,
+    #00000018 1px,
+    #00000018 2px
+  );
+  z-index: 1;
+}
+
+.aubi-scrollbar {
+  scrollbar-color: #1e2d45 #0a0e1a;
+  scrollbar-width: thin;
+}
+
+.aubi-scrollbar::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+.aubi-scrollbar::-webkit-scrollbar-track {
+  background: #0a0e1a;
+}
+
+.aubi-scrollbar::-webkit-scrollbar-thumb {
+  background: #1e2d45;
+  border-radius: 999px;
+}
