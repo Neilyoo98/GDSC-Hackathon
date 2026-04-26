@@ -1,9 +1,10 @@
 """Context Constitution builder.
 
-Takes structured GitHub data → Gemini 2.0 Flash → list of ConstitutionFacts
+Takes structured GitHub data → gpt-4o-mini (JSON mode) → list of ConstitutionFacts
 → stored as Qdrant semantic_facts points.
 
-Gemini is used here for structured JSON output (response_mime_type=application/json).
+gpt-4o-mini is used here because structured JSON extraction is exactly what it excels
+at — fast, cheap, and schema-faithful. GPT-5.5 handles all reasoning-heavy nodes.
 """
 
 from __future__ import annotations
@@ -14,10 +15,7 @@ import os
 from typing import Any
 from uuid import NAMESPACE_URL, uuid5
 
-try:
-    import google.generativeai as genai
-except ModuleNotFoundError:  # Keeps seeded demo flows alive before deps are installed.
-    genai = None
+from openai import AsyncOpenAI
 
 logger = logging.getLogger(__name__)
 
@@ -29,27 +27,17 @@ ALLOWED_CATEGORIES = {
     "known_issues",
 }
 
-_gemini = None
+_client: AsyncOpenAI | None = None
 
 
-def _get_gemini():
-    global _gemini
-    if _gemini is not None:
-        return _gemini
-    if genai is None:
-        raise RuntimeError("google-generativeai is not installed")
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise RuntimeError("GEMINI_API_KEY is not set")
-    genai.configure(api_key=api_key)
-    _gemini = genai.GenerativeModel(
-        os.getenv("GEMINI_MODEL", "gemini-2.0-flash"),
-        generation_config=genai.GenerationConfig(
-            response_mime_type="application/json",
-            temperature=0.2,
-        ),
-    )
-    return _gemini
+def _get_client() -> AsyncOpenAI:
+    global _client
+    if _client is None:
+        _client = AsyncOpenAI(
+            api_key=os.getenv("OPENAI_API_KEY"),
+            base_url=os.getenv("OPENAI_BASE_URL", "https://us.api.openai.com/v1"),
+        )
+    return _client
 
 CONSTITUTION_SYSTEM = """\
 You are a developer profiling system. Analyze GitHub activity data and extract structured facts about a developer.
@@ -135,72 +123,6 @@ def _normalize_facts(raw_facts: Any, username: str) -> list[dict[str, Any]]:
     return facts
 
 
-def _fallback_constitution(github_data: dict[str, Any]) -> list[dict[str, Any]]:
-    """Deterministic constitution builder for demos without Gemini configured."""
-    username = github_data["username"]
-    facts: list[dict[str, Any]] = []
-
-    for path in github_data.get("top_files", [])[:4]:
-        if not path:
-            continue
-        facts.append({
-            "subject": username,
-            "predicate": "owns",
-            "object": f"{path} based on recent GitHub activity",
-            "confidence": 0.72,
-            "category": "code_ownership",
-        })
-
-    languages = github_data.get("languages", [])[:6]
-    if languages:
-        facts.append({
-            "subject": username,
-            "predicate": "expertise_in",
-            "object": ", ".join(languages),
-            "confidence": 0.78,
-            "category": "expertise",
-        })
-
-    prs = github_data.get("prs", [])[:3]
-    if prs:
-        facts.append({
-            "subject": username,
-            "predicate": "currently_working_on",
-            "object": "; ".join(pr.get("title", "") for pr in prs if pr.get("title")),
-            "confidence": 0.7,
-            "category": "current_focus",
-        })
-
-    reviews = github_data.get("review_comments_sample", [])[:2]
-    if reviews:
-        facts.append({
-            "subject": username,
-            "predicate": "prefers",
-            "object": "detailed code review comments and async GitHub discussion",
-            "confidence": 0.65,
-            "category": "collaboration",
-        })
-    else:
-        facts.append({
-            "subject": username,
-            "predicate": "prefers",
-            "object": "GitHub-first async collaboration inferred from repository activity",
-            "confidence": 0.55,
-            "category": "collaboration",
-        })
-
-    if not facts:
-        facts.append({
-            "subject": username,
-            "predicate": "expertise_in",
-            "object": "general software engineering based on public GitHub profile",
-            "confidence": 0.5,
-            "category": "expertise",
-        })
-
-    return facts[:15]
-
-
 async def build_constitution_from_github(
     github_data: dict[str, Any],
 ) -> list[dict[str, Any]]:
@@ -234,16 +156,24 @@ async def build_constitution_from_github(
         review_comments=review_comments or "(no review comments found)",
     )
 
-    full_prompt = f"{CONSTITUTION_SYSTEM}\n\n{prompt}"
-    try:
-        response = await _get_gemini().generate_content_async(full_prompt)
-        raw = getattr(response, "text", "") or ""
-        start = raw.find("[")
-        end = raw.rfind("]") + 1
-        facts = _normalize_facts(json.loads(raw[start:end]), username)
-    except Exception as e:
-        logger.warning("Gemini constitution build failed; using deterministic fallback: %s", e)
-        facts = _fallback_constitution(github_data)
+    response = await _get_client().chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": CONSTITUTION_SYSTEM},
+            {"role": "user", "content": prompt},
+        ],
+        response_format={"type": "json_object"},
+        temperature=0.2,
+    )
+    raw = response.choices[0].message.content or ""
+    start = raw.find("[")
+    end = raw.rfind("]") + 1
+    if start < 0 or end <= start:
+        raise ValueError(f"gpt-4o-mini did not return a JSON array: {raw[:500]}")
+
+    facts = _normalize_facts(json.loads(raw[start:end]), username)
+    if not facts:
+        raise ValueError(f"gpt-4o-mini returned no usable constitution facts for {username}")
 
     return facts
 
