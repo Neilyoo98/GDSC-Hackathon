@@ -191,7 +191,7 @@ export default function Home() {
         } as CSSProperties
       }
     >
-      <style>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         @keyframes breathe {
           0%, 100% { opacity: .45; }
           50% { opacity: 1; }
@@ -218,7 +218,7 @@ export default function Home() {
           background: linear-gradient(90deg, transparent, #39ff14, transparent);
           animation: slide 2.4s linear infinite;
         }
-      `}</style>
+      ` }} />
 
       <section className="px-6 pb-20 pt-24 text-center md:px-10">
         <div className="landing-fade mx-auto inline-flex items-center gap-3 rounded-full border border-[#e8e4dc33] px-4 py-2" style={{ animationDelay: "0s" }}>
