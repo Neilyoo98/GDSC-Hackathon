@@ -1,11 +1,14 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { AgentCommFeed } from "@/components/aubi/AgentCommFeed";
 import { AgentMeshLines } from "@/components/aubi/AgentMeshLines";
+import { IssuePicker } from "@/components/aubi/IssuePicker";
 import { useAUBIStream } from "@/hooks/useAUBIStream";
-import type { AUBIEvent } from "@/lib/types";
+import { api } from "@/lib/api";
+import { issueUrlFor } from "@/lib/githubIssues";
+import type { AUBIEvent, GitHubIssue } from "@/lib/types";
 
 const FLOW_NODES = [
   ["issue_reader", "Issue Read"],
@@ -60,6 +63,9 @@ function latestStringArray(records: Record<string, unknown>[], keys: string[]): 
 
 export default function DemoPage() {
   const [inputIssueUrl, setInputIssueUrl] = useState("");
+  const [issues, setIssues] = useState<GitHubIssue[]>([]);
+  const [isLoadingIssues, setIsLoadingIssues] = useState(false);
+  const [issueLoadError, setIssueLoadError] = useState<string | null>(null);
   const [issueUrl, setIssueUrl] = useState<string | null>(null);
   const [pushedPrUrl, setPushedPrUrl] = useState("");
   const [approving, setApproving] = useState(false);
@@ -120,6 +126,33 @@ export default function DemoPage() {
   ];
   const prStatus = prUrl ? "Ready" : awaitingApproval ? "Approval" : "Waiting";
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadIssues() {
+      setIsLoadingIssues(true);
+      setIssueLoadError(null);
+      try {
+        const data = await api.listGitHubIssues();
+        if (cancelled) return;
+        setIssues(data.issues);
+        const firstIssue = data.issues[0];
+        if (firstIssue) {
+          setInputIssueUrl((current) => current.trim() ? current : issueUrlFor(firstIssue));
+        }
+      } catch (err) {
+        if (!cancelled) setIssueLoadError(err instanceof Error ? err.message : "Failed to load GitHub issues");
+      } finally {
+        if (!cancelled) setIsLoadingIssues(false);
+      }
+    }
+
+    void loadIssues();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleApprove = useCallback(async () => {
     if (!threadId || approving) return;
     setApproving(true);
@@ -152,13 +185,20 @@ export default function DemoPage() {
           <p className="font-mono text-[10px] uppercase tracking-[3px] text-[#e8e4dc99]">Issue → Agents Talk → Fix → PR</p>
         </div>
         <div className="flex items-center gap-4">
-          <input
-            value={inputIssueUrl}
-            onChange={(event) => setInputIssueUrl(event.target.value)}
-            onKeyDown={(event) => event.key === "Enter" && runFlow()}
-            placeholder="owner/repo#123 or issue URL"
-            className="w-[340px] border border-[#e8e4dc33] bg-[#050505] px-3 py-2 font-mono text-xs text-[#e8e4dc] outline-none placeholder:text-[#e8e4dc55]"
-          />
+          <div className="w-[430px]">
+            <IssuePicker
+              issues={issues}
+              value={inputIssueUrl}
+              onChange={setInputIssueUrl}
+              loading={isLoadingIssues}
+              disabled={isStreaming}
+            />
+            {issueLoadError && (
+              <p className="mt-1 truncate font-mono text-[8px] uppercase tracking-[1.5px] text-[#ff3366]">
+                {issueLoadError}
+              </p>
+            )}
+          </div>
           <span className={`border px-3 py-1 font-mono text-[10px] uppercase tracking-[2px] ${
             error
               ? "border-[#ff3366] text-[#ff3366]"
