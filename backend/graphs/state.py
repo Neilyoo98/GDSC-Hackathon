@@ -53,6 +53,13 @@ class AUBIIssueState(TypedDict):
     fixed_file_content: Optional[str]
     fix_explanation: Optional[str]
 
+    # Verification output
+    tests_passed: Optional[bool]
+    test_output: Optional[str]
+
+    # Human approval output
+    approval_status: Optional[bool]
+
     # PR pusher output
     pr_url: Optional[str]
     branch_name: Optional[str]
