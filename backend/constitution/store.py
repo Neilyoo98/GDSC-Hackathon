@@ -76,7 +76,10 @@ def _ensure_payload_indexes(name: str) -> None:
     from qdrant_client.models import PayloadSchemaType
 
     client = _get_client()
+    existing = set((getattr(client.get_collection(name), "payload_schema", None) or {}).keys())
     for field_name in FILTER_INDEX_FIELDS:
+        if field_name in existing:
+            continue
         try:
             client.create_payload_index(
                 collection_name=name,
