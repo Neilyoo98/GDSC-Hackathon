@@ -30,6 +30,10 @@ export const api = {
     }));
   },
 
+  async deleteAgent(id: string): Promise<void> {
+    await fetchJson(`${BASE}/agents/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+
   async pollGitHub(): Promise<GitHubPollResult> {
     return fetchJson<GitHubPollResult>(`${BASE}/github/poll`);
   },

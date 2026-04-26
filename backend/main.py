@@ -375,6 +375,18 @@ async def get_agent(agent_id: str):
     return agent
 
 
+@app.delete("/agents/{agent_id}")
+async def delete_agent(agent_id: str):
+    """Delete an AUBI coworker profile and its persisted memory."""
+    live_constitution = _get_constitution_from_store(agent_id)
+    if not live_constitution and agent_id not in _agents:
+        raise HTTPException(status_code=404, detail=f"No coworker found for agent {agent_id}")
+
+    get_store().delete_user(agent_id, _tenant_id())
+    _agents.pop(agent_id, None)
+    return {"deleted": True, "agent_id": agent_id}
+
+
 @app.post("/agents/{agent_id}/query")
 async def query_agent(agent_id: str, req: QueryAgentRequest):
     """Ask an agent what context it has relevant to an incident."""
@@ -676,7 +688,7 @@ async def stream_incident(
                     for msg in (output.get("agent_messages") or []):
                         yield f"data: {json.dumps({'event': 'agent_message', 'data': msg})}\n\n"
 
-                    # Routing evidence — "Why Alice?" panel
+                    # Routing evidence for the selected coworker panel.
                     for ev in (output.get("routing_evidence") or []):
                         yield f"data: {json.dumps({'event': 'routing_evidence', 'data': ev})}\n\n"
 

@@ -2,7 +2,7 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { coworkerName, humanSourceLabel } from "@/lib/agents";
 import type { Agent, ConstitutionCategory } from "@/lib/types";
 
@@ -17,12 +17,40 @@ const CATEGORIES: { key: ConstitutionCategory; label: string; color: string }[] 
 interface Props {
   agent: Agent | null;
   onClose: () => void;
+  onDelete?: (agent: Agent) => Promise<void>;
 }
 
-export function DossierPanel({ agent, onClose }: Props) {
+export function DossierPanel({ agent, onClose, onDelete }: Props) {
   const [tab, setTab] = useState<ConstitutionCategory>("code_ownership");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const facts = agent?.constitution_facts.filter((f) => f.category === tab) ?? [];
+
+  useEffect(() => {
+    setConfirmDelete(false);
+    setDeleting(false);
+    setDeleteError(null);
+  }, [agent?.id]);
+
+  async function handleDelete() {
+    if (!agent || !onDelete || deleting) return;
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      setDeleteError(null);
+      return;
+    }
+
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await onDelete(agent);
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Failed to delete coworker");
+      setDeleting(false);
+    }
+  }
 
   return (
     <AnimatePresence>
@@ -134,9 +162,38 @@ export function DossierPanel({ agent, onClose }: Props) {
 
           {/* Footer */}
           <div className="p-3 border-t border-[#1e2d45]">
-            <p className="font-mono text-[9px] text-[#2a3f5f]">
-              CONSTITUTION · {agent.constitution_facts.length} FACTS INDEXED
-            </p>
+            <div className="flex items-center justify-between gap-3">
+              <p className="font-mono text-[9px] text-[#2a3f5f]">
+                CONSTITUTION · {agent.constitution_facts.length} FACTS INDEXED
+              </p>
+              {onDelete && (
+                <button
+                  type="button"
+                  onClick={() => void handleDelete()}
+                  disabled={deleting}
+                  className={[
+                    "shrink-0 rounded border px-2 py-1 font-mono text-[9px] uppercase tracking-[1.5px] transition-colors disabled:opacity-50",
+                    confirmDelete
+                      ? "border-[#ff3366] bg-[#ff3366]/10 text-[#ff7794]"
+                      : "border-[#1e2d45] text-[#4a6080] hover:border-[#ff3366]/60 hover:text-[#ff7794]",
+                  ].join(" ")}
+                >
+                  {deleting ? "DELETING..." : confirmDelete ? "CONFIRM DELETE" : "DELETE"}
+                </button>
+              )}
+            </div>
+            {confirmDelete && !deleting && (
+              <div className="mt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(false)}
+                  className="font-mono text-[9px] uppercase tracking-[1.5px] text-[#4a6080] hover:text-[#8aa0c0]"
+                >
+                  CANCEL
+                </button>
+              </div>
+            )}
+            {deleteError && <p className="mt-2 font-mono text-[9px] text-[#ff7794]">{deleteError}</p>}
           </div>
         </motion.div>
       )}

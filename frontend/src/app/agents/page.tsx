@@ -158,6 +158,12 @@ export default function AgentsPage() {
     }
   }
 
+  async function handleDelete(agent: Agent) {
+    await api.deleteAgent(agent.id);
+    setAgents((prev) => prev.filter((item) => item.id !== agent.id));
+    setSelectedId(null);
+  }
+
   return (
     <div className="flex h-[calc(100vh-52px)]">
       {/* Main area */}
@@ -240,7 +246,7 @@ export default function AgentsPage() {
 
       {/* Dossier panel */}
       <div className={["flex-shrink-0 transition-all duration-300 overflow-hidden", selectedAgent ? "w-[360px]" : "w-0"].join(" ")}>
-        <DossierPanel agent={selectedAgent} onClose={() => setSelectedId(null)} />
+        <DossierPanel agent={selectedAgent} onClose={() => setSelectedId(null)} onDelete={handleDelete} />
       </div>
 
       {/* Register coworker modal */}
@@ -261,7 +267,7 @@ export default function AgentsPage() {
               </div>
               <form onSubmit={handleCreate} className="p-5 space-y-4">
                 {[
-                  { key: "github_username", label: "GITHUB USERNAME *", placeholder: "e.g. tidwall" },
+                  { key: "github_username", label: "GITHUB USERNAME *", placeholder: "GitHub username" },
                   { key: "name", label: "HUMAN SOURCE NAME", placeholder: "optional" },
                   { key: "role", label: "COWORKER ROLE", placeholder: "e.g. Core Infrastructure" },
                 ].map(({ key, label, placeholder }) => (
