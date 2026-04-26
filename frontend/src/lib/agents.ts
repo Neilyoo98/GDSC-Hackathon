@@ -33,3 +33,30 @@ export function collaborationBlurb(agent: Agent): string {
 export function shortRole(role: string): string {
   return role.length > 28 ? `${role.slice(0, 25)}...` : role;
 }
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function numberValue(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+export function normalizeAgent(agent: Agent): Agent {
+  const summary = agent.github_data_summary ?? {};
+
+  return {
+    ...agent,
+    constitution_facts: Array.isArray(agent.constitution_facts) ? agent.constitution_facts : [],
+    github_data_summary: {
+      commit_count: numberValue(summary.commit_count),
+      pr_count: numberValue(summary.pr_count),
+      top_files: stringArray(summary.top_files),
+      languages: stringArray(summary.languages)
+    }
+  };
+}
+
+export function normalizeAgents(agents: Agent[]): Agent[] {
+  return Array.isArray(agents) ? agents.map(normalizeAgent) : [];
+}
