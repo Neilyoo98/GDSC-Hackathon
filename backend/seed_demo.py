@@ -74,6 +74,7 @@ def seed():
     store = ConstitutionStore()
 
     for agent in DEMO_AGENTS:
+        store.delete_user(agent["id"], TENANT)
         count = store.upsert_facts(agent["id"], TENANT, agent["facts"])
         print(f"  ✓ {agent['name']} ({agent['id']}) — {count} facts stored")
 
