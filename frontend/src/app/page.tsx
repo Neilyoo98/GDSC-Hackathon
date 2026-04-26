@@ -1,12 +1,6 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
-import { Radar, IconContainer } from "@/components/ui/radar-effect";
-import { HiDocumentReport, HiDocumentText } from "react-icons/hi";
-import { HiMiniDocumentArrowUp } from "react-icons/hi2";
-import { AiFillDollarCircle } from "react-icons/ai";
-import { BiSolidReport } from "react-icons/bi";
-import { BsClipboardDataFill } from "react-icons/bs";
-import { RiFilePaper2Fill } from "react-icons/ri";
+import { PaperShaderBackground } from "@/components/ui/background-paper-shaders";
 
 const steps = [
   {
@@ -182,67 +176,6 @@ function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) 
   );
 }
 
-function RadarConstellation() {
-  return (
-    <div className="pointer-events-none absolute left-1/2 top-12 z-0 flex h-[640px] w-full max-w-5xl -translate-x-1/2 flex-col items-center justify-center space-y-4 overflow-hidden px-4 opacity-75 [mask-image:linear-gradient(to_bottom,transparent_0%,black_16%,black_76%,transparent_100%)]">
-      <div className="absolute inset-x-10 top-28 h-px bg-gradient-to-r from-transparent via-[#39ff14] to-transparent opacity-35" />
-      <div className="absolute inset-y-16 left-1/2 w-px -translate-x-1/2 bg-gradient-to-b from-transparent via-[#e8e4dc] to-transparent opacity-15" />
-      <div className="mx-auto w-full max-w-3xl">
-        <div className="flex w-full items-center justify-center space-x-10 md:justify-between md:space-x-0">
-          <IconContainer
-            text="Issue Reader"
-            delay={0.2}
-            icon={<HiDocumentText className="h-8 w-8 text-[#39ff14]" />}
-          />
-          <IconContainer
-            delay={0.4}
-            text="Ownership"
-            icon={<AiFillDollarCircle className="h-8 w-8 text-[#39ff14]" />}
-          />
-          <IconContainer
-            text="Agent Query"
-            delay={0.3}
-            icon={<BsClipboardDataFill className="h-8 w-8 text-[#39ff14]" />}
-          />
-        </div>
-      </div>
-
-      <div className="mx-auto w-full max-w-md">
-        <div className="flex w-full items-center justify-center space-x-10 md:justify-between md:space-x-0">
-          <IconContainer
-            text="Fix Generator"
-            delay={0.5}
-            icon={<BiSolidReport className="h-8 w-8 text-[#39ff14]" />}
-          />
-          <IconContainer
-            text="Memory Store"
-            delay={0.8}
-            icon={<HiMiniDocumentArrowUp className="h-8 w-8 text-[#39ff14]" />}
-          />
-        </div>
-      </div>
-
-      <div className="mx-auto w-full max-w-3xl">
-        <div className="flex w-full items-center justify-center space-x-10 md:justify-between md:space-x-0">
-          <IconContainer
-            delay={0.6}
-            text="GitHub PR"
-            icon={<HiDocumentReport className="h-8 w-8 text-[#39ff14]" />}
-          />
-          <IconContainer
-            delay={0.7}
-            text="SSE Stream"
-            icon={<RiFilePaper2Fill className="h-8 w-8 text-[#39ff14]" />}
-          />
-        </div>
-      </div>
-
-      <Radar className="absolute bottom-8 scale-125 md:scale-150" />
-      <div className="absolute bottom-20 z-[41] h-px w-full bg-gradient-to-r from-transparent via-[#39ff14] to-transparent opacity-45" />
-    </div>
-  );
-}
-
 export default function Home() {
   return (
     <div
@@ -288,7 +221,7 @@ export default function Home() {
         }
       ` }} />
 
-      <RadarConstellation />
+      <PaperShaderBackground className="z-0 opacity-90" />
 
       <section className="relative z-10 px-6 pb-28 pt-24 text-center md:px-10">
         <div className="landing-fade mx-auto inline-flex items-center gap-3 rounded-full border border-[#e8e4dc33] px-4 py-2" style={{ animationDelay: "0s" }}>
