@@ -13,6 +13,7 @@ import difflib
 import json
 import logging
 import os
+import re
 import time
 from typing import Any
 
@@ -86,6 +87,84 @@ def _flatten_constitution(grouped: dict[str, Any]) -> list[dict[str, Any]]:
     return facts
 
 
+SOURCE_EXTENSIONS = {
+    ".go", ".py", ".js", ".jsx", ".ts", ".tsx", ".java", ".rb", ".rs", ".php",
+    ".cs", ".cpp", ".c", ".h", ".hpp", ".swift", ".kt", ".kts", ".sql", ".sh",
+    ".yaml", ".yml", ".json", ".toml", ".md",
+}
+
+
+def _source_repo_files(paths: list[str]) -> list[str]:
+    """Keep files useful for issue-to-code grounding."""
+    useful: list[str] = []
+    for path in paths:
+        name = os.path.basename(path)
+        if name in {"go.mod", "package.json", "pyproject.toml", "requirements.txt"}:
+            useful.append(path)
+            continue
+        _, ext = os.path.splitext(path)
+        if ext.lower() in SOURCE_EXTENSIONS and not path.startswith((".git/", ".next/", "node_modules/")):
+            useful.append(path)
+    return useful
+
+
+def _rank_issue_paths(paths: list[str], title: str, body: str, limit: int = 3) -> list[str]:
+    """Deterministic fallback when the model chooses paths that do not exist."""
+    text = f"{title}\n{body}".lower()
+    issue_terms = {
+        term
+        for term in re.split(r"[^a-z0-9_]+", text)
+        if len(term) >= 3
+    }
+    ranked: list[tuple[int, str]] = []
+
+    for path in paths:
+        path_lower = path.lower()
+        basename = os.path.basename(path_lower)
+        stem, _ext = os.path.splitext(basename)
+        parts = [part for part in re.split(r"[^a-z0-9_]+", path_lower) if part]
+
+        score = 0
+        if path_lower in text:
+            score += 200
+        if basename and basename in text:
+            score += 120
+        if stem and stem in text:
+            score += 80
+        score += sum(12 for part in parts if part in issue_terms)
+
+        if "auth" in text and "auth" in parts:
+            score += 80
+        if "token" in text and ("token" in parts or "token" in stem):
+            score += 80
+        if "401" in text and ("auth" in parts or "token" in parts or "token" in stem):
+            score += 40
+        if "concurrent" in text and path_lower.endswith(".go"):
+            score += 10
+
+        if score > 0:
+            ranked.append((score, path))
+
+    ranked.sort(key=lambda item: (-item[0], item[1]))
+    return [path for _score, path in ranked[:limit]]
+
+
+def _validated_affected_files(
+    *,
+    selected: Any,
+    repo_files: list[str],
+    title: str,
+    body: str,
+) -> tuple[list[str], list[str]]:
+    available = set(repo_files)
+    requested = [path for path in selected if isinstance(path, str)] if isinstance(selected, list) else []
+    valid = [path for path in requested if path in available]
+    rejected = [path for path in requested if path not in available]
+    if valid:
+        return valid, rejected
+    return _rank_issue_paths(repo_files, title, body), rejected
+
+
 # ---------------------------------------------------------------------------
 # Node 1: issue_reader
 # ---------------------------------------------------------------------------
@@ -93,6 +172,7 @@ def _flatten_constitution(grouped: dict[str, Any]) -> list[dict[str, Any]]:
 async def issue_reader(state: AUBIIssueState) -> dict[str, Any]:
     """Read GitHub issue or use raw incident text. Extract affected files."""
     log = []
+    repo_files: list[str] = []
 
     # If we have an issue URL, fetch from GitHub
     if state.get("issue_url"):
@@ -123,17 +203,44 @@ async def issue_reader(state: AUBIIssueState) -> dict[str, Any]:
         }
         log.append(f"📋 Incident: {title}")
 
+    try:
+        from ingestion.github_issue import list_repo_files
+        repo_files = _source_repo_files(list_repo_files(issue_fields["repo_name"]))
+        if repo_files:
+            log.append(f"🗂️ Indexed {len(repo_files)} repo file path(s)")
+    except Exception as e:
+        logger.warning("Could not list repo files for issue grounding: %s", e)
+
+    repo_file_context = "\n".join(f"- {path}" for path in repo_files[:250]) or "(repo file list unavailable)"
     response = await _get_gpt55().ainvoke([
         SystemMessage(content=(
             "Extract from this issue report:\n"
             '{"affected_service": "...", "affected_files": ["path/to/file"], '
             '"error_type": "...", "urgency": "P1|P2|P3"}\n'
-            "Return JSON only. affected_files must be real repository paths likely relevant to the bug."
+            "Return JSON only. affected_files must be selected exactly from the repository file list. "
+            "If uncertain, choose the closest existing source file from the list."
         )),
-        HumanMessage(content=f"Title: {title}\n\n{body}"),
+        HumanMessage(content=(
+            f"Title: {title}\n\n{body}\n\n"
+            f"Repository files:\n{repo_file_context}"
+        )),
     ])
     data = _json(response.content)
-    if not isinstance(data, dict) or not data.get("affected_files"):
+    if not isinstance(data, dict):
+        data = {}
+
+    if repo_files:
+        affected_files, rejected_files = _validated_affected_files(
+            selected=data.get("affected_files"),
+            repo_files=repo_files,
+            title=title,
+            body=body,
+        )
+        if rejected_files:
+            log.append(f"⚠️ Ignored non-existent path(s): {', '.join(rejected_files)}")
+        data["affected_files"] = affected_files
+
+    if not data.get("affected_files"):
         raise ValueError("Issue analysis did not identify any affected repository files")
 
     log.append(
