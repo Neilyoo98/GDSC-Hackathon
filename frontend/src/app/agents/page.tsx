@@ -12,8 +12,8 @@ import type { Agent } from "@/lib/types";
 
 // Pick an icon based on an agent's top language/role
 function agentIcon(agent: Agent) {
-  const langs = agent.github_data_summary.languages.join(" ").toLowerCase();
-  const role  = agent.role.toLowerCase();
+  const langs = (agent.github_data_summary?.languages ?? []).join(" ").toLowerCase();
+  const role  = (agent.role ?? "").toLowerCase();
   if (langs.includes("go") || role.includes("backend"))  return Code;
   if (langs.includes("typescript") || langs.includes("react")) return Globe;
   if (role.includes("infra") || role.includes("devops")) return Cpu;
@@ -24,8 +24,8 @@ function agentIcon(agent: Agent) {
 // Agents that share files are "related"
 function shareFiles(a: Agent, b: Agent) {
   const prefix = (f: string) => f.split("/")[0] + "/";
-  const aSet = new Set(a.github_data_summary.top_files.map(prefix));
-  return b.github_data_summary.top_files.some((f) => aSet.has(prefix(f)));
+  const aSet = new Set((a.github_data_summary?.top_files ?? []).map(prefix));
+  return (b.github_data_summary?.top_files ?? []).some((f) => aSet.has(prefix(f)));
 }
 
 export default function AgentsPage() {
@@ -45,11 +45,12 @@ export default function AgentsPage() {
       if (j !== i && shareFiles(agent, other)) relIds.push(j + 1);
     });
 
-    const factCount  = agent.constitution_facts.length;
+    const facts      = agent.constitution_facts ?? [];
+    const factCount  = facts.length;
     const energy     = Math.min(100, Math.round((factCount / 8) * 100));
-    const topExpert  = agent.constitution_facts.find(f => f.category === "expertise")?.object ?? "";
-    const focus      = agent.constitution_facts.find(f => f.category === "current_focus")?.object ?? agent.role;
-    const knownIssue = agent.constitution_facts.find(f => f.category === "known_issues")?.object;
+    const topExpert  = facts.find(f => f.category === "expertise")?.object ?? "";
+    const focus      = facts.find(f => f.category === "current_focus")?.object ?? agent.role;
+    const knownIssue = facts.find(f => f.category === "known_issues")?.object;
 
     const content = [
       topExpert && `Expertise: ${topExpert}.`,
@@ -60,7 +61,7 @@ export default function AgentsPage() {
     const status: "completed" | "in-progress" | "pending" =
       factCount >= 6 ? "completed" : factCount >= 3 ? "in-progress" : "pending";
 
-    const constitutionCounts = agent.constitution_facts.reduce<Record<string, number>>((acc, f) => {
+    const constitutionCounts = facts.reduce<Record<string, number>>((acc, f) => {
       acc[f.category] = (acc[f.category] ?? 0) + 1;
       return acc;
     }, {});
