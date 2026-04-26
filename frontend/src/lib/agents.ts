@@ -94,6 +94,42 @@ function factsFromConstitution(value: unknown): ConstitutionFact[] {
   return Object.values(value).flatMap(normalizeFacts);
 }
 
+function summaryFromFacts(facts: ConstitutionFact[]): Agent["github_data_summary"] {
+  const metadata = facts.find((fact) => fact.category === "profile_metadata" && fact.predicate === "github_data_summary");
+  if (!metadata) {
+    return {
+      commit_count: 0,
+      pr_count: 0,
+      top_files: [],
+      languages: [],
+      repos_considered: [],
+      target_repos: [],
+    };
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(metadata.object);
+    const record = isRecord(parsed) ? parsed : {};
+    return {
+      commit_count: numberValue(record.commit_count),
+      pr_count: numberValue(record.pr_count),
+      top_files: stringArray(record.top_files),
+      languages: stringArray(record.languages),
+      repos_considered: stringArray(record.repos_considered),
+      target_repos: stringArray(record.target_repos),
+    };
+  } catch {
+    return {
+      commit_count: 0,
+      pr_count: 0,
+      top_files: [],
+      languages: [],
+      repos_considered: [],
+      target_repos: [],
+    };
+  }
+}
+
 function identityKey(agent: Agent): string {
   const subject = agent.constitution_facts?.find((fact) => fact.subject)?.subject;
   const value = agent.github_username || agent.name || subject || agent.id;
@@ -162,6 +198,8 @@ export function normalizeAgent(agent: unknown): Agent {
   const summary = isRecord(record.github_data_summary) ? record.github_data_summary : {};
   const constitutionFacts = normalizeFacts(record.constitution_facts);
   const fallbackFacts = factsFromConstitution(record.constitution);
+  const facts = constitutionFacts.length > 0 ? constitutionFacts : fallbackFacts;
+  const inferredSummary = summaryFromFacts(facts);
   const githubUsername = stringValue(record.github_username, stringValue(record.name, "unknown"));
   const name = stringValue(record.name, githubUsername);
   const role = stringValue(record.role, "Software Engineer");
@@ -171,15 +209,15 @@ export function normalizeAgent(agent: unknown): Agent {
     github_username: githubUsername,
     name,
     role,
-    constitution_facts: constitutionFacts.length > 0 ? constitutionFacts : fallbackFacts,
+    constitution_facts: facts,
     constitution: isRecord(record.constitution) ? record.constitution as Agent["constitution"] : undefined,
     github_data_summary: {
-      commit_count: numberValue(summary.commit_count),
-      pr_count: numberValue(summary.pr_count),
-      top_files: stringArray(summary.top_files),
-      languages: stringArray(summary.languages),
-      repos_considered: stringArray(summary.repos_considered),
-      target_repos: stringArray(summary.target_repos),
+      commit_count: numberValue(summary.commit_count) || inferredSummary.commit_count,
+      pr_count: numberValue(summary.pr_count) || inferredSummary.pr_count,
+      top_files: stringArray(summary.top_files).length ? stringArray(summary.top_files) : inferredSummary.top_files,
+      languages: stringArray(summary.languages).length ? stringArray(summary.languages) : inferredSummary.languages,
+      repos_considered: stringArray(summary.repos_considered).length ? stringArray(summary.repos_considered) : inferredSummary.repos_considered,
+      target_repos: stringArray(summary.target_repos).length ? stringArray(summary.target_repos) : inferredSummary.target_repos,
     }
   };
 }

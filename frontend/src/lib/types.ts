@@ -4,6 +4,7 @@ export type ConstitutionCategory =
   | "collaboration"
   | "current_focus"
   | "known_issues"
+  | "profile_metadata"
   | "episodes";
 
 export interface ConstitutionFact {

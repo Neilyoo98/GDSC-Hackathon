@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { coworkerName } from "@/lib/agents";
-import type { Agent, ConstitutionCategory } from "@/lib/types";
+import type { Agent } from "@/lib/types";
 
 const RING_R = 58;
 const CIRC = 2 * Math.PI * RING_R;
@@ -10,13 +10,14 @@ const SEG_DEG = (360 - 5 * 4) / 5;
 const SEG_UNITS = (SEG_DEG / 360) * CIRC;
 const MAX_FACTS = 3;
 
-const CATEGORY_META: Record<ConstitutionCategory, { color: string; startDeg: number }> = {
+const RING_CATEGORIES = ["code_ownership", "expertise", "collaboration", "current_focus", "known_issues"] as const;
+
+const CATEGORY_META: Record<(typeof RING_CATEGORIES)[number], { color: string; startDeg: number }> = {
   code_ownership: { color: "#3b82f6", startDeg: -90 },
   expertise:      { color: "#f59e0b", startDeg: -90 + 72 },
   collaboration:  { color: "#8b5cf6", startDeg: -90 + 144 },
   current_focus:  { color: "#00f0ff", startDeg: -90 + 216 },
   known_issues:   { color: "#ff3366", startDeg: -90 + 288 },
-  episodes:       { color: "#10b981", startDeg: -90 + 288 },
 };
 
 function hexPoints(size: number): string {
@@ -73,7 +74,7 @@ export function HexNode({
   const ringR = compact ? 28 : RING_R;
   const avatarSize = compact ? 18 : 38;
 
-  const categories = Object.keys(CATEGORY_META).slice(0, 5) as ConstitutionCategory[];
+  const categories = RING_CATEGORIES;
   const displayName = compactLabel(coworkerName(agent), 18);
   const displayRole = roleSummary(agent);
 

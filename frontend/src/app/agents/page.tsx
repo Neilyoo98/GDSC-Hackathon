@@ -18,22 +18,134 @@ const CAT_COLORS: Record<string, string> = {
 };
 
 // ── Mesh connection logic ──────────────────────────────────────────────────
-function agentTokens(agent: Agent): Set<string> {
-  const out = new Set<string>();
-  for (const fact of agent.constitution_facts ?? []) {
-    if (["code_ownership","current_focus","known_issues"].includes(fact.category)) {
-      fact.object.toLowerCase().split(/[\s/,;]+/).forEach((t) => { if (t.length > 2) out.add(t); });
+type MeshConnection = {
+  a: number;
+  b: number;
+  score: number;
+  label: string;
+  evidence: string[];
+  category: keyof typeof CAT_COLORS;
+};
+
+const STOP_WORDS = new Set([
+  "and", "the", "with", "from", "this", "that", "there", "their", "repo", "repos",
+  "directory", "directories", "file", "files", "active", "recent", "contributions",
+  "significant", "working", "focus", "based", "provided", "activity", "data",
+]);
+
+function topDirectory(path: string): string {
+  const clean = path.trim().replace(/^\/+/, "");
+  if (!clean) return "";
+  if (!clean.includes("/")) return clean.toLowerCase();
+  return `${clean.split("/")[0].toLowerCase()}/`;
+}
+
+function unique(values: string[]): string[] {
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+}
+
+function overlap(left: string[], right: string[]): string[] {
+  const rightSet = new Set(right.map((value) => value.toLowerCase()));
+  return unique(left.filter((value) => rightSet.has(value.toLowerCase())));
+}
+
+function factObjects(agent: Agent, category: string): string[] {
+  return (agent.constitution_facts ?? [])
+    .filter((fact) => fact.category === category)
+    .map((fact) => fact.object)
+    .filter(Boolean);
+}
+
+function ownershipPaths(agent: Agent): string[] {
+  const fromFacts = factObjects(agent, "code_ownership").flatMap((object) => {
+    const explicitPaths = object.match(/[A-Za-z0-9_.-]+\/[A-Za-z0-9_./-]*/g) ?? [];
+    return explicitPaths.map(topDirectory);
+  });
+  const fromSummary = (agent.github_data_summary?.top_files ?? []).map(topDirectory);
+  return unique([...fromFacts, ...fromSummary]).filter((value) => value.length > 1);
+}
+
+function languages(agent: Agent): string[] {
+  return unique(agent.github_data_summary?.languages ?? []).slice(0, 8);
+}
+
+function repos(agent: Agent): string[] {
+  return unique([...(agent.github_data_summary?.target_repos ?? []), ...(agent.github_data_summary?.repos_considered ?? [])]);
+}
+
+function tokensFromFacts(agent: Agent, categories: string[]): string[] {
+  return unique(
+    categories
+      .flatMap((category) => factObjects(agent, category))
+      .flatMap((object) => object.toLowerCase().split(/[^a-z0-9_.-]+/))
+      .filter((token) => token.length > 3 && !STOP_WORDS.has(token))
+  );
+}
+
+function readableList(values: string[], max = 2): string {
+  const shown = values.slice(0, max);
+  if (shown.length === 0) return "";
+  return shown.join(", ");
+}
+
+function shortOwner(agent: Agent): string {
+  return agent.github_username || agent.name || agent.id;
+}
+
+function primarySignal(connection: MeshConnection): string {
+  if (connection.category === "code_ownership") return "Shared code area";
+  if (connection.category === "current_focus") return "Related focus";
+  if (connection.category === "expertise") return "Shared expertise";
+  return "Shared repo context";
+}
+
+function buildConnection(a: Agent, b: Agent, ai: number, bi: number): MeshConnection | null {
+  const sharedDirs = overlap(ownershipPaths(a), ownershipPaths(b));
+  const sharedLanguages = overlap(languages(a), languages(b));
+  const sharedRepos = overlap(repos(a), repos(b));
+  const sharedFocus = overlap(tokensFromFacts(a, ["current_focus", "known_issues"]), tokensFromFacts(b, ["current_focus", "known_issues"]));
+
+  const evidence: string[] = [];
+  if (sharedDirs.length) evidence.push(`both touch ${readableList(sharedDirs, 3)}`);
+  if (sharedFocus.length) evidence.push(`related focus: ${readableList(sharedFocus, 3)}`);
+  if (sharedLanguages.length) evidence.push(`shared stack: ${readableList(sharedLanguages, 3)}`);
+  if (sharedRepos.length) evidence.push(`same repo context: ${readableList(sharedRepos, 2)}`);
+
+  const score =
+    sharedDirs.length * 5 +
+    sharedFocus.length * 3 +
+    sharedLanguages.length * 1.25 +
+    sharedRepos.length;
+
+  if (score < 3.5 || evidence.length === 0) return null;
+
+  const category: MeshConnection["category"] = sharedDirs.length
+    ? "code_ownership"
+    : sharedFocus.length
+      ? "current_focus"
+      : sharedLanguages.length
+        ? "expertise"
+        : "collaboration";
+
+  return {
+    a: ai,
+    b: bi,
+    score,
+    label: sharedDirs[0] ?? sharedFocus[0] ?? sharedLanguages[0] ?? "repo",
+    evidence,
+    category,
+  };
+}
+
+function meshConnections(agents: Agent[]): MeshConnection[] {
+  const links: MeshConnection[] = [];
+  for (let i = 0; i < agents.length; i++) {
+    for (let j = i + 1; j < agents.length; j++) {
+      const link = buildConnection(agents[i], agents[j], i, j);
+      if (link) links.push(link);
     }
   }
-  for (const f of agent.github_data_summary?.top_files ?? []) {
-    f.toLowerCase().split("/").forEach((t) => { if (t.length > 2) out.add(t); });
-  }
-  return out;
-}
-function connected(a: Agent, b: Agent) {
-  const ta = agentTokens(a);
-  if (!ta.size) return false;
-  return Array.from(agentTokens(b)).some((t) => ta.has(t));
+  return links.sort((left, right) => right.score - left.score).slice(0, Math.max(agents.length, 4));
 }
 
 // ── SVG arc helper ─────────────────────────────────────────────────────────
@@ -48,9 +160,10 @@ function arcPath(cx: number, cy: number, r: number, startDeg: number, endDeg: nu
 
 // ── Mesh graph ─────────────────────────────────────────────────────────────
 function MeshGraph({
-  agents, selectedId, onSelect,
+  agents, connections, selectedId, onSelect,
 }: {
   agents: Agent[];
+  connections: MeshConnection[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
 }) {
@@ -75,12 +188,6 @@ function MeshGraph({
     const angle  = ((i / agents.length) * 360 - 90) * (Math.PI / 180);
     return { x: CX + RADIUS * Math.cos(angle), y: CY + RADIUS * Math.sin(angle) };
   });
-
-  // Build connection pairs
-  const pairs: [number, number][] = [];
-  for (let i = 0; i < agents.length; i++)
-    for (let j = i + 1; j < agents.length; j++)
-      if (connected(agents[i], agents[j])) pairs.push([i, j]);
 
   // Constitution arc segments per agent
   const CATS = Object.keys(CAT_COLORS);
@@ -122,28 +229,56 @@ function MeshGraph({
         strokeDasharray="4 12"
       />
 
-      {/* Connection lines */}
-      {pairs.map(([i, j]) => {
-        const a = positions[i]; const b = positions[j];
-        const isActive = selectedId === agents[i].id || selectedId === agents[j].id;
+      {/* Evidence-backed connection lines */}
+      {connections.map((connection) => {
+        const a = positions[connection.a]; const b = positions[connection.b];
+        if (!a || !b) return null;
+        const isActive = selectedId === agents[connection.a]?.id || selectedId === agents[connection.b]?.id;
+        const color = CAT_COLORS[connection.category] ?? "#39ff14";
+        const mx = (a.x + b.x) / 2;
+        const my = (a.y + b.y) / 2;
         return (
-          <g key={`${i}-${j}`}>
+          <g key={`${agents[connection.a]?.id}-${agents[connection.b]?.id}`}>
             {/* Glow */}
             <line
               x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-              stroke="#39ff14"
+              stroke={color}
               strokeWidth={isActive ? 4 : 2}
               strokeOpacity={isActive ? 0.25 : 0.08}
             />
             {/* Animated dashed line */}
             <line
               x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-              stroke="#39ff14"
+              stroke={color}
               strokeWidth={isActive ? 1.5 : 0.8}
               strokeOpacity={isActive ? 0.9 : 0.4}
               strokeDasharray="6 14"
               strokeDashoffset={-dash}
             />
+            <g opacity={isActive || !selectedId ? 0.92 : 0.35}>
+              <rect
+                x={mx - 34}
+                y={my - 9}
+                width={68}
+                height={18}
+                rx={2}
+                fill="#080808"
+                stroke={color}
+                strokeOpacity={0.2}
+              />
+              <text
+                x={mx}
+                y={my + 3}
+                textAnchor="middle"
+                fill={color}
+                fontSize={7}
+                fontFamily="'Space Mono', monospace"
+                letterSpacing="0.08em"
+                style={{ textTransform: "uppercase", userSelect: "none" }}
+              >
+                {connection.label.slice(0, 12)}
+              </text>
+            </g>
           </g>
         );
       })}
@@ -245,7 +380,7 @@ function MeshGraph({
               letterSpacing="0.1em"
               style={{ textTransform: "uppercase", userSelect: "none" }}
             >
-              {(agent.role ?? "").split(",")[0].split("·")[0].trim().slice(0, 20)}
+              {`${agent.github_data_summary?.commit_count ?? 0} commits · ${ownershipPaths(agent)[0] ?? "memory"}`.slice(0, 26)}
             </text>
           </g>
         );
@@ -272,6 +407,66 @@ function MeshGraph({
   );
 }
 
+function MeshEvidencePanel({ agents, connections }: { agents: Agent[]; connections: MeshConnection[] }) {
+  const totalFacts = agents.reduce((sum, agent) => sum + (agent.constitution_facts?.length ?? 0), 0);
+  const totalCommits = agents.reduce((sum, agent) => sum + (agent.github_data_summary?.commit_count ?? 0), 0);
+
+  return (
+    <div className="absolute right-6 top-20 z-10 w-[390px] border border-[#1f1f1f] bg-[#080808]/95 p-4 backdrop-blur">
+      <div className="mb-4 grid grid-cols-3 gap-2">
+        {[
+          ["facts", totalFacts],
+          ["commits", totalCommits],
+          ["links", connections.length],
+        ].map(([label, value]) => (
+          <div key={label} className="border border-[#1f1f1f] px-3 py-2">
+            <p className="font-mono text-sm text-[#e8e4dc]">{value}</p>
+            <p className="font-mono text-[8px] uppercase tracking-[2px] text-[#e8e4dc55]">{label}</p>
+          </div>
+        ))}
+      </div>
+
+      <p className="font-mono text-[8px] uppercase tracking-[3px] text-[#39ff14]">{"// what the mesh means"}</p>
+      <p className="mt-2 text-xs leading-relaxed text-[#e8e4dc99]">
+        Lines are not decorative. Each one is created from live constitution evidence: shared code areas,
+        related focus, shared stack, or the same target repo.
+      </p>
+
+      <div className="mt-4 space-y-2">
+        {connections.length === 0 ? (
+          <div className="border border-dashed border-[#1f1f1f] px-3 py-3 font-mono text-[10px] uppercase tracking-[2px] text-[#e8e4dc55]">
+            No strong coworker links found yet.
+          </div>
+        ) : (
+          connections.slice(0, 4).map((connection) => {
+            const left = agents[connection.a];
+            const right = agents[connection.b];
+            const color = CAT_COLORS[connection.category];
+            return (
+              <button
+                key={`${left?.id}-${right?.id}`}
+                className="block w-full border border-[#1f1f1f] bg-[#0d0d0d] px-3 py-2 text-left transition-colors hover:border-[#39ff1444]"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className="truncate font-mono text-[10px] uppercase tracking-[1.5px] text-[#e8e4dc]">
+                    {shortOwner(left)} <span className="text-[#e8e4dc44]">↔</span> {shortOwner(right)}
+                  </p>
+                  <span className="shrink-0 font-mono text-[8px] uppercase tracking-[1.5px]" style={{ color }}>
+                    {primarySignal(connection)}
+                  </span>
+                </div>
+                <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-[#e8e4dc88]">
+                  {connection.evidence.join(" · ")}
+                </p>
+              </button>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Page ───────────────────────────────────────────────────────────────────
 export default function AgentsPage() {
   const { agents, isLoading, setAgents } = useAgents();
@@ -283,14 +478,8 @@ export default function AgentsPage() {
 
   const agentList   = useMemo(() => (Array.isArray(agents) ? agents : []), [agents]);
   const selectedAgent = agentList.find((a) => a.id === selectedId) ?? null;
-
-  const connectionCount = useMemo(() => {
-    let n = 0;
-    for (let i = 0; i < agentList.length; i++)
-      for (let j = i + 1; j < agentList.length; j++)
-        if (connected(agentList[i], agentList[j])) n++;
-    return n;
-  }, [agentList]);
+  const connections = useMemo(() => meshConnections(agentList), [agentList]);
+  const connectionCount = connections.length;
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -362,8 +551,12 @@ export default function AgentsPage() {
           </div>
         ) : (
           <div className="absolute inset-0 flex items-center justify-center p-8">
-            <MeshGraph agents={agentList} selectedId={selectedId} onSelect={setSelectedId} />
+            <MeshGraph agents={agentList} connections={connections} selectedId={selectedId} onSelect={setSelectedId} />
           </div>
+        )}
+
+        {!isLoading && agentList.length > 0 && !selectedAgent && (
+          <MeshEvidencePanel agents={agentList} connections={connections} />
         )}
 
         {/* Register button */}
