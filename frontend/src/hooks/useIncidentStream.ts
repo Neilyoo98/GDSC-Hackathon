@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import type { WarRoomSnapshot } from "@/lib/warRoomState";
 import type {
   CoworkerContextExchange,
   IncidentResult,
@@ -195,6 +196,16 @@ export function useIncidentStream() {
     startedAtRef.current = 0;
   }, []);
 
+  const hydrate = useCallback((snapshot: WarRoomSnapshot) => {
+    sourceRef.current?.close();
+    sourceRef.current = null;
+    setEvents(snapshot.events);
+    setResult(snapshot.result);
+    setError(null);
+    setIsStreaming(false);
+    startedAtRef.current = 0;
+  }, []);
+
   const start = useCallback((issueUrl: string) => {
     reset();
     setIsStreaming(true);
@@ -257,5 +268,5 @@ export function useIncidentStream() {
     };
   }, []);
 
-  return { events, isStreaming, result, error, start, approve, reset, setResult };
+  return { events, isStreaming, result, error, start, approve, reset, setResult, hydrate };
 }

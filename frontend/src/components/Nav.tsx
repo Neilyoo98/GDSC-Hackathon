@@ -22,9 +22,9 @@ export function Nav() {
       <div className="flex gap-8">
         {[
           { href: "/team", label: "TEAM" },
-          { href: "/demo", label: "FLOW" },
           { href: "/agents", label: "COWORKERS" },
-          { href: "/incident", label: "INCIDENT" }
+          { href: "/demo", label: "FLOW" },
+          { href: "/incident", label: "WAR ROOM" }
         ].map(({ href, label }) => {
           const active = path.startsWith(href);
           return (

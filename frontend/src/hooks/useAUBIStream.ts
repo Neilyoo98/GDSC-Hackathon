@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AUBIEvent, AgentMessage } from "@/lib/types";
+import { saveWarRoomSnapshot, snapshotFromAUBIEvents } from "@/lib/warRoomState";
 
 const FALLBACK_MESSAGES: AgentMessage[] = [
   {
@@ -210,6 +211,11 @@ export function useAUBIStream(issueUrl: string | null) {
 
     return reset;
   }, [applyEvent, clearConnectionTimer, issueUrl, reset, startVisualReplay]);
+
+  useEffect(() => {
+    if (!issueUrl || isVisualReplay || events.length === 0) return;
+    saveWarRoomSnapshot(snapshotFromAUBIEvents(issueUrl, events));
+  }, [events, isVisualReplay, issueUrl]);
 
   return { events, agentMessages, nodeStatuses, isStreaming, isVisualReplay, error, reset };
 }
