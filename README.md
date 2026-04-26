@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:6366f1,100:8b5cf6&height=200&section=header&text=AUBI&fontSize=80&fontColor=ffffff&fontAlignY=38&desc=Autonomous%20Understanding%20%26%20Behaviour%20Inference&descAlignY=60&descSize=20&descColor=c4b5fd" width="100%"/>
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:6366f1,100:8b5cf6&height=220&section=header&text=AUBI&fontSize=90&fontColor=ffffff&fontAlignY=38&desc=Autonomous%20Understanding%20%26%20Behavior%20Inference&descAlignY=58&descSize=22&descColor=c4b5fd" width="100%"/>
 
 <br/>
 
@@ -8,9 +8,7 @@
 [![Next.js](https://img.shields.io/badge/Next.js-16-8b5cf6?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org)
 [![LangGraph](https://img.shields.io/badge/LangGraph-Orchestration-a78bfa?style=for-the-badge&logo=langchain&logoColor=white)](https://langchain.com)
 [![FastAPI](https://img.shields.io/badge/FastAPI-Backend-7c3aed?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![Qdrant](https://img.shields.io/badge/Qdrant-Vector%20Store-6d28d9?style=for-the-badge&logo=qdrant&logoColor=white)](https://qdrant.tech)
-
-<br/>
+[![Qdrant](https://img.shields.io/badge/Qdrant-Vector%20Memory-6d28d9?style=for-the-badge&logo=qdrant&logoColor=white)](https://qdrant.tech)
 
 [![Gemini](https://img.shields.io/badge/Gemini%202.0%20Flash-Constitution%20Builder-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://deepmind.google/gemini)
 [![Claude](https://img.shields.io/badge/Claude%20Haiku-Agent%20Queries-D97706?style=for-the-badge&logo=anthropic&logoColor=white)](https://anthropic.com)
@@ -18,226 +16,165 @@
 
 <br/>
 
-> **"Not another auto-coder — a context-aware teammate network."**
+### *AI that knows your team — not just your codebase.*
+
+**Autonomous Understanding & Behavior Inference**
 
 **GDSC Hackathon 2026 · University of Maryland · April 26**
 
-🏆 *Targeting: Best App for Developer Productivity · Most Creative · Best Use of Gemini*
-
-<br/>
+🏆 Best App for Developer Productivity &nbsp;·&nbsp; Most Creative &nbsp;·&nbsp; Best Use of Gemini
 
 </div>
 
 ---
 
-## What is AUBI?
+## The Problem
 
-AUBI is an **AI engineering coordinator** that learns every developer's ownership and tribal knowledge from GitHub.
+Every AI coding tool today — Copilot Workspace, OpenHands, SWE-agent — answers the same question: *"How do I fix this?"*
 
-When an issue drops, AUBI doesn't just write code — it figures out *which developer* owns the bug, *what that developer already knows* about it, and *how they prefer to collaborate*. It routes the issue to the right AI teammate, surfaces relevant context from team memory, proposes a verified fix, and opens a **human-approved** PR.
+None of them answer: *"Who on the team already knows why this is broken?"*
 
-```
-Copilot Workspace knows how to code.
-OpenHands knows how to open PRs.
-SWE-agent knows how to patch files.
+When a bug lands, the real bottleneck isn't writing the patch. It's finding the one developer who touched that code three months ago, knows about the race condition they never had time to fix, and understands the tradeoffs. That context lives in Slack threads, code comments, and developer memory — not in any tool.
 
-None of them know which developer owns the bug,
-or what that developer already knows about it.
-
-That's AUBI's moat.
-```
+**AUBI solves this.** It builds a persistent memory of every developer's expertise, ownership, and tribal knowledge — then routes bugs to the right AI agent, generates a verified fix with full context, and hands it to a human for one-click approval.
 
 ---
 
-## The 90-Second Demo
+## How It Works
 
-**Scenario:** A professor files a GitHub issue — *"auth 401 blocking student submissions"*. She doesn't know who to ping. AUBI figures it out.
+A professor opens a GitHub issue: *"Auth endpoint returning 401 — blocking student submissions."*
 
-| Scene | What you see |
-|---|---|
-| **Meet the Team** | Dashboard: 3 developer cards. Click Alice → full Context Constitution — ownership, expertise, collaboration style, known issues. *Built with Gemini structured output.* |
-| **Issue drops** | Prof files GitHub issue. Issue feed lights up. AUBI picks it up. |
-| **Agents talk** | Live comm feed: Orchestrator pings Alice's Aubi. Alice surfaces the race condition from her constitution. Bob flags his adjacent PR. Lines pulse on the mesh. |
-| **Why Alice?** | Routing panel: `auth/token.go → Alice Chen · owns auth/ (0.95) · known issue: race condition` |
-| **Fix ready** | Code diff: Go mutex fix, syntax highlighted. `✓ Ownership matched · ✓ Memory found · ✓ Patch generated · ⏸ Awaiting approval` |
-| **Human approves** | One click → real GitHub PR, written in Alice's style, Bob as reviewer, issue linked. |
-| **AUBI learned** | `Memory updated: Alice known issue → resolved in PR #2 · Episode stored` |
+AUBI takes it from there.
+
+**1 — Issue lands**
+AUBI reads the issue, identifies the affected files (`auth/token.go`), and kicks off the LangGraph pipeline.
+
+**2 — Ownership routing**
+Qdrant semantic search matches the file path against each developer's Context Constitution. Alice owns `auth/` with 0.95 confidence. Her constitution also flags a *known issue: token cache race condition under concurrent load.* AUBI routes to Alice's agent.
+
+**3 — Agents confer**
+Alice's Aubi surfaces the race condition context. Bob's Aubi flags that his recent PR touched adjacent middleware. The Orchestrator synthesizes both. Every message streams live to the frontend — judges see the agents actually reasoning together.
+
+**4 — Fix generated**
+GPT-5.5 reads the live file from GitHub and generates a Go mutex patch. The diff renders syntax-highlighted in the UI. A checklist confirms: ownership matched, memory found, patch generated, tests passed.
+
+**5 — Human approves**
+AUBI pauses. A human clicks **Approve Alice's PR**. A real GitHub PR appears — written in Alice's communication style, Bob listed as reviewer, issue linked.
+
+**6 — AUBI remembers**
+Alice's constitution is updated: the race condition is marked resolved. The episode is stored in Qdrant. Next time a similar issue lands, AUBI already knows.
+
+---
+
+## What Makes This Different
+
+| | Copilot Workspace | SWE-agent | **AUBI** |
+|---|---|---|---|
+| Generates code | ✅ | ✅ | ✅ |
+| Opens PRs automatically | ✅ | ✅ | ✅ |
+| Knows *who* owns the bug | ❌ | ❌ | ✅ |
+| Surfaces tribal knowledge | ❌ | ❌ | ✅ |
+| Learns from each fix | ❌ | ❌ | ✅ |
+| Human-in-the-loop approval | ❌ | ❌ | ✅ |
+| Writes PRs in developer's voice | ❌ | ❌ | ✅ |
+
+The differentiation is not codegen. **It's team memory + ownership routing + developer-specific context.**
+
+---
+
+## Context Constitution
+
+The heart of AUBI. Built by Gemini 2.0 Flash from a developer's GitHub history — commits, PRs, issues, review patterns — and stored as structured semantic facts in Qdrant.
+
+```
+Alice Chen — Context Constitution
+─────────────────────────────────────────────────────
+Code Ownership     auth/           confidence: 0.95
+                   billing/        confidence: 0.87
+
+Expertise          Go · distributed systems · OAuth2
+
+Current Focus      payment/auth retry refactor
+
+Known Issues       ⚠ race condition in TokenCache under concurrent load
+                   ⚠ billing retry loop not idempotent in edge cases
+
+Collaboration      direct communicator · prefers async review
+Style              writes detailed PR descriptions · tags reviewers early
+```
+
+Each fact has a confidence score. Known issues are highlighted in amber — this is what routes bugs to the right person even before the code is read.
 
 ---
 
 ## Architecture
 
 ```
-                   GitHub Issue
-                        │
-              ┌─────────▼──────────┐
-              │    AUBI Graph       │  LangGraph · 6 nodes
-              │                     │
-              │  issue_reader       │  Haiku: extract affected files
-              │       ↓             │
-              │  ownership_router   │  Qdrant: find agent owners
-              │       ↓             │
-              │  query_agents (║)   │  Haiku: parallel agent queries
-              │       ↓             │
-              │  code_reader        │  GitHub API: read live code
-              │       ↓             │
-              │  fix_generator      │  GPT-5.5: generate fix + diff
-              │       ↓             │
-              │  approval_gate  ⏸  │  LangGraph interrupt → frontend
-              │       ↓ (on approve)│
-              │  pr_pusher          │  GitHub API: push real PR
-              └─────────┬──────────┘
-                        │
-        ┌───────────────┼───────────────┐
-        ▼               ▼               ▼
- Alice's Aubi     Bob's Aubi      Carol's Aubi
- Haiku + const.   Haiku + const.  Haiku + const.
-        │               │
-        └───────────────┘
-          Qdrant memory store
-    (semantic_facts · episodes)
-
-Constitution builder:  Gemini 2.0 Flash
-SSE stream:            FastAPI → Next.js
-GitHub API:            Issues · Code · PRs
+  GitHub Issue
+       │
+  ┌────▼─────────────────────────────────┐
+  │            AUBI Graph                 │
+  │                                       │
+  │  issue_reader    ── Haiku             │  extract affected files + intent
+  │       ↓                               │
+  │  ownership_router ── Qdrant           │  semantic match → find owner agent
+  │       ↓                               │
+  │  query_agents ║  ── Haiku × N         │  parallel: each agent surfaces context
+  │       ↓                               │
+  │  code_reader    ── GitHub API         │  read live file contents
+  │       ↓                               │
+  │  fix_generator  ── GPT-5.5            │  generate patch + explanation
+  │       ↓                               │
+  │  approval_gate  ⏸ ── SSE → frontend  │  pause: human reviews diff
+  │       ↓  (on approve)                 │
+  │  pr_pusher      ── GitHub API         │  push branch, open real PR
+  └───────────────────────────────────────┘
+         │                    │
+    Alice's Aubi          Bob's Aubi         ← Haiku + constitution per agent
+    (Qdrant facts)        (Qdrant facts)
 ```
+
+**Stack:**
+- **LangGraph** — 6-node stateful graph with interrupt/resume for human approval
+- **Qdrant** — vector store for semantic facts and episode memory
+- **Gemini 2.0 Flash** — structured constitution building from GitHub history
+- **GPT-5.5** — code analysis and fix generation
+- **Claude Haiku** — per-agent constitution queries and PR writing
+- **FastAPI + SSE** — real-time event stream to frontend
+- **Next.js 16 + Tailwind + shadcn/ui** — live dashboard
 
 ---
 
-## Models
+## The UI
 
-| Role | Model | Why |
-|---|---|---|
-| **Constitution building** | Gemini 2.0 Flash | Structured output is first-class; prize alignment |
-| **Orchestrator / Fix gen** | GPT-5.5 | Best code understanding for actual patch generation |
-| **Agent constitution queries** | Claude Haiku | Fast, cheap, precise at reading constitution facts |
-| **PR body writer** | Claude Haiku | Matches each developer's communication style |
+Three panels, live-updating via SSE:
 
----
+**Agent Comm Feed** — watch the agents actually talk. Orchestrator → Alice → Bob → fix. Not a log — a conversation, with typing indicators and mesh line animations between agent cards.
 
-## Repo Structure
+**Why Alice?** — a structured routing evidence panel that appears when the owner is identified. File path, confidence score, matched constitution facts. Judges see exactly why AUBI picked her.
 
-```
-GDSC-Hackathon/
-├── backend/
-│   ├── main.py                   FastAPI app — all endpoints
-│   ├── requirements.txt
-│   ├── .env.example
-│   ├── seed_demo.py              Seeds Alice / Bob / Carol into Qdrant
-│   ├── graphs/
-│   │   ├── state.py              AUBIIssueState TypedDict
-│   │   ├── incident_graph.py     6-node LangGraph graph
-│   │   └── prompt_builder.py     Prompt assembly helpers
-│   ├── ingestion/
-│   │   ├── github_ingest.py      Developer profile ingestion
-│   │   └── github_issue.py       read_issue · read_repo_files · create_fix_pr · poll
-│   └── constitution/
-│       ├── builder.py            GitHub → Gemini → structured facts
-│       └── store.py              Qdrant read / write / search
-└── frontend/
-    └── aubi-web/                 Next.js 16 · Tailwind CSS 4 · shadcn/ui
-        └── src/
-            ├── app/
-            │   ├── team/         Agent cards + constitution viewer
-            │   └── demo/         Main demo view
-            ├── hooks/
-            │   └── useAUBIStream.ts   Central SSE hook
-            └── components/aubi/
-                ├── AgentCard.tsx
-                ├── ConstitutionPanel.tsx
-                ├── AgentMeshLines.tsx
-                ├── AgentCommFeed.tsx
-                ├── RoutingEvidencePanel.tsx
-                ├── IssueFeed.tsx
-                ├── CodeDiffPanel.tsx
-                ├── ApprovalGate.tsx
-                ├── PRPreviewPanel.tsx
-                └── AUBILearnedStrip.tsx
-```
+**Approve PR** — a checklist that fills in as the graph runs, then surfaces a single big button. One click pushes a real PR to GitHub. The demo ends with a live GitHub link.
 
 ---
 
-## API
+## Tech Stack
 
 ```
-GET  /agents                     →  [{id, name, role, github_username, constitution_facts[]}]
-GET  /agents/{id}                →  {id, name, constitution: {code_ownership, expertise, ...}}
-POST /agents                     →  {github_username, name, role} → creates agent + constitution
-POST /agents/{id}/query          →  {incident_text} → {context: str}
-
-GET  /constitution/{id}          →  facts grouped by category
-PATCH /constitution/{id}         →  {fact} → appends episode
-
-GET  /ownership                  →  ?filepath=auth/ → {owner_agent_id, confidence}
-
-POST /incidents/run              →  {issue_url} → {pr_url, patch_diff, fix_explanation}
-GET  /incidents/stream           →  ?issue_url=...&thread_id=... → SSE stream
-POST /incidents/approve          →  ?thread_id=... → resumes paused graph → {pr_url}
-
-GET  /github/poll                →  {issue: {title, body, url, issue_number} | null}
-GET  /health
-```
-
-### SSE Event Stream
-
-```jsonc
-{"event": "node_start",        "node": "issue_reader"}
-{"event": "node_done",         "node": "issue_reader",     "data": {"affected_files": ["auth/token.go"]}}
-{"event": "routing_evidence",  "data": {"agent_name": "Alice Chen", "matched_files": ["auth/token.go"], "evidence_facts": [...]}}
-{"event": "agent_message",     "data": {"sender": "orchestrator", "recipient": "alice01_aubi", "message": "..."}}
-{"event": "node_done",         "node": "fix_generator",    "data": {"patch_diff": "...", "fix_explanation": "..."}}
-{"event": "awaiting_approval", "data": {"patch_diff": "..."}}
-{"event": "node_done",         "node": "pr_pusher",        "data": {"pr_url": "https://github.com/..."}}
-{"event": "aubi_learned",      "data": {"agent_name": "Alice Chen", "update": "race condition resolved in PR #2"}}
-{"event": "complete",          "data": null}
-```
-
----
-
-## Quickstart
-
-```bash
-# 1. Spin up Qdrant
-docker run -d -p 6333:6333 qdrant/qdrant
-
-# 2. Backend
-cd backend
-python3.11 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env        # fill in your keys
-python seed_demo.py         # seed Alice / Bob / Carol
-uvicorn main:app --port 8000 --reload
-
-# 3. Frontend
-cd frontend/aubi-web
-npm install
-npm run dev                 # localhost:3000
-```
-
-### Environment Variables
-
-```bash
-ANTHROPIC_API_KEY=sk-ant-...       # Claude Haiku
-OPENAI_API_KEY=sk-...              # GPT-5.5
-GEMINI_API_KEY=AIza...             # Gemini 2.0 Flash
-
-GITHUB_TOKEN=ghp_...               # needs repo write access
-DEMO_REPO=your-username/AUBI-Demo  # repo with planted bug
-
-QDRANT_URL=http://localhost:6333
-AGENTS_SERVICE_URL=http://localhost:8000
+Backend          FastAPI · LangGraph · Qdrant · Python 3.11
+AI Models        Gemini 2.0 Flash · GPT-5.5 · Claude Haiku
+Frontend         Next.js 16 · Tailwind CSS 4 · shadcn/ui · framer-motion
+GitHub           PyGithub — issue reading, file fetching, PR creation
+Memory           Qdrant — semantic facts + episode storage per developer
+Streaming        Server-Sent Events (SSE) — real-time graph node updates
 ```
 
 ---
 
 ## Team
 
-| | Person | Role | Deliverable |
-|---|---|---|---|
-| ⚡ | **Vitthal Agarwal** | Orchestration + Context Constitution | LangGraph graph · Gemini builder · Qdrant store · approval gate |
-| 🔗 | **Neil** | GitHub Integration | Issue reader · code reader · PR pusher · demo repo |
-| 🎨 | **Avhaang** | Frontend — Agents + Constitution | Agent cards · constitution viewer · comm feed · mesh lines |
-| 🖥️ | **Mitansh** | Frontend — Demo Flow + SSE | Issue feed · code diff · Approve button · PR preview · SSE wiring |
+Built in 12 hours by four UMD students.
+
+**Vitthal Agarwal** · **Neil** · **Avhaang** · **Mitansh**
 
 ---
 
@@ -245,6 +182,6 @@ AGENTS_SERVICE_URL=http://localhost:8000
 
 <img src="https://capsule-render.vercel.app/api?type=waving&color=0:8b5cf6,100:6366f1&height=120&section=footer" width="100%"/>
 
-*Built at GDSC Hackathon 2026 · University of Maryland*
+*Built in 12 hours at GDSC Hackathon 2026 · University of Maryland*
 
 </div>
