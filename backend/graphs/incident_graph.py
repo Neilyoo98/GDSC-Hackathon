@@ -440,7 +440,174 @@ async def query_single_agent(state: AUBIIssueState) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Node 4: code_reader
+# Node 4: coworker_mesh_exchange
+# ---------------------------------------------------------------------------
+
+MESH_SYSTEM = """\
+You are {responder_name}'s Aubi coworker.
+
+The owner coworker(s) {requester_names} are asking for adjacent context before code is read.
+
+Use only the provided constitution facts, prior personal episodes, and shared team memory.
+Return JSON only:
+{{
+  "context_shared": "1-3 concise sentences of relevant context",
+  "why_it_matters": "one concise sentence",
+  "should_check": ["specific thing to inspect"],
+  "confidence": 0.0
+}}
+"""
+
+
+async def coworker_mesh_exchange(state: AUBIIssueState) -> dict[str, Any]:
+    """Exchange context between owner coworkers, related coworkers, and shared memory."""
+    from constitution.store import ConstitutionStore
+
+    store = ConstitutionStore()
+    issue_query = _issue_query(state)
+    owner_ids = list(state.get("owner_ids") or [])
+    owner_contexts = state.get("agent_contexts") or []
+    owner_names = [
+        str(ctx.get("agent_name") or ctx.get("agent_id"))
+        for ctx in owner_contexts
+        if ctx.get("agent_id") in owner_ids
+    ] or owner_ids
+
+    shared_hits_raw = store.search_team_memory(
+        _tenant_id(),
+        issue_query,
+        team_id=_team_id(),
+        top_k=6,
+    )
+    shared_hits = [_compact_fact(hit) for hit in shared_hits_raw]
+    related = _select_related_coworkers(
+        store=store,
+        state=state,
+        owner_ids=owner_ids,
+        shared_hits=shared_hits_raw,
+        limit=3,
+    )
+
+    if not related:
+        return {
+            "shared_memory_hits": shared_hits,
+            "stream_log": [
+                f"🧠 Shared memory checked ({len(shared_hits)} hit{'s' if len(shared_hits) != 1 else ''}); no adjacent coworker matched"
+            ],
+        }
+
+    exchanges: list[dict[str, Any]] = []
+    new_contexts: list[dict[str, Any]] = []
+    agent_messages: list[AgentMessage] = []
+    timestamp = time.time()
+
+    requester_id = owner_ids[0] if owner_ids else "owner_mesh"
+    requester_name = owner_names[0] if owner_names else requester_id
+
+    for coworker in related:
+        agent_id = coworker["agent_id"]
+        agent_name = coworker["agent_name"]
+        personal_facts = store.search(agent_id, _tenant_id(), issue_query, top_k=5)
+        personal_episodes = store.search(agent_id, _tenant_id(), issue_query, top_k=3, collection="episodes")
+        evidence = _dedupe_facts(
+            list(coworker.get("matched_facts") or []) + personal_facts + personal_episodes,
+            8,
+        )
+
+        prompt = json.dumps({
+            "issue": {
+                "title": state.get("issue_title"),
+                "body": state.get("issue_body"),
+                "affected_service": state.get("affected_service"),
+                "error_type": state.get("error_type"),
+                "affected_files": state.get("affected_files") or [],
+            },
+            "selection_signals": coworker.get("selection_signals") or [],
+            "related_coworker_facts": evidence,
+            "shared_team_memory": shared_hits[:4],
+            "owner_contexts": owner_contexts,
+        }, indent=2, default=str)
+
+        request_text = (
+            f"Can you share adjacent context for {state.get('issue_title', '')}? "
+            f"You matched because: {', '.join(coworker.get('selection_signals') or [])}."
+        )
+        agent_messages.append({
+            "sender": f"{requester_name}_aubi",
+            "recipient": f"{agent_name}_aubi",
+            "message": request_text,
+            "timestamp": timestamp,
+        })
+
+        response = await _get_gpt55().ainvoke([
+            SystemMessage(content=MESH_SYSTEM.format(
+                responder_name=agent_name,
+                requester_names=", ".join(owner_names) or "the owner coworker mesh",
+            )),
+            HumanMessage(content=prompt),
+        ])
+        parsed = _json(response.content)
+        if not isinstance(parsed, dict):
+            parsed = {"context_shared": _extract_text(response.content), "confidence": 0.6}
+
+        context_shared = str(parsed.get("context_shared") or "").strip()
+        why_it_matters = str(parsed.get("why_it_matters") or "").strip()
+        should_check = parsed.get("should_check") if isinstance(parsed.get("should_check"), list) else []
+        try:
+            confidence = float(parsed.get("confidence") or 0.6)
+        except (TypeError, ValueError):
+            confidence = 0.6
+
+        reply_text = context_shared
+        if why_it_matters:
+            reply_text = f"{reply_text} {why_it_matters}".strip()
+        agent_messages.append({
+            "sender": f"{agent_name}_aubi",
+            "recipient": f"{requester_name}_aubi",
+            "message": reply_text,
+            "timestamp": time.time(),
+        })
+
+        exchange = {
+            "requester_agent_id": requester_id,
+            "requester_agent_name": requester_name,
+            "requester_agent_ids": owner_ids,
+            "requester_agent_names": owner_names,
+            "responder_agent_id": agent_id,
+            "responder_agent_name": agent_name,
+            "reason": "Related coworker selected from ownership, expertise, current_focus, known_issues, and shared-memory overlap.",
+            "selection_signals": coworker.get("selection_signals") or [],
+            "selection_score": coworker.get("score"),
+            "request": request_text,
+            "context_shared": context_shared,
+            "why_it_matters": why_it_matters,
+            "should_check": should_check,
+            "confidence": round(confidence, 3),
+            "evidence_facts": evidence,
+            "timestamp": time.time(),
+        }
+        exchanges.append(exchange)
+        new_contexts.append({
+            "agent_id": agent_id,
+            "agent_name": agent_name,
+            "context": reply_text,
+            "source": "coworker_mesh",
+            "selection_signals": coworker.get("selection_signals") or [],
+            "shared_memory_hit_count": len(shared_hits),
+            "evidence_facts": evidence[:4],
+        })
+
+    return {
+        "coworker_exchanges": exchanges,
+        "shared_memory_hits": shared_hits,
+        "agent_contexts": new_contexts,
+        "agent_messages": agent_messages,
+        "stream_log": [f"🧩 Coworker mesh exchanged context with {len(exchanges)} related coworker(s)"],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Node 5: code_reader
 # ---------------------------------------------------------------------------
 
 async def code_reader(state: AUBIIssueState) -> dict[str, Any]:
@@ -502,6 +669,15 @@ async def fix_generator(state: AUBIIssueState) -> dict[str, Any]:
         f"[{ctx['agent_name']}]: {ctx['context']}"
         for ctx in (state.get("agent_contexts") or [])
     )
+    mesh_context = "\n\n".join(
+        f"[{exchange.get('responder_agent_name')} -> {', '.join(exchange.get('requester_agent_names') or [])}]: "
+        f"{exchange.get('context_shared')} {exchange.get('why_it_matters', '')}".strip()
+        for exchange in (state.get("coworker_exchanges") or [])
+    )
+    shared_memory_context = "\n".join(
+        f"- {hit.get('predicate', '')}: {hit.get('object', '')}"
+        for hit in (state.get("shared_memory_hits") or [])[:6]
+    )
 
     file_context = "\n\n".join(
         f"=== {path} ===\n{content}"
@@ -514,6 +690,8 @@ async def fix_generator(state: AUBIIssueState) -> dict[str, Any]:
     prompt = (
         f"ISSUE:\n{issue_context}\n\n"
         f"DEVELOPER AGENT CONTEXT:\n{agent_context}\n\n"
+        f"COWORKER MESH EXCHANGES:\n{mesh_context or '(none)'}\n\n"
+        f"SHARED TEAM MEMORY HITS:\n{shared_memory_context or '(none)'}\n\n"
         f"SOURCE FILES:\n{file_context}"
     )
 
@@ -758,35 +936,149 @@ async def pr_pusher(state: AUBIIssueState) -> dict[str, Any]:
     )
     log = [f"🚀 PR pushed: {pr_url}"]
 
-    learned_facts: list[dict] = []
+    learned_facts: list[dict[str, Any]] = []
+    memory_writes: list[dict[str, Any]] = []
     if pr_url:
-        # Self-learning: store episode in Qdrant for each involved agent.
         from constitution.store import ConstitutionStore
         store = ConstitutionStore()
-        for ctx in (state.get("agent_contexts") or []):
-            agent_id   = ctx.get("agent_id", "")
-            agent_name_ctx = ctx.get("agent_name", agent_id)
-            if not agent_id:
-                continue
+
+        participant_names: dict[str, str] = {}
+        for ctx in contexts:
+            agent_id = str(ctx.get("agent_id") or "")
+            if agent_id:
+                participant_names.setdefault(agent_id, str(ctx.get("agent_name") or agent_id))
+        for owner_id in (state.get("owner_ids") or []):
+            participant_names.setdefault(str(owner_id), str(owner_id))
+        for exchange in (state.get("coworker_exchanges") or []):
+            responder_id = str(exchange.get("responder_agent_id") or "")
+            if responder_id:
+                participant_names.setdefault(responder_id, str(exchange.get("responder_agent_name") or responder_id))
+
+        participants = list(participant_names.keys())
+        related_agent_ids = [
+            agent_id for agent_id in participants
+            if agent_id not in (state.get("owner_ids") or [])
+        ]
+        written_at = time.time()
+        episode_object = (
+            f"Issue #{issue_number}: {state.get('issue_title', '')}; "
+            f"repo={repo_name}; file={fixed_path}; "
+            f"fix={state.get('fix_explanation', '')}; PR={pr_url}; "
+            f"mesh_exchanges={len(state.get('coworker_exchanges') or [])}"
+        )
+
+        for agent_id, agent_name_ctx in participant_names.items():
             episode = {
                 "subject":    agent_id,
                 "predicate":  "resolved_issue",
-                "object":     f"Issue #{issue_number}: {state.get('issue_title', '')} — fixed with {state.get('fix_explanation', '')[:80]}",
+                "object":     episode_object,
                 "category":   "episodes",
                 "confidence": 0.9,
+                "participants": participants,
+                "owner_ids": state.get("owner_ids") or [],
+                "related_agent_ids": related_agent_ids,
+                "issue_number": issue_number,
+                "issue_title": state.get("issue_title", ""),
+                "repo_name": repo_name,
+                "affected_files": state.get("affected_files") or [],
+                "fixed_file_path": fixed_path,
+                "pr_url": pr_url,
+                "tests_passed": state.get("tests_passed"),
+                "written_at": written_at,
             }
-            store.add_episode(agent_id, "hackathon", episode)
+            store.add_episode(agent_id, _tenant_id(), episode)
+            memory_writes.append({
+                "scope": "user",
+                "collection": "episodes",
+                "agent_id": agent_id,
+                "agent_name": agent_name_ctx,
+                "subject": episode["subject"],
+                "predicate": episode["predicate"],
+                "object": episode["object"],
+                "written_at": written_at,
+            })
             learned_facts.append({
                 "agent_id":   agent_id,
                 "agent_name": agent_name_ctx,
-                "update":     f"Issue #{issue_number} resolved — {state.get('fix_explanation', '')[:80]}",
+                "update":     f"Issue #{issue_number} resolved - {state.get('fix_explanation', '')[:120]}",
                 "episode":    episode["object"],
             })
 
+        team_episode = {
+            "subject": "team",
+            "predicate": "resolved_issue_with_mesh",
+            "object": episode_object,
+            "confidence": 0.92,
+            "participants": participants,
+            "owner_ids": state.get("owner_ids") or [],
+            "related_agent_ids": related_agent_ids,
+            "issue_number": issue_number,
+            "issue_title": state.get("issue_title", ""),
+            "repo_name": repo_name,
+            "affected_files": state.get("affected_files") or [],
+            "fixed_file_path": fixed_path,
+            "pr_url": pr_url,
+            "tests_passed": state.get("tests_passed"),
+            "written_at": written_at,
+        }
+        team_episode_id = store.add_team_episode(_tenant_id(), team_episode, team_id=_team_id())
+        team_fact = {
+            "subject": "team",
+            "predicate": "learned_resolution",
+            "object": (
+                f"{repo_name} issue #{issue_number} affecting {', '.join(state.get('affected_files') or [])} "
+                f"was fixed in {fixed_path}. Resolution: {state.get('fix_explanation', '')}. "
+                f"Consulted owners={state.get('owner_ids') or []}, related={related_agent_ids}, PR={pr_url}."
+            ),
+            "category": "team_memory",
+            "confidence": 0.9,
+            "participants": participants,
+            "issue_number": issue_number,
+            "repo_name": repo_name,
+            "pr_url": pr_url,
+            "written_at": written_at,
+        }
+        store.upsert_team_facts(
+            _tenant_id(),
+            [team_fact],
+            team_id=_team_id(),
+            source_agent_id=participants[0] if participants else None,
+        )
+        memory_writes.extend([
+            {
+                "scope": "team",
+                "collection": "episodes",
+                "team_id": _team_id(),
+                "point_id": team_episode_id,
+                "subject": team_episode["subject"],
+                "predicate": team_episode["predicate"],
+                "object": team_episode["object"],
+                "participants": participants,
+                "written_at": written_at,
+            },
+            {
+                "scope": "team",
+                "collection": "semantic_facts",
+                "team_id": _team_id(),
+                "subject": team_fact["subject"],
+                "predicate": team_fact["predicate"],
+                "object": team_fact["object"],
+                "participants": participants,
+                "written_at": written_at,
+            },
+        ])
+        learned_facts.append({
+            "scope": "team",
+            "team_id": _team_id(),
+            "update": f"Shared team memory recorded issue #{issue_number} and PR {pr_url}",
+            "episode": team_episode["object"],
+        })
+
     return {
-        "pr_url":       pr_url,
+        "pr_url":        pr_url,
         "learned_facts": learned_facts,
-        "stream_log":   log,
+        "memory_writes": memory_writes,
+        "stream_log":    log,
     }
 
 
@@ -800,6 +1092,7 @@ def build_aubi_graph() -> Any:
     builder.add_node("issue_reader",       issue_reader)
     builder.add_node("ownership_router",   ownership_router)
     builder.add_node("query_single_agent", query_single_agent)
+    builder.add_node("coworker_mesh_exchange", coworker_mesh_exchange)
     builder.add_node("code_reader",        code_reader)
     builder.add_node("fix_generator",      fix_generator)
     builder.add_node("test_runner",        test_runner)
@@ -812,11 +1105,12 @@ def build_aubi_graph() -> Any:
     # Fan-out to parallel agent queries
     builder.add_conditional_edges("ownership_router", route_to_agents, ["query_single_agent"])
 
-    # After all agent queries complete, move to code_reader
-    builder.add_edge("query_single_agent", "code_reader")
-    builder.add_edge("code_reader",        "fix_generator")
-    builder.add_edge("fix_generator",      "test_runner")
-    builder.add_edge("test_runner",        "approval_gate")
+    # After owner consults complete, exchange context before reading code.
+    builder.add_edge("query_single_agent",       "coworker_mesh_exchange")
+    builder.add_edge("coworker_mesh_exchange",   "code_reader")
+    builder.add_edge("code_reader",              "fix_generator")
+    builder.add_edge("fix_generator",            "test_runner")
+    builder.add_edge("test_runner",              "approval_gate")
     builder.add_conditional_edges(
         "approval_gate",
         route_after_approval,

@@ -7,6 +7,8 @@ Endpoints:
   POST /agents/{id}/query       query agent's context for an incident
   POST /constitution/{id}       add fact to constitution
   PATCH /constitution/{id}      update/add fact
+  GET  /constitution/team       query/list shared team memory
+  POST /constitution/team       write shared team memory
   GET  /ownership               file → owner lookup
   POST /incidents/run           blocking incident run
   GET  /incidents/stream        SSE stream of incident graph
@@ -81,13 +83,27 @@ class ConstitutionFactRequest(BaseModel):
     fact: dict[str, Any]
 
 
+class TeamMemoryWriteRequest(BaseModel):
+    fact: dict[str, Any] | None = None
+    episode: dict[str, Any] | None = None
+    team_id: str = "default"
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _tenant_id() -> str:
+    return os.getenv("AUBI_TENANT_ID", "hackathon")
+
+
+def _team_id(default: str = "default") -> str:
+    return os.getenv("AUBI_TEAM_ID", default)
+
+
 def _get_constitution_from_store(user_id: str) -> dict[str, Any]:
     """Fetch constitution facts from Qdrant grouped by category."""
-    return get_store().get_by_user(user_id, "hackathon")
+    return get_store().get_by_user(user_id, _tenant_id())
 
 
 def _flatten_constitution(grouped: dict[str, Any]) -> list[dict[str, Any]]:
@@ -103,6 +119,35 @@ def _group_facts_by_category(facts: list[dict[str, Any]]) -> dict[str, list[dict
     for fact in facts:
         grouped.setdefault(str(fact.get("category", "general")), []).append(fact)
     return grouped
+
+
+def _public_memory_record(record: dict[str, Any]) -> dict[str, Any]:
+    allowed = {
+        "scope",
+        "scope_id",
+        "team_id",
+        "tenant_id",
+        "subject",
+        "predicate",
+        "object",
+        "confidence",
+        "category",
+        "participants",
+        "owner_ids",
+        "related_agent_ids",
+        "issue_number",
+        "issue_title",
+        "repo_name",
+        "affected_files",
+        "fixed_file_path",
+        "pr_url",
+        "tests_passed",
+        "written_at",
+        "source_agent_id",
+        "_score",
+        "_collection",
+    }
+    return {key: value for key, value in record.items() if key in allowed}
 
 
 def _agent_record_from_facts(agent_id: str, facts: list[dict[str, Any]]) -> dict[str, Any]:
@@ -200,7 +245,7 @@ async def create_agent(req: CreateAgentRequest):
     facts = await build_constitution_from_github(github_data)
 
     # 3. Store facts in Qdrant. This is a required part of agent creation.
-    stored_count = get_store().upsert_facts(agent_id, "hackathon", facts)
+    stored_count = get_store().upsert_facts(agent_id, _tenant_id(), facts)
     if stored_count != len(facts):
         raise HTTPException(
             status_code=500,
@@ -228,7 +273,7 @@ async def create_agent(req: CreateAgentRequest):
 @app.get("/agents")
 async def list_agents():
     records = {agent_id: agent.copy() for agent_id, agent in _agents.items()}
-    for agent_id, facts in get_store().list_user_facts("hackathon").items():
+    for agent_id, facts in get_store().list_user_facts(_tenant_id()).items():
         if agent_id not in records:
             records[agent_id] = _agent_record_from_facts(agent_id, facts)
         else:
@@ -279,6 +324,95 @@ async def query_agent(agent_id: str, req: QueryAgentRequest):
 # Constitution endpoints
 # ---------------------------------------------------------------------------
 
+@app.get("/constitution/team")
+async def get_team_constitution(
+    query: str | None = None,
+    team_id: str = "default",
+    top_k: int = 10,
+    limit: int = 100,
+):
+    """Return shared team memory. If query is provided, run semantic search."""
+    resolved_team_id = _team_id(team_id)
+    try:
+        if query:
+            hits = get_store().search_team_memory(
+                _tenant_id(),
+                query,
+                team_id=resolved_team_id,
+                top_k=max(1, min(top_k, 25)),
+            )
+            return {
+                "scope": "team",
+                "team_id": resolved_team_id,
+                "query": query,
+                "hits": [_public_memory_record(hit) for hit in hits],
+            }
+        memory = get_store().list_team_memory(
+            _tenant_id(),
+            team_id=resolved_team_id,
+            limit=max(1, min(limit, 500)),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Shared memory lookup failed: {e}") from e
+
+    return {
+        "scope": "team",
+        "team_id": resolved_team_id,
+        "memory": {
+            collection: [_public_memory_record(item) for item in items]
+            for collection, items in memory.items()
+        },
+    }
+
+
+@app.post("/constitution/team")
+async def write_team_constitution(req: TeamMemoryWriteRequest):
+    """Write a shared team fact or episode."""
+    resolved_team_id = _team_id(req.team_id)
+    if bool(req.fact) == bool(req.episode):
+        raise HTTPException(status_code=400, detail="Provide exactly one of fact or episode")
+
+    try:
+        if req.fact:
+            count = get_store().upsert_team_facts(
+                _tenant_id(),
+                [req.fact],
+                team_id=resolved_team_id,
+                source_agent_id=str(req.fact.get("source_agent_id") or "") or None,
+            )
+            if count != 1:
+                raise HTTPException(status_code=500, detail="Team fact was not stored")
+            return {
+                "status": "ok",
+                "memory_write": {
+                    "scope": "team",
+                    "team_id": resolved_team_id,
+                    "collection": "semantic_facts",
+                    "fact": _public_memory_record(req.fact),
+                },
+            }
+
+        point_id = get_store().add_team_episode(
+            _tenant_id(),
+            req.episode or {},
+            team_id=resolved_team_id,
+        )
+        return {
+            "status": "ok",
+            "memory_write": {
+                "scope": "team",
+                "team_id": resolved_team_id,
+                "collection": "episodes",
+                "point_id": point_id,
+                "episode": _public_memory_record(req.episode or {}),
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Shared memory write failed: {e}") from e
+
+
 @app.get("/constitution/{agent_id}")
 async def get_constitution(agent_id: str):
     """Return an agent's constitution facts grouped by category."""
@@ -291,7 +425,7 @@ async def get_constitution(agent_id: str):
 @app.patch("/constitution/{agent_id}")
 async def patch_constitution(agent_id: str, req: ConstitutionFactRequest):
     """Add a fact to an agent's constitution (called by memory_updater)."""
-    stored_count = get_store().upsert_facts(agent_id, "hackathon", [req.fact])
+    stored_count = get_store().upsert_facts(agent_id, _tenant_id(), [req.fact])
     if stored_count != 1:
         raise HTTPException(status_code=500, detail="Constitution fact was not stored")
     if agent_id in _agents:
@@ -307,7 +441,7 @@ async def patch_constitution(agent_id: str, req: ConstitutionFactRequest):
 async def get_ownership(filepath: str):
     """Return which agent owns a filepath prefix."""
     try:
-        owner_agent_id, confidence, evidence = get_store().search_ownership(filepath, "hackathon")
+        owner_agent_id, confidence, evidence = get_store().search_ownership(filepath, _tenant_id())
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Qdrant ownership lookup failed: {e}") from e
 
@@ -333,7 +467,8 @@ class IssueRequest(BaseModel):
 
 GRAPH_NODES = {
     "issue_reader", "ownership_router", "query_single_agent",
-    "code_reader", "fix_generator", "test_runner", "approval_gate", "pr_pusher",
+    "coworker_mesh_exchange", "code_reader", "fix_generator",
+    "test_runner", "approval_gate", "pr_pusher",
 }
 
 
@@ -390,6 +525,9 @@ async def run_incident(req: IssueRequest):
             "owners": result.get("owner_ids"),
             "agent_messages": result.get("agent_messages", []),
             "routing_evidence": result.get("routing_evidence", []),
+            "coworker_exchanges": result.get("coworker_exchanges", []),
+            "shared_memory_hits": result.get("shared_memory_hits", []),
+            "memory_writes": result.get("memory_writes", []),
             "stream_log": result.get("stream_log", []),
         }
 
@@ -405,7 +543,10 @@ async def run_incident(req: IssueRequest):
         "owners":           result.get("owner_ids"),
         "agent_messages":   result.get("agent_messages", []),
         "routing_evidence": result.get("routing_evidence", []),
+        "coworker_exchanges": result.get("coworker_exchanges", []),
+        "shared_memory_hits": result.get("shared_memory_hits", []),
         "learned_facts":    result.get("learned_facts", []),
+        "memory_writes":    result.get("memory_writes", []),
         "stream_log":       result.get("stream_log", []),
     }
 
@@ -460,9 +601,18 @@ async def stream_incident(
                     for ev in (output.get("routing_evidence") or []):
                         yield f"data: {json.dumps({'event': 'routing_evidence', 'data': ev})}\n\n"
 
+                    for exchange in (output.get("coworker_exchanges") or []):
+                        yield f"data: {json.dumps({'event': 'coworker_exchange', 'data': exchange}, default=str)}\n\n"
+
+                    for hit in (output.get("shared_memory_hits") or []):
+                        yield f"data: {json.dumps({'event': 'shared_memory_hit', 'data': hit}, default=str)}\n\n"
+
                     # "AUBI learned" strip — fires after pr_pusher
                     for lf in (output.get("learned_facts") or []):
                         yield f"data: {json.dumps({'event': 'aubi_learned', 'data': lf})}\n\n"
+
+                    for write in (output.get("memory_writes") or []):
+                        yield f"data: {json.dumps({'event': 'memory_write', 'data': write}, default=str)}\n\n"
 
                     yield f"data: {json.dumps({'event': 'node_done', 'node': name, 'data': output}, default=str)}\n\n"
 
@@ -499,7 +649,10 @@ async def approve_incident(thread_id: str, approved: bool = True):
         "fix_explanation": result.get("fix_explanation"),
         "test_output": result.get("test_output"),
         "tests_passed": result.get("tests_passed"),
+        "coworker_exchanges": result.get("coworker_exchanges", []),
+        "shared_memory_hits": result.get("shared_memory_hits", []),
         "learned_facts": result.get("learned_facts", []),
+        "memory_writes": result.get("memory_writes", []),
         "stream_log": result.get("stream_log", []),
     }
 

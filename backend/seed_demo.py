@@ -1,4 +1,4 @@
-"""Seed three demo agents into Qdrant for the AUBI hackathon demo.
+"""Seed demo agents and shared team memory into Qdrant for the AUBI hackathon demo.
 
 Run once before the demo:
   cd backend && python seed_demo.py
@@ -7,6 +7,9 @@ Agents:
   alice  — auth/ and billing/ owner, knows about the race condition in token.go
   bob    — api/users/ and frontend/ owner, recently touched auth middleware
   carol  — infra/ and deploy/ owner
+
+Shared team memory:
+  Cross-agent resolution facts used by the coworker mesh before code is read.
 """
 
 from __future__ import annotations
@@ -20,6 +23,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from constitution.store import ConstitutionStore
 
 TENANT = "hackathon"
+TEAM_ID = "default"
 
 DEMO_AGENTS = [
     {
@@ -68,6 +72,35 @@ DEMO_AGENTS = [
     },
 ]
 
+TEAM_MEMORY_FACTS = [
+    {
+        "subject": "team",
+        "predicate": "knows_cross_agent_context",
+        "object": (
+            "Authentication 401 incidents in Neilyoo98/AUBI-demo can span auth/token.go cache refresh, "
+            "API middleware token validation, and deployment timing. Owner AUBIs should ask adjacent coworkers "
+            "for middleware, frontend submission, and deployment context before generating a fix."
+        ),
+        "confidence": 0.9,
+        "category": "team_memory",
+        "participants": ["alice01", "bob02", "carol03"],
+        "repo_name": "Neilyoo98/AUBI-demo",
+    },
+    {
+        "subject": "team",
+        "predicate": "prefers_resolution_flow",
+        "object": (
+            "For production-blocking authentication issues, AUBI should route by code ownership, collect coworker "
+            "context, verify with the repository test runner, pause at human approval, then write both personal "
+            "agent episodes and shared team memory after PR creation."
+        ),
+        "confidence": 0.92,
+        "category": "team_memory",
+        "participants": ["alice01", "bob02", "carol03"],
+        "repo_name": "Neilyoo98/AUBI-demo",
+    },
+]
+
 
 def seed():
     print("Seeding demo agents into Qdrant...")
@@ -77,6 +110,9 @@ def seed():
         store.delete_user(agent["id"], TENANT)
         count = store.upsert_facts(agent["id"], TENANT, agent["facts"])
         print(f"  ✓ {agent['name']} ({agent['id']}) — {count} facts stored")
+
+    team_count = store.upsert_team_facts(TENANT, TEAM_MEMORY_FACTS, team_id=TEAM_ID, source_agent_id="seed_demo")
+    print(f"  ✓ shared team memory ({TEAM_ID}) — {team_count} facts stored")
 
     print("\nDone. Pre-register agents in memory by calling POST /agents or use these IDs directly:")
     for agent in DEMO_AGENTS:
