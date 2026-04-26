@@ -15,7 +15,10 @@ import os
 from typing import Any
 from uuid import NAMESPACE_URL, uuid5
 
+from dotenv import load_dotenv
 from openai import AsyncOpenAI
+
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +36,11 @@ _client: AsyncOpenAI | None = None
 def _get_client() -> AsyncOpenAI:
     global _client
     if _client is None:
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise RuntimeError("OPENAI_API_KEY is not set")
         _client = AsyncOpenAI(
-            api_key=os.getenv("OPENAI_API_KEY"),
+            api_key=api_key,
             base_url=os.getenv("OPENAI_BASE_URL", "https://us.api.openai.com/v1"),
         )
     return _client
@@ -42,7 +48,7 @@ def _get_client() -> AsyncOpenAI:
 CONSTITUTION_SYSTEM = """\
 You are a developer profiling system. Analyze GitHub activity data and extract structured facts about a developer.
 
-Return a JSON array of facts. Each fact MUST have these fields:
+Return a JSON object with a "facts" array. Each fact MUST have these fields:
 {
   "subject": "<github_username>",
   "predicate": "<verb describing relationship>",
@@ -59,15 +65,17 @@ Guidelines:
 - known_issues: known problems in their code areas (predicate "is_aware_of_issue")
 
 Be specific and concrete. Infer from patterns, not keywords.
-Return ONLY valid JSON array. No markdown. No explanation.
+Return ONLY valid JSON. No markdown. No explanation.
 
 Example output:
-[
-  {"subject": "alicechen", "predicate": "owns", "object": "auth/ directory (78% of commits there)", "confidence": 0.95, "category": "code_ownership"},
-  {"subject": "alicechen", "predicate": "expertise_in", "object": "Go, PostgreSQL, distributed systems", "confidence": 0.9, "category": "expertise"},
-  {"subject": "alicechen", "predicate": "prefers", "object": "async communication — review comments show she writes detailed, standalone explanations", "confidence": 0.8, "category": "collaboration"},
-  {"subject": "alicechen", "predicate": "currently_working_on", "object": "payment retry logic based on recent PR titles", "confidence": 0.85, "category": "current_focus"}
-]
+{
+  "facts": [
+    {"subject": "alicechen", "predicate": "owns", "object": "auth/ directory (78% of commits there)", "confidence": 0.95, "category": "code_ownership"},
+    {"subject": "alicechen", "predicate": "expertise_in", "object": "Go, PostgreSQL, distributed systems", "confidence": 0.9, "category": "expertise"},
+    {"subject": "alicechen", "predicate": "prefers", "object": "async communication - review comments show she writes detailed, standalone explanations", "confidence": 0.8, "category": "collaboration"},
+    {"subject": "alicechen", "predicate": "currently_working_on", "object": "payment retry logic based on recent PR titles", "confidence": 0.85, "category": "current_focus"}
+  ]
+}
 """
 
 CONSTITUTION_USER = """\
@@ -126,7 +134,7 @@ def _normalize_facts(raw_facts: Any, username: str) -> list[dict[str, Any]]:
 async def build_constitution_from_github(
     github_data: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    """Call Gemini to extract constitution facts from GitHub data.
+    """Call OpenAI to extract constitution facts from GitHub data.
 
     Returns list of fact dicts ready to store in Qdrant.
     """
@@ -166,12 +174,13 @@ async def build_constitution_from_github(
         temperature=0.2,
     )
     raw = response.choices[0].message.content or ""
-    start = raw.find("[")
-    end = raw.rfind("]") + 1
-    if start < 0 or end <= start:
-        raise ValueError(f"gpt-4o-mini did not return a JSON array: {raw[:500]}")
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"gpt-4o-mini did not return valid JSON: {raw[:500]}") from e
 
-    facts = _normalize_facts(json.loads(raw[start:end]), username)
+    raw_facts = parsed.get("facts") if isinstance(parsed, dict) else parsed
+    facts = _normalize_facts(raw_facts, username)
     if not facts:
         raise ValueError(f"gpt-4o-mini returned no usable constitution facts for {username}")
 
