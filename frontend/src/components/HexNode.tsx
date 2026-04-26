@@ -5,7 +5,7 @@ import type { Agent, ConstitutionCategory } from "@/lib/types";
 
 const RING_R = 58;
 const CIRC = 2 * Math.PI * RING_R;
-const SEG_DEG = (360 - 5 * 4) / 5; // 68° each
+const SEG_DEG = (360 - 5 * 4) / 5;
 const SEG_UNITS = (SEG_DEG / 360) * CIRC;
 const MAX_FACTS = 3;
 
@@ -33,12 +33,17 @@ interface Props {
   breathDuration: number;
   compact?: boolean;
   pulsing?: boolean;
-  onClick: () => void;
   onHover?: () => void;
   onLeave?: () => void;
+  onPointerDown?: (e: React.PointerEvent<SVGGElement>) => void;
+  onPointerUp?: () => void;
 }
 
-export function HexNode({ agent, cx, cy, isSelected, breathDuration, compact = false, pulsing = false, onClick, onHover, onLeave }: Props) {
+export function HexNode({
+  agent, cx, cy, isSelected, breathDuration,
+  compact = false, pulsing = false,
+  onHover, onLeave, onPointerDown, onPointerUp,
+}: Props) {
   const hexSize = compact ? 32 : 56;
   const ringR = compact ? 28 : RING_R;
   const avatarSize = compact ? 18 : 38;
@@ -46,42 +51,83 @@ export function HexNode({ agent, cx, cy, isSelected, breathDuration, compact = f
   const categories = Object.keys(CATEGORY_META).slice(0, 5) as ConstitutionCategory[];
 
   return (
-    <g transform={`translate(${cx},${cy})`} style={{ cursor: "pointer" }} onClick={onClick} onMouseEnter={onHover} onMouseLeave={onLeave}>
-      {/* Breathing wrapper */}
+    <g
+      transform={`translate(${cx},${cy})`}
+      style={{ cursor: compact ? "default" : "grab" }}
+      onMouseEnter={onHover}
+      onMouseLeave={onLeave}
+      onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
+    >
+      {/* Breathing + hover scale */}
       <motion.g
-        animate={{ scale: pulsing ? [1, 1.25, 1] : [1, 1.025, 1] }}
+        animate={{ scale: pulsing ? [1, 1.25, 1] : [1, 1.02, 1] }}
+        whileHover={compact ? undefined : { scale: 1.08 }}
         transition={{
           duration: pulsing ? 0.6 : breathDuration,
           repeat: Infinity,
           ease: "easeInOut",
         }}
       >
-        {/* Constitution completeness ring */}
-        {!compact && categories.map((cat) => {
+        {/* Rotating constitution rings */}
+        {!compact && categories.map((cat, catIdx) => {
           const meta = CATEGORY_META[cat];
           const count = agent.constitution_facts.filter((f) => f.category === cat).length;
           const filled = (Math.min(count, MAX_FACTS) / MAX_FACTS) * SEG_UNITS;
+          const rotDuration = 9 + catIdx * 2.2;
+
+          return (
+            <motion.g
+              key={cat}
+              animate={{ rotate: 360 }}
+              transition={{ duration: rotDuration, repeat: Infinity, ease: "linear" }}
+            >
+              <circle
+                cx={0} cy={0} r={ringR}
+                fill="none"
+                stroke={meta.color}
+                strokeWidth={3.5}
+                strokeDasharray={`${filled} ${CIRC}`}
+                strokeDashoffset={0}
+                transform={`rotate(${meta.startDeg})`}
+                strokeLinecap="round"
+                opacity={filled > 0 ? 0.9 : 0.15}
+                style={{
+                  filter: filled > 0 ? `drop-shadow(0 0 6px ${meta.color}cc)` : undefined,
+                }}
+              />
+            </motion.g>
+          );
+        })}
+
+        {/* Static compact rings */}
+        {compact && categories.map((cat) => {
+          const meta = CATEGORY_META[cat];
+          const count = agent.constitution_facts.filter((f) => f.category === cat).length;
+          const filled = (Math.min(count, MAX_FACTS) / MAX_FACTS) * ((SEG_DEG / 360) * 2 * Math.PI * ringR);
+          const circ = 2 * Math.PI * ringR;
           return (
             <circle
               key={cat}
               cx={0} cy={0} r={ringR}
               fill="none"
               stroke={meta.color}
-              strokeWidth={3.5}
-              strokeDasharray={`${filled} ${CIRC}`}
-              strokeDashoffset={0}
+              strokeWidth={2.5}
+              strokeDasharray={`${filled} ${circ}`}
               transform={`rotate(${meta.startDeg})`}
               strokeLinecap="round"
-              opacity={filled > 0 ? 0.9 : 0.15}
-              style={{ filter: filled > 0 ? `drop-shadow(0 0 4px ${meta.color}99)` : undefined }}
+              opacity={filled > 0 ? 0.8 : 0.1}
             />
           );
         })}
 
-        {/* Glow ring when selected */}
+        {/* Selected glow ring */}
         {isSelected && (
-          <circle cx={0} cy={0} r={hexSize + 4} fill="none" stroke="#00f0ff" strokeWidth={2}
-            style={{ filter: "drop-shadow(0 0 8px #00f0ff)" }} />
+          <circle
+            cx={0} cy={0} r={hexSize + 4}
+            fill="none" stroke="#00f0ff" strokeWidth={2}
+            style={{ filter: "drop-shadow(0 0 10px #00f0ff)" }}
+          />
         )}
 
         {/* Hex body */}
@@ -92,7 +138,7 @@ export function HexNode({ agent, cx, cy, isSelected, breathDuration, compact = f
           strokeWidth={isSelected ? 2 : 1.5}
         />
 
-        {/* GitHub avatar */}
+        {/* Avatar */}
         <defs>
           <clipPath id={`clip-${agent.id}`}>
             <circle cx={0} cy={0} r={avatarSize / 2} />
@@ -106,7 +152,7 @@ export function HexNode({ agent, cx, cy, isSelected, breathDuration, compact = f
           clipPath={`url(#clip-${agent.id})`}
         />
 
-        {/* Name label */}
+        {/* Name + role labels */}
         {!compact && (
           <>
             <text
@@ -128,7 +174,7 @@ export function HexNode({ agent, cx, cy, isSelected, breathDuration, compact = f
         )}
       </motion.g>
 
-      {/* Pulse ring for agent_querier animation */}
+      {/* Pulse ring for incident animation */}
       {pulsing && (
         <motion.circle
           cx={0} cy={0} r={hexSize}
