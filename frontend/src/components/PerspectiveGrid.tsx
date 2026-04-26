@@ -1,6 +1,10 @@
 "use client";
 import { useEffect, useRef } from "react";
 
+const CELL     = 64;   // grid cell size in px
+const PARALLAX = 24;   // max offset the grid drifts in px
+const SPEED    = 0.06; // lerp speed
+
 export function PerspectiveGrid() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -11,9 +15,8 @@ export function PerspectiveGrid() {
     if (!ctx) return;
 
     let raf: number;
-    // Vanishing point as normalized [0,1] coords, target + smoothed current
-    const target = { x: 0.5, y: 0.42 };
-    const vp     = { x: 0.5, y: 0.42 };
+    const target = { x: 0, y: 0 };
+    const current = { x: 0, y: 0 };
 
     const resize = () => {
       el.width  = el.offsetWidth;
@@ -21,74 +24,33 @@ export function PerspectiveGrid() {
     };
 
     const tick = () => {
-      // Smooth follow
-      vp.x += (target.x - vp.x) * 0.055;
-      vp.y += (target.y - vp.y) * 0.055;
+      current.x += (target.x - current.x) * SPEED;
+      current.y += (target.y - current.y) * SPEED;
 
-      const W   = el.width;
-      const H   = el.height;
-      const vpX = vp.x * W;
-      const vpY = vp.y * H;
+      const W = el.width;
+      const H = el.height;
 
       ctx.clearRect(0, 0, W, H);
+      ctx.strokeStyle = "rgba(0,240,255,0.12)";
+      ctx.lineWidth = 0.5;
 
-      const V_LINES       = 20;
-      const H_LINES_FLOOR = 14;
-      const H_LINES_CEIL  = 8;
+      // Offset origin so the grid drifts with cursor
+      const ox = ((current.x % CELL) + CELL) % CELL;
+      const oy = ((current.y % CELL) + CELL) % CELL;
 
-      // ── Fan lines (vertical, radiating from VP to all 4 edges) ──────────
-      for (let i = 0; i <= V_LINES; i++) {
-        const t    = i / V_LINES;
-        const edgeX = t * W;
-        const distC = Math.abs(t - 0.5) * 2;          // 0 at center, 1 at edge
-        const alpha = (1 - distC * 0.65) * 0.16;
-
-        // To bottom
+      // Vertical lines
+      for (let x = ox - CELL; x < W + CELL; x += CELL) {
         ctx.beginPath();
-        ctx.moveTo(vpX, vpY);
-        ctx.lineTo(edgeX, H);
-        ctx.strokeStyle = `rgba(0,240,255,${alpha.toFixed(3)})`;
-        ctx.lineWidth = 0.5;
-        ctx.stroke();
-
-        // To top (subtler)
-        ctx.beginPath();
-        ctx.moveTo(vpX, vpY);
-        ctx.lineTo(edgeX, 0);
-        ctx.strokeStyle = `rgba(0,240,255,${(alpha * 0.5).toFixed(3)})`;
-        ctx.lineWidth = 0.5;
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, H);
         ctx.stroke();
       }
 
-      // ── Floor horizontals (below VP) — perspective spaced ───────────────
-      for (let i = 1; i <= H_LINES_FLOOR; i++) {
-        const t  = Math.pow(i / H_LINES_FLOOR, 1.5);
-        const y  = vpY + t * (H - vpY);
-        const x0 = vpX - t * vpX;
-        const x1 = vpX + t * (W - vpX);
-        const alpha = t * 0.32;
-
+      // Horizontal lines
+      for (let y = oy - CELL; y < H + CELL; y += CELL) {
         ctx.beginPath();
-        ctx.moveTo(x0, y);
-        ctx.lineTo(x1, y);
-        ctx.strokeStyle = `rgba(0,240,255,${alpha.toFixed(3)})`;
-        ctx.lineWidth = 0.5;
-        ctx.stroke();
-      }
-
-      // ── Ceiling horizontals (above VP) — subtler ────────────────────────
-      for (let i = 1; i <= H_LINES_CEIL; i++) {
-        const t  = Math.pow(i / H_LINES_CEIL, 1.5);
-        const y  = vpY - t * vpY;
-        const x0 = vpX - t * vpX;
-        const x1 = vpX + t * (W - vpX);
-        const alpha = t * 0.13;
-
-        ctx.beginPath();
-        ctx.moveTo(x0, y);
-        ctx.lineTo(x1, y);
-        ctx.strokeStyle = `rgba(0,240,255,${alpha.toFixed(3)})`;
-        ctx.lineWidth = 0.5;
+        ctx.moveTo(0, y);
+        ctx.lineTo(W, y);
         ctx.stroke();
       }
 
@@ -96,9 +58,9 @@ export function PerspectiveGrid() {
     };
 
     const onMove = (e: MouseEvent) => {
-      // Clamp VP to a tasteful range so it doesn't go to extreme edges
-      target.x = 0.3 + (e.clientX / window.innerWidth)  * 0.4;
-      target.y = 0.28 + (e.clientY / window.innerHeight) * 0.28;
+      // Map cursor position to ±PARALLAX offset
+      target.x = (e.clientX / window.innerWidth  - 0.5) * PARALLAX * 2;
+      target.y = (e.clientY / window.innerHeight - 0.5) * PARALLAX * 2;
     };
 
     const ro = new ResizeObserver(resize);
